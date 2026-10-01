@@ -1,6 +1,6 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const FICHIERS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js',
   'manifest.webmanifest', 'icons/icone.svg', 'icons/icone-192.png', 'icons/icone-512.png',

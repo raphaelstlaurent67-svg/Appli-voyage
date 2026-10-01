@@ -296,11 +296,18 @@ async function pageFiche(id) {
 
       <p class="petit">${e.verifieLe ? `Vérifié le ${esc(e.verifieLe)}` : 'Pas de date de vérification'}</p>
       <button class="bouton-danger" id="supprimer">Supprimer cet endroit</button>
+      <div class="confirmer" id="confirmer" hidden>
+        <p>Supprimer « ${esc(e.nom)} » ? C'est définitif.</p>
+        <button class="bouton-danger" id="oui-supprimer">Oui, supprimer</button>
+        <button class="bouton-secondaire" id="non-supprimer">Annuler</button>
+      </div>
     </article>`;
 
   for (const img of app.querySelectorAll('[data-photo]')) img.src = await urlPhoto(img.dataset.photo);
-  app.querySelector('#supprimer').onclick = async () => {
-    if (!confirm(`Supprimer « ${e.nom} » ? Cette action est définitive.`)) return;
+  const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
+  app.querySelector('#supprimer').onclick = () => demander(true);
+  app.querySelector('#non-supprimer').onclick = () => demander(false);
+  app.querySelector('#oui-supprimer').onclick = async () => {
     for (const p of e.photos || []) await db.effacer('photos', p);
     await db.effacer('endroits', e.id);
     etat.endroits = etat.endroits.filter((x) => x.id !== e.id);
@@ -418,7 +425,8 @@ async function pageFormulaire(id) {
     if (f.type) {
       const sous = [...(cat.types[f.type] || [])];
       if (f.sousType && !sous.includes(f.sousType)) sous.push(f.sousType);
-      zoneSous.innerHTML = `<p class="sous-legende">Sous-type</p><div class="puces">${sous.map((s) => `<button type="button" class="puce ${s === f.sousType ? 'choisie' : ''}" data-soustype="${esc(s)}">${esc(s)}</button>`).join('')}<button type="button" class="puce autre" data-autre>+ Autre</button></div>`;
+      zoneSous.innerHTML = `<p class="sous-legende">Sous-type</p><div class="puces">${sous.map((s) => `<button type="button" class="puce ${s === f.sousType ? 'choisie' : ''}" data-soustype="${esc(s)}">${esc(s)}</button>`).join('')}<button type="button" class="puce autre" data-autre>+ Autre</button></div>
+        <div class="autre-saisie" id="autre-saisie" hidden><input id="autre-nom" placeholder="Nom du sous-type"><button type="button" class="bouton-secondaire" data-autre-ok>OK</button></div>`;
     } else zoneSous.innerHTML = '';
     majTrajet();
   }
@@ -450,8 +458,11 @@ async function pageFormulaire(id) {
       f.sousType = f.sousType === b.dataset.soustype ? '' : b.dataset.soustype;
       majCategories();
     } else if (b.hasAttribute('data-autre')) {
-      const nom = prompt('Nom du sous-type :');
-      if (nom && nom.trim()) { f.sousType = nom.trim(); majCategories(); }
+      app.querySelector('#autre-saisie').hidden = false;
+      app.querySelector('#autre-nom').focus();
+    } else if (b.hasAttribute('data-autre-ok')) {
+      const nom = app.querySelector('#autre-nom').value.trim();
+      if (nom) { f.sousType = nom; majCategories(); }
     } else if (b.dataset.prix) {
       f.prix = f.prix === +b.dataset.prix ? null : +b.dataset.prix;
       majPuces();
@@ -462,6 +473,13 @@ async function pageFormulaire(id) {
       const cle = b.dataset.retirerPhoto;
       if (f.photos.includes(cle)) { f.photos = f.photos.filter((p) => p !== cle); f.photosRetirees.push(cle); } else f.nouvellesPhotos = f.nouvellesPhotos.filter((p) => p.cle !== cle);
       majPhotos();
+    }
+  });
+
+  form.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && ev.target.id === 'autre-nom') {
+      ev.preventDefault();
+      app.querySelector('[data-autre-ok]').click();
     }
   });
 
@@ -656,7 +674,7 @@ async function pageReglages() {
       toast(`${n} endroit${n > 1 ? 's' : ''} restauré${n > 1 ? 's' : ''}`);
       pageReglages();
     } catch (err) {
-      alert(err.message || 'Ce fichier ne peut pas être lu.');
+      toast(err.message || 'Ce fichier ne peut pas être lu.');
     }
   };
 
