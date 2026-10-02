@@ -87,6 +87,12 @@ export const TAXONOMIE = {
       'Privé': ['Chauffeur', 'Voiture de location', 'Transfert aéroport'],
     },
   },
+  autre: {
+    couleur: '#64748b',
+    nom: 'Autre', icone: '📌',
+    // Pas de type : pour les endroits qu'on ne sait pas encore où classer.
+    types: {},
+  },
 };
 
 // Valeur approximative de 1 unité de chaque monnaie en dollars canadiens.

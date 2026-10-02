@@ -177,7 +177,7 @@ function choisirCategorie(f, quandFini) {
         <button type="button" class="tuile ${k === f.categorie ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat="${k}">
           <span class="tuile-icone">${c.icone}</span>
           <span class="tuile-nom">${esc(c.nom)}</span>
-          <span class="tuile-sous">${Object.keys(c.types).length} types</span>
+          <span class="tuile-sous">${Object.keys(c.types).length ? `${Object.keys(c.types).length} types` : 'Pas sûr où le classer'}</span>
         </button>`).join('')}
     </div>`, clic);
 
@@ -226,7 +226,11 @@ function choisirCategorie(f, quandFini) {
     if (!b) return;
     if (b.dataset.retour === '1') etape1();
     else if (b.dataset.retour === '2') etape2();
-    else if (b.dataset.cat) { cat = b.dataset.cat; etape2(); }
+    else if (b.dataset.cat) {
+      cat = b.dataset.cat;
+      if (Object.keys(TAXONOMIE[cat].types).length) etape2();
+      else { type = ''; finir(''); }
+    }
     else if (b.dataset.type) { type = b.dataset.type; etape3(); }
     else if (b.dataset.sous) finir(b.dataset.sous);
     else if (b.hasAttribute('data-sans-sous')) finir('');
@@ -611,7 +615,7 @@ async function pageFormulaire(id) {
     } else {
       b.style.setProperty('--c', c.couleur);
       b.classList.remove('a-remplir');
-      b.innerHTML = `<span class="selecteur-icone">${c.icone}</span><span class="selecteur-texte"><b>${esc([f.type, f.sousType].filter(Boolean).join(' › ') || c.nom)}</b><small>${esc(c.nom)}</small></span><span class="chevron">Changer</span>`;
+      b.innerHTML = `<span class="selecteur-icone">${c.icone}</span><span class="selecteur-texte"><b>${esc([f.type, f.sousType].filter(Boolean).join(' › ') || c.nom)}</b><small>${f.type ? esc(c.nom) : 'Catégorie'}</small></span><span class="chevron">Changer</span>`;
     }
     majTrajet();
   }
