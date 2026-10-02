@@ -1,4 +1,5 @@
-import { TAXONOMIE, PAYS, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS } from './taxonomie.js';
+import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS } from './taxonomie.js';
+import { VILLES, PAYS_ASIE, trierFr } from './lieux.js';
 import * as db from './db.js';
 
 // ---------- État de l'appli ----------
@@ -7,18 +8,19 @@ const etat = {
   villes: [],
   taux: { ...TAUX_PAR_DEFAUT },
   filtres: { recherche: '', pays: '', ville: '', prix: '', categorie: '', type: '', tri: 'recent' },
-  form: null, // endroit en cours de saisie
 };
 const urlsPhotos = new Map(); // id photo -> URL d'affichage
 
 const app = document.getElementById('app');
+const feuille = document.getElementById('feuille');
 
 // ---------- Petits outils ----------
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 const dollars = (n) => (n ? '$'.repeat(n) : '');
-const etoiles = (n) => (n ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 const cleVille = (pays, ville) => `${(pays || '').trim().toLowerCase()}|${(ville || '').trim().toLowerCase()}`;
+const sansAccents = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const uniques = (liste) => [...new Set(liste.filter(Boolean))];
 
 function toast(message) {
   const t = document.getElementById('toast');
@@ -29,7 +31,7 @@ function toast(message) {
 }
 
 function enCAD(montant, devise) {
-  const m = parseFloat(montant);
+  const m = parseFloat(String(montant).replace(',', '.'));
   const t = etat.taux[devise];
   if (!m || !t) return null;
   return m * t;
@@ -37,7 +39,7 @@ function enCAD(montant, devise) {
 
 function formatCAD(v) {
   if (v == null) return '';
-  return v < 10 ? `${v.toFixed(2)} $ CA` : `${Math.round(v).toLocaleString('fr-CA')} $ CA`;
+  return v < 10 ? `${v.toFixed(2).replace('.', ',')} $ CA` : `${Math.round(v).toLocaleString('fr-CA')} $ CA`;
 }
 
 function lienWeb(v) {
@@ -52,16 +54,23 @@ function lienContact(cle, valeur) {
   switch (cle) {
     case 'whatsapp': return `https://wa.me/${chiffres.replace('+', '')}`;
     case 'email': return `mailto:${v}`;
-    case 'site': case 'reservation': case 'facebook': case 'googleMaps': return lienWeb(v);
+    case 'site': case 'reservation': case 'facebook': return lienWeb(v);
     case 'instagram': return /^https?:/i.test(v) ? v : `https://instagram.com/${v.replace('@', '')}`;
     default: return '';
   }
 }
 
 function lienCarte(e) {
+  if (e.lienMaps) return lienWeb(e.lienMaps);
   if (e.lat && e.lng) return `https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lng}`;
   const q = [e.nom, e.adresse, e.ville, e.pays].filter(Boolean).join(', ');
   return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : '';
+}
+
+// Les anciennes fiches gardaient le lien Google Maps avec les autres contacts.
+function migrer(e) {
+  if (e.contacts?.googleMaps && !e.lienMaps) { e.lienMaps = e.contacts.googleMaps; delete e.contacts.googleMaps; }
+  return e;
 }
 
 async function urlPhoto(id) {
@@ -71,6 +80,13 @@ async function urlPhoto(id) {
   const url = URL.createObjectURL(p.blob);
   urlsPhotos.set(id, url);
   return url;
+}
+
+async function afficherPhotos(racine) {
+  for (const img of racine.querySelectorAll('img[data-photo]')) {
+    const url = await urlPhoto(img.dataset.photo);
+    if (url) img.src = url;
+  }
 }
 
 // Réduit la photo pour qu'elle prenne moins de place (max 1600 px).
@@ -93,9 +109,160 @@ function compresserPhoto(fichier) {
   });
 }
 
+// Pays et villes connus : la liste de l'Asie plus ceux déjà utilisés.
+function listePays() {
+  return trierFr(uniques([...PAYS_ASIE, ...etat.endroits.map((e) => e.pays)]));
+}
+function listeVilles(pays) {
+  return trierFr(uniques([...(VILLES[pays] || []), ...etat.endroits.filter((e) => e.pays === pays).map((e) => e.ville)]));
+}
+
+// ---------- Feuille qui monte du bas (choix de catégorie, pays, ville) ----------
+function ouvrirFeuille(html, auClic) {
+  feuille.innerHTML = `<div class="feuille-fond" data-fermer></div><div class="feuille-panneau" role="dialog" aria-modal="true">${html}</div>`;
+  feuille.hidden = false;
+  document.body.classList.add('fige');
+  feuille.onclick = (ev) => {
+    if (ev.target.closest('[data-fermer]')) { fermerFeuille(); return; }
+    auClic(ev);
+  };
+  const recherche = feuille.querySelector('.feuille-recherche');
+  if (recherche) {
+    recherche.addEventListener('input', () => filtrerFeuille(recherche.value));
+    if (window.matchMedia('(min-width: 700px)').matches) recherche.focus();
+  }
+}
+
+function fermerFeuille() {
+  feuille.hidden = true;
+  feuille.innerHTML = '';
+  document.body.classList.remove('fige');
+}
+
+function filtrerFeuille(texte) {
+  const q = sansAccents(texte.trim());
+  let visibles = 0;
+  feuille.querySelectorAll('[data-nom]').forEach((li) => {
+    const ok = !q || sansAccents(li.dataset.nom).includes(q);
+    li.hidden = !ok;
+    if (ok) visibles++;
+  });
+  const ajout = feuille.querySelector('[data-ajouter]');
+  if (ajout) {
+    const exact = [...feuille.querySelectorAll('[data-nom]')].some((li) => sansAccents(li.dataset.nom) === q);
+    ajout.hidden = !q || exact;
+    ajout.dataset.ajouter = texte.trim();
+    ajout.querySelector('b').textContent = texte.trim();
+  }
+  const vide = feuille.querySelector('.feuille-vide');
+  if (vide) vide.hidden = visibles > 0 || !!(ajout && !ajout.hidden);
+}
+
+const enteteFeuille = (titre, retour) => `
+  <div class="feuille-entete">
+    ${retour ? `<button type="button" class="rond" data-retour="${retour}" aria-label="Retour">‹</button>` : '<span class="rond vide-rond"></span>'}
+    <h2>${titre}</h2>
+    <button type="button" class="rond" data-fermer aria-label="Fermer">✕</button>
+  </div>`;
+
+// Choix catégorie > type > sous-type, un écran à la fois.
+function choisirCategorie(f, quandFini) {
+  let cat = f.categorie;
+  let type = f.type;
+
+  const etape1 = () => ouvrirFeuille(`
+    ${enteteFeuille('Quelle catégorie ?')}
+    <div class="tuiles">
+      ${Object.entries(TAXONOMIE).map(([k, c]) => `
+        <button type="button" class="tuile ${k === f.categorie ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat="${k}">
+          <span class="tuile-icone">${c.icone}</span>
+          <span class="tuile-nom">${esc(c.nom)}</span>
+          <span class="tuile-sous">${Object.keys(c.types).length} types</span>
+        </button>`).join('')}
+    </div>`, clic);
+
+  const etape2 = () => {
+    const c = TAXONOMIE[cat];
+    ouvrirFeuille(`
+      ${enteteFeuille(`${c.icone} ${esc(c.nom)}`, '1')}
+      <div class="tuiles" style="--c:${c.couleur}">
+        ${Object.entries(c.types).map(([t, sous]) => `
+          <button type="button" class="tuile ${cat === f.categorie && t === f.type ? 'choisie' : ''}" data-type="${esc(t)}">
+            <span class="tuile-nom">${esc(t)}</span>
+            <span class="tuile-sous">${esc(sous.slice(0, 3).join(', '))}${sous.length > 3 ? '…' : ''}</span>
+          </button>`).join('')}
+      </div>`, clic);
+  };
+
+  const etape3 = () => {
+    const c = TAXONOMIE[cat];
+    const sous = c.types[type] || [];
+    ouvrirFeuille(`
+      ${enteteFeuille(`${c.icone} ${esc(type)}`, '2')}
+      <div class="tuiles tuiles-petites" style="--c:${c.couleur}">
+        ${sous.map((s) => `
+          <button type="button" class="tuile ${type === f.type && s === f.sousType ? 'choisie' : ''}" data-sous="${esc(s)}">
+            <span class="tuile-nom">${esc(s)}</span>
+          </button>`).join('')}
+        <button type="button" class="tuile tuile-autre" data-autre><span class="tuile-nom">+ Autre</span></button>
+      </div>
+      <div class="autre-saisie" hidden>
+        <input id="autre-nom" placeholder="Nom du sous-type" autocomplete="off">
+        <button type="button" class="bouton-principal" data-autre-ok>OK</button>
+      </div>
+      <button type="button" class="lien-discret" data-sans-sous>Garder seulement « ${esc(type)} »</button>`, clic);
+    const champ = feuille.querySelector('#autre-nom');
+    champ.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); feuille.querySelector('[data-autre-ok]').click(); } });
+  };
+
+  const finir = (sousType) => {
+    f.categorie = cat; f.type = type; f.sousType = sousType;
+    fermerFeuille();
+    quandFini();
+  };
+
+  function clic(ev) {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.retour === '1') etape1();
+    else if (b.dataset.retour === '2') etape2();
+    else if (b.dataset.cat) { cat = b.dataset.cat; etape2(); }
+    else if (b.dataset.type) { type = b.dataset.type; etape3(); }
+    else if (b.dataset.sous) finir(b.dataset.sous);
+    else if (b.hasAttribute('data-sans-sous')) finir('');
+    else if (b.hasAttribute('data-autre')) {
+      feuille.querySelector('.autre-saisie').hidden = false;
+      feuille.querySelector('#autre-nom').focus();
+    } else if (b.hasAttribute('data-autre-ok')) {
+      const nom = feuille.querySelector('#autre-nom').value.trim();
+      if (nom) finir(nom);
+    }
+  }
+
+  etape1();
+}
+
+// Liste avec recherche (pays ou ville).
+function choisirDansListe({ titre, valeurs, choisie, ajout, retour, quandChoisi, quandRetour }) {
+  ouvrirFeuille(`
+    ${enteteFeuille(esc(titre), retour ? 'liste' : '')}
+    <input class="feuille-recherche" type="search" placeholder="Chercher…" autocomplete="off">
+    <ul class="liste-choix">
+      ${ajout ? '<li><button type="button" class="ligne ligne-ajout" data-ajouter="" hidden>+ Ajouter « <b></b> »</button></li>' : ''}
+      ${valeurs.map((v) => `<li data-nom="${esc(v)}"><button type="button" class="ligne ${v === choisie ? 'choisie' : ''}" data-valeur="${esc(v)}">${esc(v)}${v === choisie ? '<span>✓</span>' : ''}</button></li>`).join('')}
+    </ul>
+    <p class="feuille-vide" hidden>Aucun résultat.</p>`, (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.retour === 'liste') { quandRetour(); return; }
+    const v = b.dataset.valeur ?? b.dataset.ajouter;
+    if (v) { fermerFeuille(); quandChoisi(v); }
+  });
+}
+
 // ---------- Chargement ----------
 async function charger() {
-  etat.endroits = await db.tous('endroits');
+  etat.endroits = (await db.tous('endroits')).map(migrer);
   etat.villes = await db.tous('villes');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   try {
@@ -112,8 +279,11 @@ function sauverFiltres() {
 function aller(route) { location.hash = route; }
 
 async function router() {
+  fermerFeuille();
   const [, page, id] = (location.hash || '#/').split('/');
-  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === (page || 'liste')));
+  const nom = page || 'liste';
+  document.body.dataset.page = nom;
+  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === nom));
   window.scrollTo(0, 0);
   if (page === 'ajouter') return pageFormulaire(null);
   if (page === 'modifier') return pageFormulaire(id);
@@ -126,14 +296,14 @@ async function router() {
 // ---------- Liste des endroits ----------
 function endroitsFiltres() {
   const f = etat.filtres;
-  const q = f.recherche.trim().toLowerCase();
-  let liste = etat.endroits.filter((e) =>
+  const q = sansAccents(f.recherche.trim());
+  const liste = etat.endroits.filter((e) =>
     (!f.pays || e.pays === f.pays) &&
     (!f.ville || e.ville === f.ville) &&
     (!f.prix || String(e.prix) === f.prix) &&
     (!f.categorie || e.categorie === f.categorie) &&
     (!f.type || e.type === f.type) &&
-    (!q || [e.nom, e.ville, e.pays, e.type, e.sousType, e.description, e.notes].join(' ').toLowerCase().includes(q)));
+    (!q || sansAccents([e.nom, e.ville, e.pays, e.type, e.sousType, e.description, e.notes].join(' ')).includes(q)));
 
   const nul = (v, fin) => (v == null || v === '' ? fin : v);
   const tris = {
@@ -156,91 +326,98 @@ function options(valeurs, choisie, vide) {
 
 async function pageListe() {
   const f = etat.filtres;
-  const paysConnus = [...new Set(etat.endroits.map((e) => e.pays).filter(Boolean))].sort();
-  const villesConnues = [...new Set(etat.endroits.filter((e) => !f.pays || e.pays === f.pays).map((e) => e.ville).filter(Boolean))].sort();
+  const paysConnus = trierFr(uniques(etat.endroits.map((e) => e.pays)));
+  const villesConnues = trierFr(uniques(etat.endroits.filter((e) => !f.pays || e.pays === f.pays).map((e) => e.ville)));
   const typesConnus = f.categorie ? Object.keys(TAXONOMIE[f.categorie]?.types || {}) : [];
-  const nbFiltres = ['pays', 'ville', 'prix', 'categorie', 'type'].filter((k) => f[k]).length;
-  const liste = endroitsFiltres();
+  const nbFiltres = ['pays', 'ville', 'prix', 'type'].filter((k) => f[k]).length;
+  const nbPays = paysConnus.length;
+  const compteCat = (k) => etat.endroits.filter((e) => e.categorie === k).length;
 
   const derniere = await db.lireReglage('derniereSauvegarde', null);
   const jours = derniere ? Math.floor((Date.now() - new Date(derniere)) / 864e5) : null;
   const rappel = etat.endroits.length >= 5 && (jours === null || jours >= 7);
 
   app.innerHTML = `
-    <header class="entete">
-      <h1>Mes endroits <span class="compte">${etat.endroits.length}</span></h1>
+    <header class="hero">
+      <p class="hero-sur">Carnet de voyage · Asie</p>
+      <h1>Mes endroits</h1>
+      <p class="hero-stats">${etat.endroits.length} endroit${etat.endroits.length > 1 ? 's' : ''} · ${nbPays} pays</p>
+      <div class="hero-recherche">
+        <input type="search" id="recherche" placeholder="Chercher un nom, une ville…" value="${esc(f.recherche)}" autocomplete="off">
+      </div>
     </header>
     ${rappel ? `<a class="alerte" href="#/reglages">💾 ${jours === null ? "Tu n'as jamais fait de copie de sauvegarde." : `Dernière copie de sauvegarde il y a ${jours} jours.`} Touche ici pour en faire une.</a>` : ''}
-    <div class="barre-recherche">
-      <input type="search" id="recherche" placeholder="Chercher un nom, une ville…" value="${esc(f.recherche)}">
+    <div class="defile-cats" role="tablist">
+      <button class="cat-puce ${!f.categorie ? 'choisie' : ''}" data-cat-filtre="">Tout <span>${etat.endroits.length}</span></button>
+      ${Object.entries(TAXONOMIE).map(([k, c]) => `<button class="cat-puce ${f.categorie === k ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat-filtre="${k}">${c.icone} ${esc(c.nom)} <span>${compteCat(k)}</span></button>`).join('')}
     </div>
     <div class="barre-outils">
-      <button class="bouton-secondaire" id="btn-filtres">Filtres${nbFiltres ? ` (${nbFiltres})` : ''}</button>
+      <button class="bouton-secondaire ${nbFiltres ? 'actif' : ''}" id="btn-filtres">⚙︎ Filtres${nbFiltres ? ` · ${nbFiltres}` : ''}</button>
       <select id="tri" aria-label="Trier">
-        ${options([['recent', 'Plus récents'], ['prixCroissant', 'Prix : moins cher'], ['prixDecroissant', 'Prix : plus cher'], ['luxe', 'Plus luxueux'], ['coeur', 'Coups de cœur'], ['nom', 'Nom (A à Z)']], f.tri, 'Trier par…')}
+        ${options([['recent', 'Plus récents'], ['prixCroissant', 'Moins cher'], ['prixDecroissant', 'Plus cher'], ['luxe', 'Plus luxueux'], ['coeur', 'Coups de cœur'], ['nom', 'Nom (A à Z)']], f.tri, 'Trier par…')}
       </select>
     </div>
     <div class="filtres ${nbFiltres ? 'ouvert' : ''}" id="filtres">
       <select data-filtre="pays">${options(paysConnus, f.pays, 'Tous les pays')}</select>
       <select data-filtre="ville">${options(villesConnues, f.ville, 'Toutes les villes')}</select>
       <select data-filtre="prix">${options([['1', '$'], ['2', '$$'], ['3', '$$$'], ['4', '$$$$']], f.prix, 'Tous les budgets')}</select>
-      <select data-filtre="categorie">${options(Object.entries(TAXONOMIE).map(([k, c]) => [k, `${c.icone} ${c.nom}`]), f.categorie, 'Toutes les catégories')}</select>
-      <select data-filtre="type" ${f.categorie ? '' : 'disabled'}>${options(typesConnus, f.type, 'Tous les types')}</select>
+      <select data-filtre="type" ${f.categorie ? '' : 'disabled'}>${options(typesConnus, f.type, f.categorie ? 'Tous les types' : 'Type : choisis une catégorie')}</select>
       ${nbFiltres ? '<button class="lien" id="effacer-filtres">Effacer les filtres</button>' : ''}
     </div>
-    <ul class="cartes">
-      ${liste.map(carte).join('') || `<li class="vide">${etat.endroits.length ? 'Aucun endroit ne correspond à ta recherche.' : 'Aucun endroit pour le moment.<br>Touche le bouton <b>+</b> pour ajouter ton premier.'}</li>`}
-    </ul>`;
+    <ul class="cartes" id="cartes"></ul>`;
 
-  // Miniatures des photos
-  for (const e of liste) {
-    if (e.photos?.length) {
-      const img = app.querySelector(`[data-mini="${e.id}"]`);
-      if (img) img.src = await urlPhoto(e.photos[0]);
-    }
-  }
+  const remplir = () => {
+    const l = endroitsFiltres();
+    const ul = app.querySelector('#cartes');
+    ul.innerHTML = l.map(carte).join('') || `<li class="vide">${etat.endroits.length
+      ? 'Aucun endroit ne correspond à ta recherche.'
+      : '<span class="vide-icone">🧭</span><b>Ton carnet est vide.</b><br>Touche le bouton <b>+</b> pour ajouter ton premier endroit.'}</li>`;
+    afficherPhotos(ul);
+  };
+  remplir();
 
   const rafraichir = () => { sauverFiltres(); pageListe(); };
-  app.querySelector('#recherche').addEventListener('input', (ev) => {
-    etat.filtres.recherche = ev.target.value;
-    const ul = app.querySelector('.cartes');
-    const l = endroitsFiltres();
-    ul.innerHTML = l.map(carte).join('') || '<li class="vide">Aucun endroit ne correspond à ta recherche.</li>';
-    l.forEach(async (e) => { if (e.photos?.length) { const img = ul.querySelector(`[data-mini="${e.id}"]`); if (img) img.src = await urlPhoto(e.photos[0]); } });
-  });
+  app.querySelector('#recherche').addEventListener('input', (ev) => { etat.filtres.recherche = ev.target.value; remplir(); });
   app.querySelector('#btn-filtres').onclick = () => app.querySelector('#filtres').classList.toggle('ouvert');
   app.querySelector('#tri').onchange = (ev) => { etat.filtres.tri = ev.target.value || 'recent'; rafraichir(); };
+  app.querySelectorAll('[data-cat-filtre]').forEach((b) => {
+    b.onclick = () => { etat.filtres.categorie = b.dataset.catFiltre; etat.filtres.type = ''; rafraichir(); };
+  });
   app.querySelectorAll('[data-filtre]').forEach((s) => {
     s.onchange = () => {
       const k = s.dataset.filtre;
       etat.filtres[k] = s.value;
       if (k === 'pays') etat.filtres.ville = '';
-      if (k === 'categorie') etat.filtres.type = '';
       rafraichir();
     };
   });
   const eff = app.querySelector('#effacer-filtres');
-  if (eff) eff.onclick = () => { Object.assign(etat.filtres, { pays: '', ville: '', prix: '', categorie: '', type: '' }); rafraichir(); };
+  if (eff) eff.onclick = () => { Object.assign(etat.filtres, { pays: '', ville: '', prix: '', type: '' }); rafraichir(); };
+  const choisie = app.querySelector('.cat-puce.choisie');
+  if (choisie && choisie.dataset.catFiltre) choisie.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
 function carte(e) {
-  const cat = TAXONOMIE[e.categorie];
+  const cat = TAXONOMIE[e.categorie] || { icone: '📍', couleur: '#64748b', nom: '' };
   const sousTitre = [e.type, e.sousType].filter(Boolean).join(' · ');
   const lieu = e.categorie === 'trajets' && (e.depart || e.arrivee)
     ? `${esc(e.depart || '?')} → ${esc(e.arrivee || '?')}`
     : esc([e.ville, e.pays].filter(Boolean).join(', '));
   return `
     <li>
-      <a class="carte" href="#/endroit/${esc(e.id)}">
-        ${e.photos?.length ? `<img class="mini" data-mini="${esc(e.id)}" alt="">` : `<div class="mini icone">${cat?.icone || '📍'}</div>`}
-        <div class="infos">
-          <div class="nom">${e.coupDeCoeur ? '<span class="coeur">❤</span> ' : ''}${esc(e.nom)}</div>
-          <div class="sous">${esc(sousTitre)}</div>
-          <div class="sous">${lieu}</div>
+      <a class="carte" href="#/endroit/${esc(e.id)}" style="--c:${cat.couleur}">
+        <div class="carte-image ${e.photos?.length ? '' : 'sans-photo'}">
+          ${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : `<span class="carte-icone">${cat.icone}</span>`}
+          <span class="carte-cat">${cat.icone} ${esc(cat.nom)}</span>
+          ${e.coupDeCoeur ? '<span class="carte-coeur" aria-label="Coup de cœur">❤</span>' : ''}
         </div>
-        <div class="cotes">
-          <span class="prix">${dollars(e.prix)}</span>
-          <span class="confort">${e.confort ? `${e.confort}★` : ''}</span>
+        <div class="carte-corps">
+          <div class="carte-nom">${esc(e.nom)}</div>
+          ${sousTitre ? `<div class="carte-sous">${esc(sousTitre)}</div>` : ''}
+          <div class="carte-bas">
+            <span class="carte-lieu">${lieu ? `📍 ${lieu}` : ''}</span>
+            <span class="carte-cotes">${e.prix ? `<b>${dollars(e.prix)}</b>` : ''}${e.confort ? `<span>${e.confort}★</span>` : ''}</span>
+          </div>
         </div>
       </a>
     </li>`;
@@ -250,60 +427,77 @@ function carte(e) {
 async function pageFiche(id) {
   const e = etat.endroits.find((x) => x.id === id);
   if (!e) return aller('#/');
-  const cat = TAXONOMIE[e.categorie];
+  const cat = TAXONOMIE[e.categorie] || { icone: '📍', couleur: '#64748b', nom: '' };
   const cad = enCAD(e.montant, e.devise);
+  const carteUrl = lienCarte(e);
+  const tel = e.telephone ? e.telephone.replace(/[^\d+]/g, '') : '';
   const contacts = CONTACTS.filter(([k]) => e.contacts?.[k]).map(([k, lib]) => {
     const lien = lienContact(k, e.contacts[k]);
-    return `<li><span class="etiquette">${esc(lib)}</span>${lien ? `<a href="${esc(lien)}" target="_blank" rel="noopener">${esc(e.contacts[k])}</a>` : esc(e.contacts[k])}</li>`;
+    return `<li><span class="etiquette">${esc(lib)}</span>${lien ? `<a href="${esc(lien)}" target="_blank" rel="noopener">${esc(e.contacts[k])}</a>` : `<span>${esc(e.contacts[k])}</span>`}</li>`;
   }).join('');
-  const carteUrl = lienCarte(e);
+  const photos = e.photos || [];
 
   app.innerHTML = `
-    <header class="entete">
-      <a class="retour" href="#/">‹ Retour</a>
-      <a class="bouton-secondaire" href="#/modifier/${esc(e.id)}">Modifier</a>
-    </header>
-    <div class="galerie">${(e.photos || []).map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>
-    <article class="fiche">
-      <div class="chemin">${cat ? `${cat.icone} ${esc(cat.nom)}` : ''} ${e.type ? `› ${esc(e.type)}` : ''} ${e.sousType ? `› ${esc(e.sousType)}` : ''}</div>
-      <h1>${e.coupDeCoeur ? '<span class="coeur">❤</span> ' : ''}${esc(e.nom)}</h1>
+    <div class="fiche-haut" style="--c:${cat.couleur}">
+      ${photos.length ? `<div class="galerie">${photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : `<div class="fiche-icone">${cat.icone}</div>`}
+      <div class="fiche-boutons">
+        <a class="rond rond-flottant" href="#/" aria-label="Retour">‹</a>
+        <a class="pilule-flottante" href="#/modifier/${esc(e.id)}">Modifier</a>
+      </div>
+      ${photos.length > 1 ? `<span class="galerie-compte">${photos.length} photos</span>` : ''}
+    </div>
+    <article class="fiche" style="--c:${cat.couleur}">
+      <div class="chemin"><span class="chemin-cat">${cat.icone} ${esc(cat.nom)}</span>${e.type ? ` › ${esc(e.type)}` : ''}${e.sousType ? ` › ${esc(e.sousType)}` : ''}</div>
+      <h1>${esc(e.nom)}${e.coupDeCoeur ? ' <span class="coeur">❤</span>' : ''}</h1>
       <p class="lieu">${esc([e.ville, e.pays].filter(Boolean).join(', '))}</p>
+
       <div class="pastilles">
-        ${e.prix ? `<span class="pastille">Prix ${dollars(e.prix)}</span>` : ''}
-        ${e.confort ? `<span class="pastille">Confort ${etoiles(e.confort)}</span>` : ''}
-        ${e.montant ? `<span class="pastille">${esc(e.montant)} ${esc(e.devise)}${cad != null && e.devise !== 'CAD' ? ` ≈ ${formatCAD(cad)}` : ''}</span>` : ''}
+        ${e.prix ? `<span class="pastille"><small>Prix</small>${dollars(e.prix)}</span>` : ''}
+        ${e.confort ? `<span class="pastille"><small>Confort</small>${e.confort}/5</span>` : ''}
+        ${e.montant ? `<span class="pastille"><small>Prix réel</small>${esc(e.montant)} ${esc(e.devise)}${cad != null && e.devise !== 'CAD' ? ` <em>≈ ${formatCAD(cad)}</em>` : ''}</span>` : ''}
       </div>
 
-      ${e.categorie === 'trajets' ? `
-        <h2>Le trajet</h2>
+      <div class="actions">
+        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>📞</span>Appeler</a>` : ''}
+        ${carteUrl ? `<a class="action" href="${esc(carteUrl)}" target="_blank" rel="noopener"><span>🗺️</span>Carte</a>` : ''}
+        ${e.contacts?.whatsapp ? `<a class="action" href="${esc(lienContact('whatsapp', e.contacts.whatsapp))}" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>` : ''}
+        ${e.contacts?.site ? `<a class="action" href="${esc(lienWeb(e.contacts.site))}" target="_blank" rel="noopener"><span>🌐</span>Site web</a>` : ''}
+      </div>
+
+      ${e.categorie === 'trajets' && (e.depart || e.arrivee || e.duree) ? `
+        <section class="bloc-fiche">
+          <h2>Le trajet</h2>
+          <div class="trajet">
+            <div><span class="etiquette">Départ</span><b>${esc(e.depart || '—')}</b></div>
+            <div class="trajet-fleche">→<small>${esc(e.duree || '')}</small></div>
+            <div><span class="etiquette">Arrivée</span><b>${esc(e.arrivee || '—')}</b></div>
+          </div>
+        </section>` : ''}
+
+      ${e.description ? `<section class="bloc-fiche"><h2>Ce que fait l'endroit</h2><p class="texte">${esc(e.description)}</p></section>` : ''}
+
+      <section class="bloc-fiche">
+        <h2>Coordonnées</h2>
         <ul class="details">
-          ${e.depart ? `<li><span class="etiquette">Départ</span>${esc(e.depart)}</li>` : ''}
-          ${e.arrivee ? `<li><span class="etiquette">Arrivée</span>${esc(e.arrivee)}</li>` : ''}
-          ${e.duree ? `<li><span class="etiquette">Durée</span>${esc(e.duree)}</li>` : ''}
-        </ul>` : ''}
+          ${e.adresse ? `<li><span class="etiquette">Adresse</span><span>${esc(e.adresse)}</span></li>` : ''}
+          ${e.telephone ? `<li><span class="etiquette">Téléphone</span><a href="tel:${esc(tel)}">${esc(e.telephone)}</a></li>` : ''}
+          ${carteUrl ? `<li><span class="etiquette">Google Maps</span><a href="${esc(carteUrl)}" target="_blank" rel="noopener">Ouvrir la carte</a></li>` : ''}
+          ${contacts}
+        </ul>
+      </section>
 
-      ${e.description ? `<h2>Description</h2><p class="texte">${esc(e.description)}</p>` : ''}
+      ${e.notes ? `<section class="bloc-fiche"><h2>🔒 Mes notes privées</h2><p class="texte notes">${esc(e.notes)}</p></section>` : ''}
 
-      <h2>Coordonnées</h2>
-      <ul class="details">
-        ${e.adresse ? `<li><span class="etiquette">Adresse</span>${esc(e.adresse)}</li>` : ''}
-        ${carteUrl ? `<li><span class="etiquette">Carte</span><a href="${esc(carteUrl)}" target="_blank" rel="noopener">Ouvrir dans Google Maps</a></li>` : ''}
-        ${e.telephone ? `<li><span class="etiquette">Téléphone</span><a href="tel:${esc(e.telephone.replace(/[^\d+]/g, ''))}">${esc(e.telephone)}</a></li>` : ''}
-        ${contacts}
-      </ul>
-
-      ${e.notes ? `<h2>🔒 Mes notes privées</h2><p class="texte notes">${esc(e.notes)}</p>` : ''}
-
-      <p class="petit">${e.verifieLe ? `Vérifié le ${esc(e.verifieLe)}` : 'Pas de date de vérification'}</p>
+      <p class="petit">${e.verifieLe ? `✓ Vérifié le ${esc(e.verifieLe)}` : 'Pas de date de vérification'}</p>
       <button class="bouton-danger" id="supprimer">Supprimer cet endroit</button>
       <div class="confirmer" id="confirmer" hidden>
         <p>Supprimer « ${esc(e.nom)} » ? C'est définitif.</p>
-        <button class="bouton-danger" id="oui-supprimer">Oui, supprimer</button>
+        <button class="bouton-danger plein" id="oui-supprimer">Oui, supprimer</button>
         <button class="bouton-secondaire" id="non-supprimer">Annuler</button>
       </div>
     </article>`;
 
-  for (const img of app.querySelectorAll('[data-photo]')) img.src = await urlPhoto(img.dataset.photo);
+  afficherPhotos(app);
   const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
   app.querySelector('#supprimer').onclick = () => demander(true);
   app.querySelector('#non-supprimer').onclick = () => demander(false);
@@ -328,80 +522,75 @@ async function pageFormulaire(id) {
   f.photos = f.photos || [];
   f.nouvellesPhotos = []; // { cle, blob, url }
   f.photosRetirees = [];
-  etat.form = f;
-
-  const villesDuPays = () => [...new Set(etat.endroits.filter((e) => !f.pays || e.pays === f.pays).map((e) => e.ville).filter(Boolean))].sort();
-  const paysListe = [...new Set([...PAYS, ...etat.endroits.map((e) => e.pays).filter(Boolean)])];
+  const nbAutresContacts = CONTACTS.filter(([k]) => f.contacts[k]).length;
 
   app.innerHTML = `
-    <header class="entete">
-      <a class="retour" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}">‹ Annuler</a>
-      <h1 class="titre-petit">${existant ? 'Modifier' : 'Nouvel endroit'}</h1>
+    <header class="entete-form">
+      <a class="rond" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}" aria-label="Annuler">✕</a>
+      <h1>${existant ? 'Modifier' : 'Nouvel endroit'}</h1>
+      <span class="rond vide-rond"></span>
     </header>
-    <form id="formulaire" class="formulaire" autocomplete="off">
-      <fieldset>
-        <legend>Catégorie</legend>
-        <div class="puces" id="categories">
-          ${Object.entries(TAXONOMIE).map(([k, c]) => `<button type="button" class="puce" data-categorie="${k}">${c.icone} ${esc(c.nom)}</button>`).join('')}
+    <form id="formulaire" class="formulaire" autocomplete="off" novalidate>
+
+      <section class="section">
+        <h2 class="section-titre">C'est quoi ?</h2>
+        <button type="button" class="selecteur selecteur-cat" id="choix-categorie"></button>
+        <label class="champ"><span>Nom</span><input name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Chez Mama Noi"></label>
+      </section>
+
+      <section class="section">
+        <h2 class="section-titre">Où ?</h2>
+        <div class="deux">
+          <button type="button" class="selecteur" id="choix-pays"></button>
+          <button type="button" class="selecteur" id="choix-ville"></button>
         </div>
-        <div id="zone-type"></div>
-        <div id="zone-soustype"></div>
-      </fieldset>
+        <div id="zone-trajet"></div>
+        <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier…"></label>
+        <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
+        <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Colle le lien partagé par Google Maps"></label>
+        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">📍 Enregistrer ma position actuelle</button>
+        <p class="aide" id="texte-position">${f.lat ? `Position enregistrée (${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)})` : ''}</p>
+      </section>
 
-      <label>Nom *<input name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Chez Mama Noi"></label>
+      <section class="section">
+        <h2 class="section-titre">Combien ?</h2>
+        <p class="sous-titre">Budget</p>
+        <div class="segments" id="prix">${[1, 2, 3, 4].map((n) => `<button type="button" class="segment" data-prix="${n}">${dollars(n)}</button>`).join('')}</div>
+        <p class="sous-titre">Prix réel</p>
+        <div class="montant">
+          <input name="montant" type="text" inputmode="decimal" value="${esc(f.montant)}" placeholder="Ex. : 300" aria-label="Montant">
+          <select name="devise" aria-label="Monnaie">${trierFr(Object.keys(etat.taux)).map((d) => `<option ${d === f.devise ? 'selected' : ''}>${d}</option>`).join('')}</select>
+        </div>
+        <p class="aide" id="conversion"></p>
+        <p class="sous-titre">Luxe / confort <small>(séparé du prix)</small></p>
+        <div class="segments" id="confort">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="segment" data-confort="${n}">${n}★</button>`).join('')}</div>
+        <p class="aide">1 = simple · 5 = haut de gamme</p>
+      </section>
 
-      <div class="deux">
-        <label>Pays<input name="pays" list="liste-pays" value="${esc(f.pays)}"></label>
-        <label>Ville<input name="ville" list="liste-villes" value="${esc(f.ville)}"></label>
-      </div>
-      <datalist id="liste-pays">${paysListe.map((p) => `<option value="${esc(p)}">`).join('')}</datalist>
-      <datalist id="liste-villes"></datalist>
+      <section class="section">
+        <label class="interrupteur">
+          <span><b>❤ Coup de cœur</b><small>Un endroit que tu recommandes à coup sûr</small></span>
+          <input type="checkbox" name="coupDeCoeur" ${f.coupDeCoeur ? 'checked' : ''}>
+          <i aria-hidden="true"></i>
+        </label>
+      </section>
 
-      <div id="zone-trajet"></div>
-
-      <fieldset>
-        <legend>Prix</legend>
-        <div class="puces" id="prix">${[1, 2, 3, 4].map((n) => `<button type="button" class="puce" data-prix="${n}">${dollars(n)}</button>`).join('')}</div>
-      </fieldset>
-      <fieldset>
-        <legend>Luxe / confort</legend>
-        <div class="puces" id="confort">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="puce" data-confort="${n}">${n}★</button>`).join('')}</div>
-        <p class="aide">1 = simple, 5 = haut de gamme. Séparé du prix.</p>
-      </fieldset>
-
-      <label class="interrupteur"><input type="checkbox" name="coupDeCoeur" ${f.coupDeCoeur ? 'checked' : ''}><span>❤ Coup de cœur</span></label>
-
-      <fieldset>
-        <legend>Photos</legend>
+      <section class="section">
+        <h2 class="section-titre">Photos</h2>
         <div class="photos" id="photos"></div>
         <label class="bouton-secondaire bouton-photo">📷 Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
-      </fieldset>
+      </section>
 
-      <details ${existant ? 'open' : ''}>
-        <summary>Plus de détails (adresse, contacts, notes…)</summary>
+      <section class="section">
+        <h2 class="section-titre">Notes</h2>
+        <label class="champ"><span>Ce que fait l'endroit</span><textarea name="description" rows="3" placeholder="Visible par le client">${esc(f.description)}</textarea></label>
+        <label class="champ champ-prive"><span>🔒 Mes notes privées <small>jamais montrées au client</small></span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
+        <label class="champ"><span>Vérifié le</span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
+      </section>
 
-        <label>Adresse<input name="adresse" value="${esc(f.adresse)}"></label>
-        <div class="position">
-          <button type="button" class="bouton-secondaire" id="ma-position">📍 Utiliser ma position actuelle</button>
-          <span id="texte-position" class="petit">${f.lat ? `Position enregistrée (${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)})` : ''}</span>
-        </div>
-
-        <label>Téléphone<input name="telephone" type="tel" value="${esc(f.telephone)}"></label>
-        ${CONTACTS.map(([k, lib]) => `<label>${esc(lib)}<input data-contact="${k}" value="${esc(f.contacts[k])}"></label>`).join('')}
-
-        <label>Ce que fait l'endroit<textarea name="description" rows="3">${esc(f.description)}</textarea></label>
-
-        <fieldset>
-          <legend>Prix réel</legend>
-          <div class="deux">
-            <label>Montant<input name="montant" type="number" inputmode="decimal" step="any" min="0" value="${esc(f.montant)}"></label>
-            <label>Monnaie<select name="devise">${Object.keys(etat.taux).map((d) => `<option ${d === f.devise ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
-          </div>
-          <p class="aide" id="conversion"></p>
-        </fieldset>
-
-        <label>🔒 Mes notes privées (jamais montrées au client)<textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
-        <label>Vérifié le<input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
+      <details class="section" ${nbAutresContacts ? 'open' : ''}>
+        <summary>Plus de détails <small>WhatsApp, Instagram, WeChat…</small></summary>
+        ${CONTACTS.map(([k, lib]) => `<label class="champ"><span>${esc(lib)}</span><input data-contact="${k}" value="${esc(f.contacts[k])}"></label>`).join('')}
       </details>
 
       <div class="barre-enregistrer">
@@ -412,58 +601,78 @@ async function pageFormulaire(id) {
   const form = app.querySelector('#formulaire');
   const champ = (n) => form.elements[n];
 
-  // Catégorie > type > sous-type
-  function majCategories() {
-    app.querySelectorAll('[data-categorie]').forEach((b) => b.classList.toggle('choisie', b.dataset.categorie === f.categorie));
-    const cat = TAXONOMIE[f.categorie];
-    const zoneType = app.querySelector('#zone-type');
-    const zoneSous = app.querySelector('#zone-soustype');
-    if (!cat) { zoneType.innerHTML = ''; zoneSous.innerHTML = ''; majTrajet(); return; }
-    const types = Object.keys(cat.types);
-    if (f.type && !types.includes(f.type)) types.push(f.type);
-    zoneType.innerHTML = `<p class="sous-legende">Type</p><div class="puces">${types.map((t) => `<button type="button" class="puce ${t === f.type ? 'choisie' : ''}" data-type="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
-    if (f.type) {
-      const sous = [...(cat.types[f.type] || [])];
-      if (f.sousType && !sous.includes(f.sousType)) sous.push(f.sousType);
-      zoneSous.innerHTML = `<p class="sous-legende">Sous-type</p><div class="puces">${sous.map((s) => `<button type="button" class="puce ${s === f.sousType ? 'choisie' : ''}" data-soustype="${esc(s)}">${esc(s)}</button>`).join('')}<button type="button" class="puce autre" data-autre>+ Autre</button></div>
-        <div class="autre-saisie" id="autre-saisie" hidden><input id="autre-nom" placeholder="Nom du sous-type"><button type="button" class="bouton-secondaire" data-autre-ok>OK</button></div>`;
-    } else zoneSous.innerHTML = '';
+  function majCategorie() {
+    const c = TAXONOMIE[f.categorie];
+    const b = app.querySelector('#choix-categorie');
+    if (!c) {
+      b.innerHTML = '<span class="selecteur-icone">＋</span><span class="selecteur-texte"><b>Choisir une catégorie</b><small>Hébergement, resto, activité, trajet…</small></span><span class="chevron">›</span>';
+      b.style.removeProperty('--c');
+      b.classList.add('a-remplir');
+    } else {
+      b.style.setProperty('--c', c.couleur);
+      b.classList.remove('a-remplir');
+      b.innerHTML = `<span class="selecteur-icone">${c.icone}</span><span class="selecteur-texte"><b>${esc([f.type, f.sousType].filter(Boolean).join(' › ') || c.nom)}</b><small>${esc(c.nom)}</small></span><span class="chevron">Changer</span>`;
+    }
     majTrajet();
+  }
+
+  function majLieu() {
+    app.querySelector('#choix-pays').innerHTML = `<span class="selecteur-texte"><small>Pays</small><b class="${f.pays ? '' : 'vide-txt'}">${esc(f.pays || 'Choisir')}</b></span><span class="chevron">›</span>`;
+    app.querySelector('#choix-ville').innerHTML = `<span class="selecteur-texte"><small>Ville</small><b class="${f.ville ? '' : 'vide-txt'}">${esc(f.ville || 'Choisir')}</b></span><span class="chevron">›</span>`;
   }
 
   function majTrajet() {
     const zone = app.querySelector('#zone-trajet');
     if (f.categorie !== 'trajets') { zone.innerHTML = ''; return; }
     zone.innerHTML = `
-      <fieldset>
-        <legend>Le trajet</legend>
-        <label>Point de départ<input name="depart" value="${esc(f.depart)}" placeholder="Ex. : Gare de Bangkok"></label>
-        <label>Point d'arrivée<input name="arrivee" value="${esc(f.arrivee)}" placeholder="Ex. : Chiang Mai"></label>
-        <label>Durée<input name="duree" value="${esc(f.duree)}" placeholder="Ex. : 11 h"></label>
-        <p class="aide">Le prix approximatif va dans « Prix réel », plus bas.</p>
-      </fieldset>`;
+      <div class="trajet-saisie">
+        <label class="champ"><span>Point de départ</span><input name="depart" value="${esc(f.depart)}" placeholder="Ex. : Gare de Bangkok"></label>
+        <label class="champ"><span>Point d'arrivée</span><input name="arrivee" value="${esc(f.arrivee)}" placeholder="Ex. : Chiang Mai"></label>
+        <label class="champ"><span>Durée</span><input name="duree" value="${esc(f.duree)}" placeholder="Ex. : 11 h"></label>
+      </div>`;
     zone.querySelectorAll('input').forEach((i) => { i.oninput = () => { f[i.name] = i.value; }; });
   }
 
-  app.querySelector('#formulaire').addEventListener('click', (ev) => {
+  function choisirPays(ensuiteVille) {
+    choisirDansListe({
+      titre: 'Pays',
+      valeurs: listePays(),
+      choisie: f.pays,
+      ajout: true,
+      quandChoisi: (p) => {
+        if (p !== f.pays) {
+          f.pays = p;
+          f.ville = '';
+          const d = DEVISE_DU_PAYS[p];
+          if (d && !champ('montant').value) { champ('devise').value = d; majConversion(); }
+        }
+        majLieu();
+        if (ensuiteVille) choisirVille(true);
+      },
+    });
+  }
+
+  function choisirVille(depuisPays) {
+    if (!f.pays) { choisirPays(true); return; }
+    choisirDansListe({
+      titre: `Ville · ${f.pays}`,
+      valeurs: listeVilles(f.pays),
+      choisie: f.ville,
+      ajout: true,
+      retour: depuisPays,
+      quandRetour: () => choisirPays(true),
+      quandChoisi: (v) => { f.ville = v; majLieu(); },
+    });
+  }
+
+  app.querySelector('#choix-categorie').onclick = () => choisirCategorie(f, majCategorie);
+  app.querySelector('#choix-pays').onclick = () => choisirPays(!f.ville);
+  app.querySelector('#choix-ville').onclick = () => choisirVille(false);
+
+  form.addEventListener('click', (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.categorie) {
-      if (f.categorie !== b.dataset.categorie) { f.categorie = b.dataset.categorie; f.type = ''; f.sousType = ''; }
-      majCategories();
-    } else if (b.dataset.type) {
-      if (f.type !== b.dataset.type) { f.type = b.dataset.type; f.sousType = ''; }
-      majCategories();
-    } else if (b.dataset.soustype) {
-      f.sousType = f.sousType === b.dataset.soustype ? '' : b.dataset.soustype;
-      majCategories();
-    } else if (b.hasAttribute('data-autre')) {
-      app.querySelector('#autre-saisie').hidden = false;
-      app.querySelector('#autre-nom').focus();
-    } else if (b.hasAttribute('data-autre-ok')) {
-      const nom = app.querySelector('#autre-nom').value.trim();
-      if (nom) { f.sousType = nom; majCategories(); }
-    } else if (b.dataset.prix) {
+    if (b.dataset.prix) {
       f.prix = f.prix === +b.dataset.prix ? null : +b.dataset.prix;
       majPuces();
     } else if (b.dataset.confort) {
@@ -476,16 +685,9 @@ async function pageFormulaire(id) {
     }
   });
 
-  form.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' && ev.target.id === 'autre-nom') {
-      ev.preventDefault();
-      app.querySelector('[data-autre-ok]').click();
-    }
-  });
-
   function majPuces() {
-    app.querySelectorAll('[data-prix]').forEach((b) => b.classList.toggle('choisie', +b.dataset.prix === f.prix));
-    app.querySelectorAll('[data-confort]').forEach((b) => b.classList.toggle('choisie', +b.dataset.confort === f.confort));
+    app.querySelectorAll('[data-prix]').forEach((b) => b.classList.toggle('choisi', +b.dataset.prix === f.prix));
+    app.querySelectorAll('[data-confort]').forEach((b) => b.classList.toggle('choisi', +b.dataset.confort === f.confort));
   }
 
   async function majPhotos() {
@@ -495,21 +697,11 @@ async function pageFormulaire(id) {
       <div class="photo"><img src="${esc(p.url)}" alt=""><button type="button" data-retirer-photo="${esc(p.cle)}" aria-label="Retirer">✕</button></div>`).join('');
   }
 
-  function majVilles() {
-    app.querySelector('#liste-villes').innerHTML = villesDuPays().map((v) => `<option value="${esc(v)}">`).join('');
-  }
-
   function majConversion() {
     const cad = enCAD(champ('montant').value, champ('devise').value);
     app.querySelector('#conversion').textContent = cad != null && champ('devise').value !== 'CAD' ? `≈ ${formatCAD(cad)} (taux approximatif)` : '';
   }
 
-  champ('pays').addEventListener('change', () => {
-    f.pays = champ('pays').value.trim();
-    majVilles();
-    const d = DEVISE_DU_PAYS[f.pays];
-    if (d && !champ('montant').value) { champ('devise').value = d; majConversion(); }
-  });
   champ('montant').addEventListener('input', majConversion);
   champ('devise').addEventListener('change', majConversion);
 
@@ -539,11 +731,13 @@ async function pageFormulaire(id) {
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    if (!f.categorie) { toast('Choisis une catégorie'); app.querySelector('#categories').scrollIntoView({ behavior: 'smooth' }); return; }
+    if (!f.categorie) { toast('Choisis une catégorie'); choisirCategorie(f, majCategorie); return; }
+    if (!champ('nom').value.trim()) { toast("Écris le nom de l'endroit"); champ('nom').focus(); return; }
     const bouton = form.querySelector('[type=submit]');
     bouton.disabled = true;
 
-    for (const n of ['nom', 'pays', 'ville', 'adresse', 'telephone', 'description', 'montant', 'devise', 'notes', 'verifieLe']) f[n] = champ(n).value.trim();
+    for (const n of ['nom', 'adresse', 'telephone', 'lienMaps', 'description', 'montant', 'devise', 'notes', 'verifieLe']) f[n] = champ(n).value.trim();
+    f.montant = f.montant.replace(',', '.');
     f.coupDeCoeur = champ('coupDeCoeur').checked;
     form.querySelectorAll('[data-contact]').forEach((i) => { f.contacts[i.dataset.contact] = i.value.trim(); });
     for (const k of Object.keys(f.contacts)) if (!f.contacts[k]) delete f.contacts[k];
@@ -564,11 +758,12 @@ async function pageFormulaire(id) {
     aller(existant ? `#/endroit/${endroit.id}` : '#/');
   });
 
-  majCategories();
+  majCategorie();
+  majLieu();
   majPuces();
   majPhotos();
-  majVilles();
   majConversion();
+  if (!existant) choisirCategorie(f, majCategorie);
 }
 
 // ---------- Villes (jours recommandés) ----------
@@ -585,36 +780,47 @@ async function pageVilles() {
 
   let paysCourant = null;
   app.innerHTML = `
-    <header class="entete"><h1>Villes</h1></header>
-    <p class="intro">Combien de jours tu conseilles de passer dans chaque ville. C'est une suggestion pour les futurs itinéraires.</p>
+    <header class="entete-page">
+      <h1>Villes</h1>
+      <p>Combien de jours tu conseilles dans chaque ville. Ça servira pour créer les itinéraires.</p>
+    </header>
     <div class="villes">
       ${liste.map((v) => {
         const info = etat.villes.find((x) => x.id === v.id) || {};
-        const titre = v.pays !== paysCourant ? `<h2>${esc(v.pays || 'Pays inconnu')}</h2>` : '';
+        const titre = v.pays !== paysCourant ? `<h2 class="pays-titre">${esc(v.pays || 'Pays inconnu')}</h2>` : '';
         paysCourant = v.pays;
         return `${titre}
           <div class="ville" data-ville="${esc(v.id)}">
             <div class="ville-tete"><b>${esc(v.ville)}</b><span class="petit">${v.nb} endroit${v.nb > 1 ? 's' : ''}</span></div>
-            <label class="jours">Jours recommandés
-              <input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(info.joursRecommandes ?? '')}" data-champ="joursRecommandes">
-            </label>
+            <div class="jours">
+              <span>Jours recommandés</span>
+              <div class="compteur">
+                <button type="button" data-moins aria-label="Moins">−</button>
+                <input type="text" inputmode="decimal" value="${esc(info.joursRecommandes ?? '')}" placeholder="–" data-champ="joursRecommandes" aria-label="Jours recommandés">
+                <button type="button" data-plus aria-label="Plus">+</button>
+              </div>
+            </div>
             <textarea rows="2" placeholder="Notes sur la ville (privé)" data-champ="notes">${esc(info.notes)}</textarea>
           </div>`;
-      }).join('') || '<p class="vide">Les villes apparaîtront ici dès que tu auras ajouté des endroits.</p>'}
+      }).join('') || '<p class="vide"><span class="vide-icone">🏙️</span>Les villes apparaîtront ici dès que tu auras ajouté des endroits.</p>'}
     </div>`;
 
   app.querySelectorAll('[data-ville]').forEach((bloc) => {
     const g = groupes.get(bloc.dataset.ville);
-    bloc.querySelectorAll('[data-champ]').forEach((input) => {
-      input.addEventListener('change', async () => {
-        const v = etat.villes.find((x) => x.id === g.id) || { id: g.id, pays: g.pays, ville: g.ville };
-        v[input.dataset.champ] = input.dataset.champ === 'joursRecommandes' ? (input.value === '' ? null : +input.value) : input.value.trim();
-        v.modifieLe = new Date().toISOString();
-        await db.ecrire('villes', v);
-        etat.villes = etat.villes.filter((x) => x.id !== v.id).concat(v);
-        toast('Enregistré');
-      });
-    });
+    const sauver = async (cleChamp, valeur) => {
+      const v = etat.villes.find((x) => x.id === g.id) || { id: g.id, pays: g.pays, ville: g.ville };
+      v[cleChamp] = valeur;
+      v.modifieLe = new Date().toISOString();
+      await db.ecrire('villes', v);
+      etat.villes = etat.villes.filter((x) => x.id !== v.id).concat(v);
+      toast('Enregistré');
+    };
+    const jours = bloc.querySelector('[data-champ=joursRecommandes]');
+    const lireJours = () => { const n = parseFloat(jours.value.replace(',', '.')); return Number.isFinite(n) && n >= 0 ? n : null; };
+    jours.addEventListener('change', () => sauver('joursRecommandes', lireJours()));
+    bloc.querySelector('[data-plus]').onclick = () => { const n = (lireJours() || 0) + 1; jours.value = n; sauver('joursRecommandes', n); };
+    bloc.querySelector('[data-moins]').onclick = () => { const n = Math.max(0, (lireJours() || 0) - 1); jours.value = n || ''; sauver('joursRecommandes', n || null); };
+    bloc.querySelector('[data-champ=notes]').addEventListener('change', (ev) => sauver('notes', ev.target.value.trim()));
   });
 }
 
@@ -623,26 +829,26 @@ async function pageReglages() {
   const derniere = await db.lireReglage('derniereSauvegarde', null);
   const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
   app.innerHTML = `
-    <header class="entete"><h1>Réglages</h1></header>
+    <header class="entete-page"><h1>Réglages</h1></header>
 
-    <section class="bloc">
-      <h2>💾 Copie de sauvegarde</h2>
+    <section class="section">
+      <h2 class="section-titre">💾 Copie de sauvegarde</h2>
       <p>Pour l'instant, tes données sont gardées <b>sur ce téléphone seulement</b>. Fais une copie de sauvegarde régulièrement et garde-la dans ton Google Drive, iCloud ou tes courriels.</p>
       <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : 'Aucune copie faite pour le moment.'}</p>
       <button class="bouton-principal" id="exporter">Faire une copie de sauvegarde</button>
       <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
     </section>
 
-    <section class="bloc">
-      <h2>💱 Taux de change</h2>
+    <section class="section">
+      <h2 class="section-titre">💱 Taux de change</h2>
       <p class="petit">Valeur approximative de 1 unité en dollars canadiens. Sert seulement à afficher l'équivalent en $ CA.</p>
       <div class="taux">
-        ${Object.entries(etat.taux).filter(([d]) => d !== 'CAD').map(([d, t]) => `<label>${d}<input type="number" step="any" min="0" inputmode="decimal" data-devise="${d}" value="${t}"></label>`).join('')}
+        ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
       </div>
     </section>
 
-    <section class="bloc">
-      <h2>📱 Installer sur l'écran d'accueil</h2>
+    <section class="section">
+      <h2 class="section-titre">📱 Installer sur l'écran d'accueil</h2>
       <p class="petit">iPhone : dans Safari, touche le bouton Partager puis « Sur l'écran d'accueil ». Android : dans Chrome, menu ⋮ puis « Installer l'application ».</p>
     </section>`;
 
@@ -680,7 +886,7 @@ async function pageReglages() {
 
   app.querySelectorAll('[data-devise]').forEach((input) => {
     input.onchange = async () => {
-      const v = parseFloat(input.value);
+      const v = parseFloat(input.value.replace(',', '.'));
       if (!(v > 0)) return;
       etat.taux[input.dataset.devise] = v;
       const perso = await db.lireReglage('taux', {});
@@ -693,6 +899,7 @@ async function pageReglages() {
 
 // ---------- Démarrage ----------
 window.addEventListener('hashchange', router);
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !feuille.hidden) fermerFeuille(); });
 charger().then(router).catch((err) => {
   app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
 });

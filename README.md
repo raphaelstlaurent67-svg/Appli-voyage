@@ -14,9 +14,10 @@ Appli pour noter rapidement, depuis le téléphone, les hébergements, restos, a
 
 La sauvegarde en ligne automatique viendra dans une prochaine version.
 
-## Modifier les catégories
+## Modifier les listes
 
-Toute la liste des catégories, types et sous-types est dans `js/taxonomie.js`.
+- Catégories, types et sous-types : `js/taxonomie.js`
+- Pays d'Asie et leurs villes : `js/lieux.js`
 
 ## Essayer l'appli sur l'ordinateur
 
@@ -28,5 +29,7 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `css/style.css` : l'apparence
 - `js/app.js` : les écrans (liste, formulaire, fiche, villes, réglages)
 - `js/db.js` : l'enregistrement des données sur le téléphone et la copie de sauvegarde
-- `js/taxonomie.js` : les catégories, pays, monnaies et façons de joindre un endroit
+- `js/taxonomie.js` : les catégories, monnaies et façons de joindre un endroit
+- `js/lieux.js` : les pays d'Asie et leurs villes
+- `fonts/` : les polices Bricolage Grotesque et Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet

@@ -4,6 +4,7 @@
 
 export const TAXONOMIE = {
   hebergement: {
+    couleur: '#5b5bd6',
     nom: 'Hébergement', icone: '🛏️',
     types: {
       'Auberge': ['Dortoir', 'Chambre privée', 'Auberge festive', 'Auberge tranquille', 'Capsule'],
@@ -15,6 +16,7 @@ export const TAXONOMIE = {
     },
   },
   restos: {
+    couleur: '#e8590c',
     nom: 'Restos', icone: '🍜',
     types: {
       'Rue': ['Stand', 'Marché de nuit', 'Food court', 'Food truck'],
@@ -25,6 +27,7 @@ export const TAXONOMIE = {
     },
   },
   sport: {
+    couleur: '#2f9e44',
     nom: 'Sport', icone: '🏃',
     types: {
       'Raquette': ['Tennis', 'Pickleball', 'Padel', 'Badminton', 'Squash', 'Ping-pong'],
@@ -38,6 +41,7 @@ export const TAXONOMIE = {
     },
   },
   visites: {
+    couleur: '#b8860b',
     nom: 'Visites', icone: '🏛️',
     types: {
       'Culture': ['Temple', 'Pagode', 'Palais', 'Château', 'Ruines', 'Vieille ville', 'Village traditionnel'],
@@ -50,6 +54,7 @@ export const TAXONOMIE = {
     },
   },
   experiences: {
+    couleur: '#d6336c',
     nom: 'Expériences', icone: '✨',
     types: {
       'Détente': ['Spa', 'Massage', 'Onsen/bains chauds'],
@@ -59,6 +64,7 @@ export const TAXONOMIE = {
     },
   },
   nuit: {
+    couleur: '#7048e8',
     nom: 'Vie nocturne', icone: '🌙',
     types: {
       'Bar relax': ['Lounge', 'Cocktails', 'Speakeasy', 'Rooftop', 'Vin', 'Whisky', 'Saké', 'Micro-brasserie', 'Bar de plage', 'Pub'],
@@ -70,6 +76,7 @@ export const TAXONOMIE = {
     },
   },
   trajets: {
+    couleur: '#1c7ed6',
     nom: 'Trajets', icone: '🚆',
     types: {
       'Avion': ['Low-cost', 'Régulier'],
@@ -82,11 +89,6 @@ export const TAXONOMIE = {
   },
 };
 
-export const PAYS = [
-  'Japon', 'Corée du Sud', 'Chine', 'Taïwan', 'Hong Kong', 'Thaïlande', 'Vietnam', 'Cambodge', 'Laos',
-  'Myanmar', 'Malaisie', 'Singapour', 'Indonésie', 'Philippines', 'Inde', 'Sri Lanka', 'Népal', 'Maldives',
-];
-
 // Valeur approximative de 1 unité de chaque monnaie en dollars canadiens.
 // Modifiable dans l'écran Réglages de l'appli.
 export const TAUX_PAR_DEFAUT = {
@@ -95,19 +97,26 @@ export const TAUX_PAR_DEFAUT = {
   THB: 0.041, VND: 0.000054, KHR: 0.00034, LAK: 0.000064, MMK: 0.00065,
   MYR: 0.31, SGD: 1.05, IDR: 0.000085, PHP: 0.024,
   INR: 0.016, LKR: 0.0046, NPR: 0.01, MVR: 0.089,
+  AED: 0.37, SAR: 0.36, QAR: 0.37, OMR: 3.55, KWD: 4.47, BHD: 3.64, JOD: 1.93, ILS: 0.37,
+  TRY: 0.033, GEL: 0.5, AMD: 0.0035, AZN: 0.8, KZT: 0.0027, KGS: 0.0157, UZS: 0.00011, TJS: 0.13, TMT: 0.39,
+  MNT: 0.0004, BDT: 0.0113, BTN: 0.016, BND: 1.05, MOP: 0.17, PKR: 0.0049, AFN: 0.02,
 };
 
 // Monnaie proposée automatiquement selon le pays choisi.
 export const DEVISE_DU_PAYS = {
-  'Japon': 'JPY', 'Corée du Sud': 'KRW', 'Chine': 'CNY', 'Taïwan': 'TWD', 'Hong Kong': 'HKD',
+  'Japon': 'JPY', 'Corée du Sud': 'KRW', 'Chine': 'CNY', 'Taïwan': 'TWD', 'Hong Kong': 'HKD', 'Macao': 'MOP',
   'Thaïlande': 'THB', 'Vietnam': 'VND', 'Cambodge': 'USD', 'Laos': 'LAK', 'Myanmar': 'MMK',
-  'Malaisie': 'MYR', 'Singapour': 'SGD', 'Indonésie': 'IDR', 'Philippines': 'PHP',
-  'Inde': 'INR', 'Sri Lanka': 'LKR', 'Népal': 'NPR', 'Maldives': 'USD',
+  'Malaisie': 'MYR', 'Singapour': 'SGD', 'Indonésie': 'IDR', 'Philippines': 'PHP', 'Brunei': 'BND', 'Timor oriental': 'USD',
+  'Inde': 'INR', 'Sri Lanka': 'LKR', 'Népal': 'NPR', 'Maldives': 'USD', 'Bhoutan': 'BTN', 'Bangladesh': 'BDT', 'Pakistan': 'PKR',
+  'Afghanistan': 'AFN', 'Mongolie': 'MNT', 'Kazakhstan': 'KZT', 'Kirghizistan': 'KGS', 'Ouzbékistan': 'UZS',
+  'Tadjikistan': 'TJS', 'Turkménistan': 'TMT', 'Géorgie': 'GEL', 'Arménie': 'AMD', 'Azerbaïdjan': 'AZN', 'Turquie': 'TRY',
+  'Émirats arabes unis': 'AED', 'Arabie saoudite': 'SAR', 'Qatar': 'QAR', 'Oman': 'OMR', 'Koweït': 'KWD', 'Bahreïn': 'BHD',
+  'Jordanie': 'JOD', 'Israël': 'ILS',
 };
 
-// Façons de joindre un endroit (en plus du téléphone).
+// Autres façons de joindre un endroit (en plus du téléphone), rangées dans « Plus de détails ».
 export const CONTACTS = [
   ['whatsapp', 'WhatsApp'], ['email', 'Courriel'], ['site', 'Site web'], ['reservation', 'Lien de réservation'],
   ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['line', 'LINE'], ['wechat', 'WeChat'],
-  ['kakao', 'KakaoTalk'], ['zalo', 'Zalo'], ['googleMaps', 'Lien Google Maps'],
+  ['kakao', 'KakaoTalk'], ['zalo', 'Zalo'],
 ];
