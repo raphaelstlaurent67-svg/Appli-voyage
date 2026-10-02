@@ -287,7 +287,19 @@ input::placeholder, textarea::placeholder { color: var(--doux); opacity: .7; }
 .segment.choisi { background: var(--surface); color: var(--accent); box-shadow: var(--ombre); }
 .montant { display: flex; gap: 8px; }
 .montant input { flex: 1; min-width: 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.montant select { width: 100px; flex: none; font-weight: 700; }
+.montant-devise {
+  flex: none; min-width: 64px; display: flex; align-items: center; justify-content: center; padding: 0 12px;
+  border-radius: var(--rayon-petit); background: var(--surface-2); font-weight: 800; color: var(--doux);
+}
+.puces-devises { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.puce-devise {
+  display: flex; flex-direction: column; align-items: flex-start; padding: 8px 14px; border-radius: var(--rayon-petit);
+  border: 1.5px solid var(--bordure); background: var(--surface); cursor: pointer; text-align: left; line-height: 1.25;
+}
+.puce-devise small { font-size: .72rem; color: var(--doux); }
+.puce-devise.choisie { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.puce-devise.choisie b { color: var(--accent); }
+.puce-devise.autre { border-style: dashed; }
 
 /* Interrupteur coup de cœur */
 .interrupteur { display: flex; align-items: center; gap: 12px; cursor: pointer; }
@@ -346,6 +358,10 @@ summary small { font-family: var(--police); font-weight: 500; font-size: .82rem;
   background: var(--fond);
 }
 .feuille-entete h2 { flex: 1; text-align: center; font-size: 1.2rem; min-width: 0; }
+.feuille-panneau.plein { top: calc(12px + env(safe-area-inset-top)); max-height: none; }
+.feuille-panneau.plein .feuille-recherche { position: sticky; top: 56px; z-index: 1; box-shadow: 0 0 0 8px var(--fond); }
+#feuille.ferme .feuille-fond { opacity: 0; transition: opacity .22s; }
+.feuille-panneau { touch-action: pan-y; }
 @keyframes monte { from { transform: translateY(40%); opacity: .4; } to { transform: none; opacity: 1; } }
 @keyframes apparait { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .feuille-panneau, .feuille-fond { animation: none; } .carte { transition: none; } }
@@ -380,7 +396,7 @@ summary small { font-family: var(--police); font-weight: 500; font-size: .82rem;
   border: 0; background: none; text-align: left; cursor: pointer; font-weight: 600;
 }
 .ligne.choisie { color: var(--lagon-2); }
-.ligne-ajout { color: var(--accent); }
+.ligne-ajout { display: block; line-height: 52px; color: var(--accent); }
 .feuille-vide { text-align: center; color: var(--doux); }
 
 /* ---------- Fiche ---------- */

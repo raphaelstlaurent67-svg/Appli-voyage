@@ -126,3 +126,19 @@ export const CONTACTS = [
   ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['line', 'LINE'], ['wechat', 'WeChat'],
   ['kakao', 'KakaoTalk'], ['zalo', 'Zalo'],
 ];
+
+// Nom de chaque monnaie, affiché à côté de son code.
+export const NOMS_DEVISES = {
+  CAD: 'Dollar canadien', USD: 'Dollar américain', EUR: 'Euro',
+  JPY: 'Yen japonais', KRW: 'Won sud-coréen', CNY: 'Yuan chinois', TWD: 'Dollar taïwanais', HKD: 'Dollar de Hong Kong', MOP: 'Pataca de Macao',
+  THB: 'Baht thaïlandais', VND: 'Dong vietnamien', KHR: 'Riel cambodgien', LAK: 'Kip laotien', MMK: 'Kyat birman',
+  MYR: 'Ringgit malaisien', SGD: 'Dollar de Singapour', IDR: 'Roupie indonésienne', PHP: 'Peso philippin', BND: 'Dollar de Brunei',
+  INR: 'Roupie indienne', LKR: 'Roupie srilankaise', NPR: 'Roupie népalaise', MVR: 'Rufiyaa des Maldives', BTN: 'Ngultrum du Bhoutan',
+  BDT: 'Taka du Bangladesh', PKR: 'Roupie pakistanaise', AFN: 'Afghani',
+  AED: 'Dirham des Émirats', SAR: 'Riyal saoudien', QAR: 'Riyal qatari', OMR: 'Rial omanais', KWD: 'Dinar koweïtien', BHD: 'Dinar de Bahreïn',
+  JOD: 'Dinar jordanien', ILS: 'Shekel israélien', TRY: 'Livre turque', GEL: 'Lari géorgien', AMD: 'Dram arménien', AZN: 'Manat azerbaïdjanais',
+  KZT: 'Tenge kazakh', KGS: 'Som kirghize', UZS: 'Sum ouzbek', TJS: 'Somoni tadjik', TMT: 'Manat turkmène', MNT: 'Tugrik mongol',
+};
+
+// Monnaies des pays où tu vas le plus, montrées en premier.
+export const DEVISES_FAVORITES = ['JPY', 'THB', 'KRW', 'NPR', 'PHP', 'VND'];

@@ -1,4 +1,4 @@
-import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS } from './taxonomie.js';
+import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES } from './taxonomie.js';
 import { VILLES, PAYS_ASIE, trierFr } from './lieux.js';
 import * as db from './db.js';
 
@@ -10,6 +10,7 @@ const etat = {
   filtres: { recherche: '', pays: '', ville: '', prix: '', categorie: '', type: '', tri: 'recent' },
 };
 const urlsPhotos = new Map(); // id photo -> URL d'affichage
+let brouillon = null; // catégorie choisie avec le bouton + avant d'ouvrir le formulaire
 
 const app = document.getElementById('app');
 const feuille = document.getElementById('feuille');
@@ -118,25 +119,82 @@ function listeVilles(pays) {
 }
 
 // ---------- Feuille qui monte du bas (choix de catégorie, pays, ville) ----------
-function ouvrirFeuille(html, auClic) {
-  feuille.innerHTML = `<div class="feuille-fond" data-fermer></div><div class="feuille-panneau" role="dialog" aria-modal="true">${html}</div>`;
+function ouvrirFeuille(html, auClic, { plein = false } = {}) {
+  feuille.innerHTML = `<div class="feuille-fond" data-fermer></div><div class="feuille-panneau ${plein ? 'plein' : ''}" role="dialog" aria-modal="true">${html}</div>`;
+  feuille.dataset.numero = String(+(feuille.dataset.numero || 0) + 1);
+  feuille.classList.remove('ferme');
   feuille.hidden = false;
   document.body.classList.add('fige');
   feuille.onclick = (ev) => {
-    if (ev.target.closest('[data-fermer]')) { fermerFeuille(); return; }
+    if (ev.target.closest('[data-fermer]')) { fermerFeuille(true); return; }
     auClic(ev);
   };
+  activerGlissement(feuille.querySelector('.feuille-panneau'));
   const recherche = feuille.querySelector('.feuille-recherche');
   if (recherche) {
-    recherche.addEventListener('input', () => filtrerFeuille(recherche.value));
-    if (window.matchMedia('(min-width: 700px)').matches) recherche.focus();
+    recherche.addEventListener('input', () => { filtrerFeuille(recherche.value); feuille.querySelector('.feuille-panneau').scrollTop = 0; });
+    // Entrée choisit le premier résultat.
+    recherche.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      const visible = (b) => !b.hidden && !b.closest('li').hidden;
+      const premier = [...feuille.querySelectorAll('[data-valeur]')].find(visible) || [...feuille.querySelectorAll('[data-ajouter]')].find(visible);
+      if (premier) premier.click();
+    });
+    // Le clavier s'ouvre tout de suite pour pouvoir écrire.
+    recherche.focus({ preventScroll: true });
   }
 }
 
-function fermerFeuille() {
-  feuille.hidden = true;
-  feuille.innerHTML = '';
-  document.body.classList.remove('fige');
+// anime = true : la feuille redescend en glissant avant de disparaître.
+function fermerFeuille(anime = false) {
+  if (feuille.hidden) return;
+  const numero = feuille.dataset.numero;
+  const fin = () => {
+    if (feuille.dataset.numero !== numero) return; // une autre feuille s'est ouverte entre-temps
+    feuille.hidden = true;
+    feuille.innerHTML = '';
+    feuille.classList.remove('ferme');
+    document.body.classList.remove('fige');
+  };
+  const panneau = feuille.querySelector('.feuille-panneau');
+  if (!anime || !panneau || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { fin(); return; }
+  panneau.style.transition = 'transform .22s ease-in';
+  panneau.style.transform = 'translateY(100%)';
+  feuille.classList.add('ferme');
+  setTimeout(fin, 220);
+}
+
+// Glisser la feuille vers le bas pour la fermer.
+function activerGlissement(panneau) {
+  let debutY = null;
+  let dy = 0;
+  let debutTemps = 0;
+  panneau.addEventListener('touchstart', (ev) => {
+    if (panneau.scrollTop > 0 && !ev.target.closest('.feuille-entete')) { debutY = null; return; }
+    debutY = ev.touches[0].clientY;
+    dy = 0;
+    debutTemps = Date.now();
+    panneau.style.transition = 'none';
+  }, { passive: true });
+  panneau.addEventListener('touchmove', (ev) => {
+    if (debutY == null) return;
+    dy = ev.touches[0].clientY - debutY;
+    if (dy > 0) {
+      panneau.style.transform = `translateY(${dy}px)`;
+      if (ev.cancelable) ev.preventDefault();
+    }
+  }, { passive: false });
+  const relacher = () => {
+    if (debutY == null) return;
+    debutY = null;
+    const rapide = dy > 40 && dy / Math.max(1, Date.now() - debutTemps) > 0.5;
+    if (dy > 110 || rapide) { fermerFeuille(true); return; }
+    panneau.style.transition = 'transform .2s ease-out';
+    panneau.style.transform = '';
+  };
+  panneau.addEventListener('touchend', relacher);
+  panneau.addEventListener('touchcancel', relacher);
 }
 
 function filtrerFeuille(texte) {
@@ -247,13 +305,13 @@ function choisirCategorie(f, quandFini) {
 }
 
 // Liste avec recherche (pays ou ville).
-function choisirDansListe({ titre, valeurs, choisie, ajout, retour, quandChoisi, quandRetour }) {
+function choisirDansListe({ titre, valeurs, choisie, ajout, retour, quandChoisi, quandRetour, etiquette = (v) => v, placeholder = 'Chercher…' }) {
   ouvrirFeuille(`
     ${enteteFeuille(esc(titre), retour ? 'liste' : '')}
-    <input class="feuille-recherche" type="search" placeholder="Chercher…" autocomplete="off">
+    <input class="feuille-recherche" type="search" placeholder="${esc(placeholder)}" autocomplete="off" autocapitalize="words" enterkeyhint="go">
     <ul class="liste-choix">
+      ${valeurs.map((v) => `<li data-nom="${esc(etiquette(v))}"><button type="button" class="ligne ${v === choisie ? 'choisie' : ''}" data-valeur="${esc(v)}">${esc(etiquette(v))}${v === choisie ? '<span>✓</span>' : ''}</button></li>`).join('')}
       ${ajout ? '<li><button type="button" class="ligne ligne-ajout" data-ajouter="" hidden>+ Ajouter « <b></b> »</button></li>' : ''}
-      ${valeurs.map((v) => `<li data-nom="${esc(v)}"><button type="button" class="ligne ${v === choisie ? 'choisie' : ''}" data-valeur="${esc(v)}">${esc(v)}${v === choisie ? '<span>✓</span>' : ''}</button></li>`).join('')}
     </ul>
     <p class="feuille-vide" hidden>Aucun résultat.</p>`, (ev) => {
     const b = ev.target.closest('button');
@@ -261,7 +319,7 @@ function choisirDansListe({ titre, valeurs, choisie, ajout, retour, quandChoisi,
     if (b.dataset.retour === 'liste') { quandRetour(); return; }
     const v = b.dataset.valeur ?? b.dataset.ajouter;
     if (v) { fermerFeuille(); quandChoisi(v); }
-  });
+  }, { plein: true });
 }
 
 // ---------- Chargement ----------
@@ -521,7 +579,8 @@ async function pageFormulaire(id) {
   const dernierLieu = await db.lireReglage('dernierLieu', {});
   const f = existant
     ? structuredClone(existant)
-    : { id: db.nouvelId(), pays: dernierLieu.pays || '', ville: dernierLieu.ville || '', devise: dernierLieu.devise || DEVISE_DU_PAYS[dernierLieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui() };
+    : { id: db.nouvelId(), pays: dernierLieu.pays || '', ville: dernierLieu.ville || '', devise: dernierLieu.devise || DEVISE_DU_PAYS[dernierLieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
+  brouillon = null;
   f.contacts = f.contacts || {};
   f.photos = f.photos || [];
   f.nouvellesPhotos = []; // { cle, blob, url }
@@ -553,7 +612,7 @@ async function pageFormulaire(id) {
         <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
         <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Colle le lien partagé par Google Maps"></label>
         <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">📍 Enregistrer ma position actuelle</button>
-        <p class="aide" id="texte-position">${f.lat ? `Position enregistrée (${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)})` : ''}</p>
+        <p class="aide" id="texte-position"></p>
       </section>
 
       <section class="section">
@@ -563,8 +622,9 @@ async function pageFormulaire(id) {
         <p class="sous-titre">Prix réel</p>
         <div class="montant">
           <input name="montant" type="text" inputmode="decimal" value="${esc(f.montant)}" placeholder="Ex. : 300" aria-label="Montant">
-          <select name="devise" aria-label="Monnaie">${trierFr(Object.keys(etat.taux)).map((d) => `<option ${d === f.devise ? 'selected' : ''}>${d}</option>`).join('')}</select>
+          <span class="montant-devise" id="devise-actuelle"></span>
         </div>
+        <div class="puces-devises" id="devises"></div>
         <p class="aide" id="conversion"></p>
         <p class="sous-titre">Luxe / confort <small>(séparé du prix)</small></p>
         <div class="segments" id="confort">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="segment" data-confort="${n}">${n}★</button>`).join('')}</div>
@@ -648,7 +708,8 @@ async function pageFormulaire(id) {
           f.pays = p;
           f.ville = '';
           const d = DEVISE_DU_PAYS[p];
-          if (d && !champ('montant').value) { champ('devise').value = d; majConversion(); }
+          if (d && !champ('montant').value) f.devise = d;
+          majDevises();
         }
         majLieu();
         if (ensuiteVille) choisirVille(true);
@@ -702,12 +763,41 @@ async function pageFormulaire(id) {
   }
 
   function majConversion() {
-    const cad = enCAD(champ('montant').value, champ('devise').value);
-    app.querySelector('#conversion').textContent = cad != null && champ('devise').value !== 'CAD' ? `≈ ${formatCAD(cad)} (taux approximatif)` : '';
+    const cad = enCAD(champ('montant').value, f.devise);
+    app.querySelector('#conversion').textContent = cad != null && f.devise !== 'CAD' ? `≈ ${formatCAD(cad)} (taux approximatif)` : '';
+  }
+
+  // Seulement 3 choix rapides : la monnaie du pays, le dollar américain et le dollar canadien.
+  function majDevises() {
+    const locale = DEVISE_DU_PAYS[f.pays];
+    const rapides = uniques([locale, f.devise, 'USD', 'CAD']);
+    app.querySelector('#devise-actuelle').textContent = f.devise || '';
+    app.querySelector('#devises').innerHTML = rapides.map((d) => `
+      <button type="button" class="puce-devise ${d === f.devise ? 'choisie' : ''}" data-devise-rapide="${d}">
+        <b>${d}</b><small>${esc(d === locale ? `Monnaie locale` : NOMS_DEVISES[d] || '')}</small>
+      </button>`).join('') + '<button type="button" class="puce-devise autre" data-devise-autre><b>Autre…</b><small>Toutes les monnaies</small></button>';
+    majConversion();
+  }
+
+  function choisirDevise() {
+    const favorites = DEVISES_FAVORITES.filter((d) => etat.taux[d]);
+    const autres = trierFr(Object.keys(etat.taux).filter((d) => !favorites.includes(d)));
+    choisirDansListe({
+      titre: 'Monnaie',
+      valeurs: [...favorites, ...autres],
+      choisie: f.devise,
+      etiquette: (d) => `${d} · ${NOMS_DEVISES[d] || d}`,
+      placeholder: 'Chercher (ex. : baht, yen…)',
+      quandChoisi: (d) => { f.devise = d; majDevises(); },
+    });
   }
 
   champ('montant').addEventListener('input', majConversion);
-  champ('devise').addEventListener('change', majConversion);
+  app.querySelector('#devises').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.deviseRapide) { f.devise = b.dataset.deviseRapide; majDevises(); } else if (b.hasAttribute('data-devise-autre')) choisirDevise();
+  });
 
   app.querySelector('#ajout-photos').addEventListener('change', async (ev) => {
     for (const fichier of ev.target.files) {
@@ -718,6 +808,13 @@ async function pageFormulaire(id) {
     majPhotos();
   });
 
+  function afficherPosition() {
+    const texte = app.querySelector('#texte-position');
+    if (!f.lat) { texte.textContent = ''; return; }
+    const url = `https://www.google.com/maps/search/?api=1&query=${f.lat},${f.lng}`;
+    texte.innerHTML = `✓ Position enregistrée${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a>`;
+  }
+
   app.querySelector('#ma-position').addEventListener('click', () => {
     const texte = app.querySelector('#texte-position');
     if (!navigator.geolocation) { texte.textContent = 'Position non disponible sur cet appareil.'; return; }
@@ -726,10 +823,17 @@ async function pageFormulaire(id) {
       (pos) => {
         f.lat = +pos.coords.latitude.toFixed(6);
         f.lng = +pos.coords.longitude.toFixed(6);
-        texte.textContent = `Position enregistrée (${f.lat.toFixed(5)}, ${f.lng.toFixed(5)})`;
+        f.precision = Math.round(pos.coords.accuracy);
+        afficherPosition();
       },
-      () => { texte.textContent = "Impossible d'obtenir ta position. Vérifie que la localisation est permise."; },
-      { enableHighAccuracy: true, timeout: 15000 },
+      (err) => {
+        texte.textContent = err.code === 1
+          ? "Ton téléphone a refusé l'accès à la position. Va dans Réglages > Confidentialité > Service de localisation et permets-le pour Safari (ou Chrome)."
+          : err.code === 3
+            ? 'La position prend trop de temps. Sors à découvert ou réessaie dans un instant.'
+            : "Impossible d'obtenir ta position pour le moment. Réessaie dans un instant.";
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
     );
   });
 
@@ -740,7 +844,7 @@ async function pageFormulaire(id) {
     const bouton = form.querySelector('[type=submit]');
     bouton.disabled = true;
 
-    for (const n of ['nom', 'adresse', 'telephone', 'lienMaps', 'description', 'montant', 'devise', 'notes', 'verifieLe']) f[n] = champ(n).value.trim();
+    for (const n of ['nom', 'adresse', 'telephone', 'lienMaps', 'description', 'montant', 'notes', 'verifieLe']) f[n] = champ(n).value.trim();
     f.montant = f.montant.replace(',', '.');
     f.coupDeCoeur = champ('coupDeCoeur').checked;
     form.querySelectorAll('[data-contact]').forEach((i) => { f.contacts[i.dataset.contact] = i.value.trim(); });
@@ -766,8 +870,8 @@ async function pageFormulaire(id) {
   majLieu();
   majPuces();
   majPhotos();
-  majConversion();
-  if (!existant) choisirCategorie(f, majCategorie);
+  majDevises();
+  afficherPosition();
 }
 
 // ---------- Villes (jours recommandés) ----------
@@ -903,6 +1007,16 @@ async function pageReglages() {
 
 // ---------- Démarrage ----------
 window.addEventListener('hashchange', router);
+// Le bouton + ouvre d'abord le choix de catégorie par-dessus la page.
+// Si on le referme, on reste où on était ; sinon le formulaire s'ouvre.
+document.querySelector('.bouton-ajouter').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  const choix = {};
+  choisirCategorie(choix, () => {
+    brouillon = { categorie: choix.categorie, type: choix.type, sousType: choix.sousType };
+    aller('#/ajouter');
+  });
+});
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !feuille.hidden) fermerFeuille(); });
 charger().then(router).catch((err) => {
   app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
