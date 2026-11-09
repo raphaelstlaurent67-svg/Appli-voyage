@@ -2,7 +2,7 @@
 // Fonctionne sans internet. Une sauvegarde en ligne viendra s'ajouter plus tard.
 
 const NOM_BASE = 'appli-voyage';
-const VERSION = 2; // 2 : ajout des voyages (générateur)
+const VERSION = 3; // 2 : voyages (générateur) · 3 : contributeurs et paiements
 let basePromise;
 
 function ouvrir() {
@@ -16,6 +16,8 @@ function ouvrir() {
         if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('reglages')) db.createObjectStore('reglages', { keyPath: 'cle' });
         if (!db.objectStoreNames.contains('voyages')) db.createObjectStore('voyages', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('contributeurs')) db.createObjectStore('contributeurs', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('paiements')) db.createObjectStore('paiements', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -88,6 +90,8 @@ export async function exporterTout() {
     endroits: await tous('endroits'),
     villes: await tous('villes'),
     voyages: await tous('voyages'),
+    contributeurs: await tous('contributeurs'),
+    paiements: await tous('paiements'),
     reglages: await tous('reglages'),
     photos: photosTexte,
   };
@@ -110,9 +114,38 @@ export async function importerTout(donnees) {
     const actuel = await lire('voyages', v.id);
     if (!actuel || (v.modifieLe || '') > (actuel.modifieLe || '')) await ecrire('voyages', v);
   }
+  for (const magasin of ['contributeurs', 'paiements']) {
+    for (const x of donnees[magasin] || []) {
+      const actuel = await lire(magasin, x.id);
+      if (!actuel || (x.modifieLe || '') > (actuel.modifieLe || '')) await ecrire(magasin, x);
+    }
+  }
   for (const r of donnees.reglages || []) await ecrire('reglages', r);
   for (const p of donnees.photos || []) {
     if (!(await lire('photos', p.id))) await ecrire('photos', { id: p.id, blob: await texteVersBlob(p.data) });
   }
   return ajoutes;
+}
+
+// Fichier envoyé par un contributeur : on prend seulement ses endroits et ses photos.
+// Ils arrivent « à valider » ; un endroit déjà accepté ou refusé garde sa décision.
+export async function importerContribution(donnees, contributeurId) {
+  if (!donnees || donnees.format !== 'appli-voyage') throw new Error("Ce fichier n'est pas une sauvegarde de l'appli.");
+  let nouveaux = 0;
+  for (const e of donnees.endroits || []) {
+    const actuel = await lire('endroits', e.id);
+    if (actuel && (e.modifieLe || '') <= (actuel.modifieLe || '')) continue;
+    const garde = actuel && actuel.contributeurId === contributeurId && actuel.statut !== 'en_attente';
+    await ecrire('endroits', {
+      ...e, contributeurId,
+      statut: garde ? actuel.statut : 'en_attente',
+      recuLe: actuel?.recuLe || new Date().toISOString(),
+      decideLe: garde ? actuel.decideLe : undefined,
+    });
+    if (!actuel) nouveaux++;
+  }
+  for (const p of donnees.photos || []) {
+    if (!(await lire('photos', p.id))) await ecrire('photos', { id: p.id, blob: await texteVersBlob(p.data) });
+  }
+  return nouveaux;
 }

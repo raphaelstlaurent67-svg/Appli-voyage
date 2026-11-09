@@ -1,43 +1,62 @@
-// Générateur de voyages : assembler des endroits en un voyage jour par jour.
+// Studio : générateur de voyages et suivi des contributeurs.
 // Utilisé par Raph seulement, surtout sur l'ordinateur. Les endroits viennent du fichier
 // de sauvegarde du cellulaire (Mes données > Importer). Tout reste sur cet appareil.
 
 import { TAXONOMIE, TAUX_PAR_DEFAUT } from './taxonomie.js';
 import * as db from './db.js';
+import { icone, iconeCat } from './icones.js';
 
-const etat = { endroits: [], voyages: [], taux: { ...TAUX_PAR_DEFAUT } };
+const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
 const app = document.getElementById('app');
+const side = document.getElementById('side');
+const modale = document.getElementById('modale');
+
+// Règles de paiement des contributeurs (modifiables dans Contributeurs > Règles).
+const REGLES_DEFAUT = {
+  parEndroit: 1,
+  bonusVille: 75,
+  cibleParCategorie: 30,
+  categoriesBonus: ['hebergement', 'restos', 'visites', 'nuit', 'sport', 'experiences'],
+  pourcentage: 10,
+  seuilVoyage: 300,
+  recompenseVoyage: 'Un voyage à rabais',
+};
 
 // ---------- Petits outils ----------
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const dollars = (n) => (n ? '$'.repeat(n) : '');
 const sansAccents = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const uniques = (l) => [...new Set(l.filter(Boolean))];
 const trier = (l) => [...l].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 const categorie = (e) => TAXONOMIE[e?.categorie] || TAXONOMIE.autre;
 const endroit = (id) => etat.endroits.find((e) => e.id === id);
+const pluriel = (n, mot, motPluriel = `${mot}s`) => `${n} ${n > 1 ? motPluriel : mot}`;
+const nombre = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+const dateCourte = (iso) => (iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const aujourdhui = () => new Date().toISOString().slice(0, 10);
 
 function toast(message) {
   const t = document.getElementById('toast');
   t.textContent = message;
   t.classList.add('visible');
   clearTimeout(toast.minuterie);
-  toast.minuterie = setTimeout(() => t.classList.remove('visible'), 2500);
+  toast.minuterie = setTimeout(() => t.classList.remove('visible'), 2600);
 }
 
 function enCAD(montant, devise) {
-  const m = parseFloat(String(montant ?? '').replace(',', '.'));
+  const m = nombre(montant);
   const t = etat.taux[devise];
   return m && t ? m * t : null;
 }
-const formatCAD = (v) => `${Math.round(v || 0).toLocaleString('fr-CA')} $ CA`;
+const formatCAD = (v) => `${Math.round(v || 0).toLocaleString('fr-CA')} $`;
+const formatArgent = (v) => `${(Math.round((v || 0) * 100) / 100).toLocaleString('fr-CA', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 })} $`;
+const dollars = (n) => (n ? '$'.repeat(n) : '');
 
-function dateDuJour(v, index) {
+function dateDuJour(v, index, options = { weekday: 'short', day: 'numeric', month: 'short' }) {
   if (!v.dateDebut) return '';
   const d = new Date(`${v.dateDebut}T12:00:00`);
   d.setDate(d.getDate() + index);
-  return d.toLocaleDateString('fr-CA', { weekday: 'short', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString('fr-CA', options);
 }
 
 function lienWeb(v) {
@@ -70,31 +89,34 @@ async function afficherPhotos(racine) {
 async function charger() {
   etat.endroits = await db.tous('endroits');
   etat.voyages = await db.tous('voyages');
+  etat.contributeurs = await db.tous('contributeurs');
+  etat.paiements = await db.tous('paiements');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
+  etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
 }
 
-async function sauver(v) {
-  v.modifieLe = new Date().toISOString();
-  await db.ecrire('voyages', v);
-  etat.voyages = etat.voyages.filter((x) => x.id !== v.id).concat(v);
+async function sauver(magasin, objet) {
+  objet.modifieLe = new Date().toISOString();
+  await db.ecrire(magasin, objet);
+  etat[magasin] = etat[magasin].filter((x) => x.id !== objet.id).concat(objet);
 }
+
+// Un endroit est utilisable dans les voyages s'il est à Raph, ou accepté.
+const utilisable = (e) => !e.contributeurId || e.statut === 'accepte';
+const endroitsUtilisables = () => etat.endroits.filter(utilisable);
+const aValider = () => etat.endroits.filter((e) => e.contributeurId && e.statut === 'en_attente');
 
 function nouveauVoyage() {
-  const v = {
+  return {
     id: db.nouvelId(), titre: 'Nouveau voyage', client: '', dateDebut: '', voyageurs: 2, style: 'moyen',
-    prixVente: '', introClient: '', notesPrivees: '', modele: false,
+    prixVente: '', introClient: '', notesPrivees: '', modele: false, vendu: false, venduLe: '',
     etapes: [], jours: [], creeLe: new Date().toISOString(),
   };
-  return v;
 }
 
-function dupliquer(v, { commeModele = false } = {}) {
+function dupliquer(v) {
   const copie = structuredClone(v);
-  copie.id = db.nouvelId();
-  copie.titre = commeModele ? v.titre : `${v.titre} (copie)`;
-  copie.modele = commeModele;
-  copie.client = '';
-  copie.creeLe = new Date().toISOString();
+  Object.assign(copie, { id: db.nouvelId(), titre: v.modele ? v.titre : `${v.titre} (copie)`, modele: false, vendu: false, venduLe: '', client: '', creeLe: new Date().toISOString() });
   return copie;
 }
 
@@ -108,12 +130,9 @@ function synchroniserJours(v) {
     et.jours = n;
     const ceux = [];
     for (let r = 0; r < n; r++) {
-      const j = anciens.find((x) => x.etapeId === et.id && x.rang === r) || { id: db.nouvelId(), etapeId: et.id, rang: r, titre: '', items: [] };
-      ceux.push(j);
+      ceux.push(anciens.find((x) => x.etapeId === et.id && x.rang === r) || { id: db.nouvelId(), etapeId: et.id, rang: r, titre: '', items: [] });
     }
-    for (const j of anciens) {
-      if (j.etapeId === et.id && j.rang >= n) ceux[n - 1].items.push(...j.items);
-    }
+    for (const j of anciens) if (j.etapeId === et.id && j.rang >= n) ceux[n - 1].items.push(...j.items);
     nouveaux.push(...ceux);
   }
   v.jours = nouveaux;
@@ -122,6 +141,10 @@ function synchroniserJours(v) {
 const etapeDe = (v, jour) => v.etapes.find((et) => et.id === jour.etapeId) || {};
 const itineraire = (v) => v.etapes.map((et) => et.ville || et.pays).filter(Boolean).join(' → ');
 const nbEndroits = (v) => v.jours.reduce((n, j) => n + j.items.length, 0);
+const photoCouverture = (v) => {
+  for (const j of v.jours) for (const it of j.items) { const e = endroit(it.endroitId); if (e?.photos?.length) return e.photos[0]; }
+  return '';
+};
 
 function coutVoyage(v) {
   let total = 0;
@@ -136,172 +159,348 @@ function coutVoyage(v) {
   return { total, sansPrix };
 }
 
+// ---------- Contributeurs : calculs ----------
+// Plus une fiche est complète, plus elle a de chances d'être acceptée.
+const CRITERES = [
+  ['photo', (e) => e.photos?.length > 0],
+  ['position GPS', (e) => !!e.lat],
+  ['description', (e) => (e.description || '').length >= 20],
+  ['budget', (e) => !!e.prix],
+  ['prix réel', (e) => !!e.montant],
+  ['confort', (e) => !!e.confort],
+  ['adresse ou lien Maps', (e) => !!(e.adresse || e.lienMaps)],
+  ['type précis', (e) => !!(e.sousType || e.categorie === 'autre')],
+  ['contact', (e) => !!(e.telephone || Object.keys(e.contacts || {}).length)],
+  ['date de visite', (e) => !!e.verifieLe],
+];
+function completude(e) {
+  const manque = CRITERES.filter(([, ok]) => !ok(e)).map(([nom]) => nom);
+  return { score: Math.round(((CRITERES.length - manque.length) / CRITERES.length) * 100), manque };
+}
+
+function bilanContributeur(c) {
+  const r = etat.regles;
+  const siens = etat.endroits.filter((e) => e.contributeurId === c.id);
+  const acceptes = siens.filter((e) => e.statut === 'accepte');
+  const enAttente = siens.filter((e) => e.statut === 'en_attente').length;
+  const refuses = siens.filter((e) => e.statut === 'refuse').length;
+
+  // Bonus « ville complète » : X endroits acceptés dans chaque catégorie choisie.
+  const parVille = new Map();
+  for (const e of acceptes) {
+    const cle = `${e.pays}|${e.ville}`;
+    if (!parVille.has(cle)) parVille.set(cle, { pays: e.pays, ville: e.ville, cats: {} });
+    const v = parVille.get(cle);
+    v.cats[e.categorie] = (v.cats[e.categorie] || 0) + 1;
+  }
+  const cats = r.categoriesBonus.length ? r.categoriesBonus : ['hebergement'];
+  const villes = [...parVille.values()].map((v) => {
+    const fait = cats.reduce((n, k) => n + Math.min(v.cats[k] || 0, r.cibleParCategorie), 0);
+    const total = cats.length * r.cibleParCategorie;
+    return {
+      ...v, progres: total ? fait / total : 0, complete: fait >= total,
+      manque: cats.filter((k) => (v.cats[k] || 0) < r.cibleParCategorie).map((k) => `${TAXONOMIE[k]?.nom || k} ${v.cats[k] || 0}/${r.cibleParCategorie}`),
+    };
+  }).sort((a, b) => b.progres - a.progres);
+  const bonus = villes.filter((v) => v.complete).length * r.bonusVille;
+
+  // Pourcentage sur les itinéraires vendus, selon la part de ses endroits dans le voyage.
+  let commissions = 0;
+  const ventes = [];
+  for (const v of etat.voyages.filter((x) => x.vendu && nombre(x.prixVente))) {
+    const ids = v.jours.flatMap((j) => j.items.map((it) => it.endroitId));
+    if (!ids.length) continue;
+    const a = ids.filter((id) => endroit(id)?.contributeurId === c.id).length;
+    if (!a) continue;
+    const montant = nombre(v.prixVente) * (r.pourcentage / 100) * (a / ids.length);
+    commissions += montant;
+    ventes.push({ titre: v.titre, montant });
+  }
+
+  const gagne = acceptes.length * r.parEndroit + bonus + commissions;
+  const paye = etat.paiements.filter((p) => p.contributeurId === c.id).reduce((n, p) => n + nombre(p.montant), 0);
+  return {
+    acceptes: acceptes.length, enAttente, refuses, villes, bonus, commissions, ventes,
+    gagne, paye, du: Math.max(0, Math.round((gagne - paye) * 100) / 100),
+    progresVoyage: Math.min(1, acceptes.length / Math.max(1, r.seuilVoyage)),
+  };
+}
+
+// ---------- Barre latérale ----------
+function rendreSide() {
+  const route = location.hash || '#/';
+  const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
+  const n = aValider().length;
+  const actif = (href) => (href === '#/' ? route === '#/' || route === '#' : route.startsWith(href));
+  const lienNav = (href, ico, texte, extra = '') => `<a class="navBtn ${actif(href) ? 'on' : ''}" href="${href}">${icone(ico, { taille: 16 })}<span>${texte}</span>${extra}</a>`;
+  side.innerHTML = `
+    <a class="brand" href="#/">
+      <span class="mk">${icone('compass', { taille: 17, epaisseur: 2.2 })}</span>
+      <span><b>Studio</b><span class="st"><i class="dot"></i>${pluriel(endroitsUtilisables().length, 'endroit')}</span></span>
+    </a>
+    <nav class="sideNav">
+      ${lienNav('#/', 'layout-grid', "Vue d'ensemble")}
+      ${lienNav('#/contributeurs', 'users', 'Contributeurs', n ? `<span class="pastille-n">${n}</span>` : '')}
+      ${lienNav('#/donnees', 'folder-open', 'Mes données')}
+    </nav>
+    <div class="sideLab">Voyages</div>
+    <div class="sideVoyages">
+      ${tries.map((v) => `
+        <a class="camp ${route.startsWith(`#/voyage/${v.id}`) ? 'on' : ''}" href="#/voyage/${esc(v.id)}">
+          <span class="nm"><i class="cdot ${v.vendu ? 'vendu' : v.modele ? 'modele' : ''}"></i><span>${esc(v.titre)}</span></span>
+          <span class="sub">${v.modele ? 'Modèle · ' : v.vendu ? 'Vendu · ' : ''}${pluriel(v.jours.length, 'jour')} · ${pluriel(nbEndroits(v), 'endroit')}</span>
+        </a>`).join('')}
+      <button class="navBtn" id="side-nouveau">${icone('plus', { taille: 16 })}<span>Nouveau voyage</span></button>
+    </div>
+    <div class="sideFoot">
+      <a href="index.html">${icone('external-link', { taille: 13 })} Appli des endroits</a>
+      <span>Données gardées sur cet ordinateur</span>
+    </div>`;
+  side.querySelector('#side-nouveau').onclick = creerVoyage;
+}
+
+async function creerVoyage() {
+  const v = nouveauVoyage();
+  await sauver('voyages', v);
+  location.hash = `#/voyage/${v.id}`;
+}
+
+// ---------- Fenêtre (modale) ----------
+function ouvrirModale(titre, corps, quandOk, { ok = 'Enregistrer', danger = false } = {}) {
+  modale.innerHTML = `
+    <div class="mod-fond" data-fermer></div>
+    <form class="mod" role="dialog" aria-modal="true">
+      <header class="mod-tete"><h2>${titre}</h2><button type="button" class="ico-btn" data-fermer aria-label="Fermer">${icone('x', { taille: 18 })}</button></header>
+      <div class="mod-corps">${corps}</div>
+      <footer class="mod-pied"><button type="button" class="btn ghost" data-fermer>Annuler</button><button class="btn ${danger ? 'rouge' : ''}">${ok}</button></footer>
+    </form>`;
+  modale.hidden = false;
+  const form = modale.querySelector('form');
+  modale.querySelectorAll('[data-fermer]').forEach((b) => { b.onclick = fermerModale; });
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const valeurs = Object.fromEntries(new FormData(form));
+    if ((await quandOk(valeurs, form)) !== false) fermerModale();
+  };
+  form.querySelector('input, select, textarea')?.focus();
+}
+function fermerModale() { modale.hidden = true; modale.innerHTML = ''; }
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !modale.hidden) fermerModale(); });
+
 // ---------- Navigation ----------
+let carte = null;
+
 async function router() {
-  const [, page, id, mode] = (location.hash || '#/').split('/');
-  document.body.dataset.page = page || 'voyages';
-  document.querySelectorAll('.onglets a[data-page]').forEach((a) => a.classList.toggle('actif', a.dataset.page === (page || 'voyages')));
+  const [, page, id, sous] = (location.hash || '#/').split('/');
+  carte = null;
+  rendreSide();
+  app.classList.toggle('large', page === 'voyage');
   window.scrollTo(0, 0);
-  if (page === 'voyage') return pageEditeur(id);
-  if (page === 'client') return pageClient(id, mode === 'apercu' ? 'apercu' : 'complet');
+  if (page === 'voyage') return pageVoyage(id, sous || 'itineraire');
+  if (page === 'client') { location.hash = `#/voyage/${id}/client`; return undefined; }
+  if (page === 'contributeurs') return pageContributeurs(id || 'apercu');
   if (page === 'donnees') return pageDonnees();
-  return pageVoyages();
+  return pageAccueil();
 }
 
-// ---------- Liste des voyages ----------
-function carteVoyage(v) {
-  const nbJours = v.jours.length;
+const entete = (titre, sousTitre, actions = '') => `
+  <div class="head"><h1>${titre}</h1><div class="head-actions">${actions}</div></div>
+  <p class="crumb">${sousTitre}</p>`;
+
+// ---------- Vue d'ensemble ----------
+function tuileVoyage(v) {
+  const photo = photoCouverture(v);
+  const { total } = coutVoyage(v);
   return `
-    <li class="carte-voyage">
-      <a href="#/voyage/${esc(v.id)}" class="carte-voyage-lien">
-        <span class="carte-voyage-titre">${esc(v.titre)}</span>
-        <span class="petit">${esc(itineraire(v) || 'Aucune étape')}</span>
-        <span class="petit">${nbJours} jour${nbJours > 1 ? 's' : ''} · ${nbEndroits(v)} endroits${v.client ? ` · ${esc(v.client)}` : ''}</span>
-      </a>
-      <div class="carte-voyage-actions">
-        <button class="bouton-secondaire petit-bouton" data-dupliquer="${esc(v.id)}">${v.modele ? 'Utiliser ce modèle' : 'Dupliquer'}</button>
+    <a class="tile" href="#/voyage/${esc(v.id)}">
+      <div class="cv">
+        ${photo ? `<img data-photo="${esc(photo)}" alt="">` : `<span class="none">${icone('route', { taille: 30, epaisseur: 1.5 })}</span>`}
+        ${v.vendu ? '<span class="badge ok">Vendu</span>' : v.modele ? '<span class="badge">Modèle</span>' : v.client ? `<span class="badge">${esc(v.client)}</span>` : ''}
       </div>
-    </li>`;
+      <div class="tb">
+        <div class="tn">${esc(v.titre)}</div>
+        <div class="troute">${esc(itineraire(v) || 'Aucune étape')}</div>
+        <div class="stats">
+          <div class="stat"><b>${v.jours.length}</b><span>jours</span></div>
+          <div class="stat"><b>${nbEndroits(v)}</b><span>endroits</span></div>
+          <div class="stat"><b>${total ? formatCAD(total) : '—'}</b><span>coût estimé</span></div>
+        </div>
+      </div>
+    </a>`;
 }
 
-function pageVoyages() {
+function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const modeles = tries.filter((v) => v.modele);
   const clients = tries.filter((v) => !v.modele);
+  const utilisables = endroitsUtilisables();
+  const pays = uniques(utilisables.map((e) => e.pays));
+  const villes = uniques(utilisables.map((e) => `${e.pays}|${e.ville}`));
+  const vendus = etat.voyages.filter((v) => v.vendu);
+  const ventes = vendus.reduce((n, v) => n + nombre(v.prixVente), 0);
+  const n = aValider().length;
   app.innerHTML = `
-    <section class="page-voyages">
-      <div class="entete-ligne">
-        <div>
-          <h1>Mes voyages</h1>
-          <p class="petit">${etat.endroits.length} endroits disponibles pour bâtir tes voyages.</p>
-        </div>
-        <button class="bouton-principal" id="nouveau">+ Nouveau voyage</button>
-      </div>
-      ${etat.endroits.length ? '' : `<p class="alerte">Aucun endroit pour l'instant. Va dans <a href="#/donnees">Mes données</a> pour importer le fichier de sauvegarde de ton cellulaire.</p>`}
-      <h2>Modèles réutilisables</h2>
-      <p class="petit">Un voyage type (ex. « Japon 14 jours ») que tu adaptes pour chaque client.</p>
-      <ul class="grille-voyages">${modeles.map(carteVoyage).join('') || '<li class="vide">Aucun modèle. Ouvre un voyage et coche « Modèle réutilisable ».</li>'}</ul>
-      <h2>Voyages clients</h2>
-      <ul class="grille-voyages">${clients.map(carteVoyage).join('') || '<li class="vide">Aucun voyage pour l\'instant.</li>'}</ul>
-    </section>`;
-
-  app.querySelector('#nouveau').onclick = async () => {
-    const v = nouveauVoyage();
-    await sauver(v);
-    location.hash = `#/voyage/${v.id}`;
-  };
-  app.querySelectorAll('[data-dupliquer]').forEach((b) => {
-    b.onclick = async () => {
-      const copie = dupliquer(etat.voyages.find((v) => v.id === b.dataset.dupliquer));
-      await sauver(copie);
-      toast('Copie créée');
-      location.hash = `#/voyage/${copie.id}`;
-    };
-  });
+    ${entete("Vue d'ensemble", `${pluriel(clients.length, 'voyage')} · ${pluriel(modeles.length, 'modèle')}`, `<button class="btn" id="nouveau">${icone('plus', { taille: 15 })} Nouveau voyage</button>`)}
+    <div class="kpis">
+      <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${utilisables.length}</b><small>${pluriel(villes.length, 'ville')} · ${pluriel(pays.length, 'pays', 'pays')}</small></div>
+      <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
+      <div class="kpi"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></div>
+      <a class="kpi ${n ? 'hi' : ''}" href="#/contributeurs/soumissions"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits de contributeurs' : 'Rien en attente'}</small></a>
+    </div>
+    ${etat.endroits.length ? '' : `
+      <div class="encart">
+        <span class="rond-ico">${icone('upload', { taille: 18 })}</span>
+        <div><b>Commence par importer tes endroits</b><p>Sur ton cell : Réglages, puis « Faire une copie de sauvegarde ». Envoie le fichier à ton ordi et choisis-le dans « Mes données ».</p></div>
+        <a class="btn" href="#/donnees">Importer</a>
+      </div>`}
+    <h2 class="titre-section">Voyages clients</h2>
+    <div class="tiles">${clients.map(tuileVoyage).join('') || `<button class="tile tile-vide" id="nouveau2">${icone('plus', { taille: 22 })}<span>Créer ton premier voyage</span></button>`}</div>
+    <h2 class="titre-section">Modèles réutilisables <small>Un voyage type (ex. « Japon 14 jours ») à dupliquer pour chaque client</small></h2>
+    <div class="tiles">${modeles.map(tuileVoyage).join('') || '<p class="vide-ligne">Aucun modèle. Dans un voyage, onglet « Infos et vente », coche « Modèle réutilisable ».</p>'}</div>`;
+  app.querySelector('#nouveau').onclick = creerVoyage;
+  const n2 = app.querySelector('#nouveau2');
+  if (n2) n2.onclick = creerVoyage;
+  afficherPhotos(app);
 }
 
-// ---------- Éditeur d'un voyage ----------
-let carte = null;
-
-function pageEditeur(id) {
+// ---------- Un voyage ----------
+function pageVoyage(id, onglet) {
   const trouve = etat.voyages.find((x) => x.id === id);
   if (!trouve) { location.hash = '#/'; return; }
   const v = structuredClone(trouve);
   synchroniserJours(v);
-  const biblio = { recherche: '', pays: '', ville: '__jour', categorie: '', coeur: false };
-  let jourChoisi = v.jours[0]?.id || null;
   let minuterie;
-  const enregistrer = () => { clearTimeout(minuterie); minuterie = setTimeout(() => sauver(v), 300); };
-
-  const paysConnus = () => trier(uniques([...etat.endroits.map((e) => e.pays), ...v.etapes.map((e) => e.pays)]));
-  const villesConnues = (pays) => trier(uniques(etat.endroits.filter((e) => !pays || e.pays === pays).map((e) => e.ville)));
+  const crumb = () => [itineraire(v) || 'Aucune étape', pluriel(v.jours.length, 'jour'), pluriel(nbEndroits(v), 'endroit'), v.client].filter(Boolean).map(esc).join(' · ');
+  const majCrumb = () => { const c = app.querySelector('#crumb'); if (c) c.innerHTML = crumb(); };
+  const enregistrer = () => {
+    clearTimeout(minuterie);
+    minuterie = setTimeout(async () => { await sauver('voyages', v); rendreSide(); }, 300);
+  };
+  const etiquette = () => (v.vendu ? '<span class="etiq ok">Vendu</span>' : v.modele ? '<span class="etiq">Modèle</span>' : '');
+  const onglets = [['itineraire', 'route', 'Itinéraire'], ['infos', 'file-text', 'Infos et vente'], ['client', 'eye', 'Page client']];
 
   app.innerHTML = `
-    <section class="editeur">
-      <div class="editeur-haut">
-        <a class="rond" href="#/" aria-label="Retour aux voyages">←</a>
-        <input class="titre-voyage" id="titre" value="${esc(v.titre)}" aria-label="Nom du voyage">
-        <div class="actions-haut">
-          <label class="case"><input type="checkbox" id="modele" ${v.modele ? 'checked' : ''}> Modèle réutilisable</label>
-          <a class="bouton-secondaire petit-bouton" href="#/client/${esc(v.id)}/apercu">👁 Aperçu à vendre</a>
-          <a class="bouton-secondaire petit-bouton" href="#/client/${esc(v.id)}/complet">📄 Version complète</a>
-          <button class="bouton-secondaire petit-bouton" id="dupliquer">Dupliquer</button>
-          <button class="bouton-danger petit-bouton" id="supprimer">Supprimer</button>
-        </div>
+    <div class="head">
+      <h1 contenteditable="plaintext-only" spellcheck="false" id="titre" title="Clique pour renommer">${esc(v.titre)}</h1>
+      <span id="etiq">${etiquette()}</span>
+      <div class="head-actions">
+        <button class="btn ghost sm" id="dupliquer">${icone('copy', { taille: 14 })} ${v.modele ? 'Utiliser ce modèle' : 'Dupliquer'}</button>
+        <button class="btn danger sm" id="supprimer" aria-label="Supprimer le voyage">${icone('trash-2', { taille: 14 })}</button>
       </div>
+    </div>
+    <p class="crumb" id="crumb">${crumb()}</p>
+    <nav class="tabs">${onglets.map(([k, ico, nom]) => `<a class="tab ${k === onglet ? 'on' : ''}" href="#/voyage/${esc(v.id)}/${k}">${icone(ico, { taille: 15 })}${nom}</a>`).join('')}</nav>
+    <div id="contenu"></div>`;
 
-      <details class="bloc infos" ${v.client || v.dateDebut ? '' : 'open'}>
-        <summary>Infos du voyage <small>client, dates, budget, prix de vente</small></summary>
-        <div class="infos-grille">
-          <label class="champ"><span>Client</span><input data-info="client" value="${esc(v.client)}" placeholder="Ex. : Julie et Marc"></label>
+  const titre = app.querySelector('#titre');
+  titre.addEventListener('input', () => { v.titre = titre.textContent.trim() || 'Sans titre'; enregistrer(); });
+  titre.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); titre.blur(); } });
+  app.querySelector('#dupliquer').onclick = async () => {
+    clearTimeout(minuterie);
+    await sauver('voyages', v);
+    const copie = dupliquer(v);
+    await sauver('voyages', copie);
+    toast(v.modele ? 'Nouveau voyage créé à partir du modèle' : 'Copie créée');
+    location.hash = `#/voyage/${copie.id}`;
+  };
+  app.querySelector('#supprimer').onclick = () => ouvrirModale('Supprimer ce voyage ?', `<p>« ${esc(v.titre)} » sera supprimé. Les endroits, eux, restent.</p>`, async () => {
+    clearTimeout(minuterie);
+    await db.effacer('voyages', v.id);
+    etat.voyages = etat.voyages.filter((x) => x.id !== v.id);
+    location.hash = '#/';
+  }, { ok: 'Supprimer', danger: true });
+
+  const zone = app.querySelector('#contenu');
+  const majEtiquette = () => { app.querySelector('#etiq').innerHTML = etiquette(); };
+  if (onglet === 'infos') ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb);
+  else if (onglet === 'client') ongletClient(v, zone);
+  else ongletItineraire(v, zone, enregistrer, majCrumb);
+}
+
+function ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb) {
+  const r = etat.regles;
+  zone.innerHTML = `
+    <div class="grille-2">
+      <section class="panel">
+        <div class="panel-tete"><h3>Le client</h3></div>
+        <div class="form-grille">
+          <label class="champ"><span>Nom du client</span><input data-info="client" value="${esc(v.client)}" placeholder="Ex. : Julie et Marc"></label>
           <label class="champ"><span>Date de départ</span><input data-info="dateDebut" type="date" value="${esc(v.dateDebut)}"></label>
           <label class="champ"><span>Voyageurs</span><input data-info="voyageurs" type="number" min="1" value="${esc(v.voyageurs)}"></label>
           <label class="champ"><span>Style</span><select data-info="style">
             ${[['eco', 'Économique'], ['moyen', 'Moyen de gamme'], ['luxe', 'Luxe']].map(([k, l]) => `<option value="${k}" ${v.style === k ? 'selected' : ''}>${l}</option>`).join('')}
           </select></label>
-          <label class="champ"><span>Prix de vente de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 350"></label>
-          <label class="champ large"><span>Mot d'introduction pour le client</span><textarea data-info="introClient" rows="2" placeholder="Visible par le client">${esc(v.introClient)}</textarea></label>
-          <label class="champ large champ-prive"><span>🔒 Notes privées <small>jamais montrées au client</small></span><textarea data-info="notesPrivees" rows="2">${esc(v.notesPrivees)}</textarea></label>
+          <label class="champ large"><span>Mot d'introduction <small>visible par le client</small></span><textarea data-info="introClient" rows="3" placeholder="Ex. : Deux semaines entre temples, onsen et izakayas, à votre rythme.">${esc(v.introClient)}</textarea></label>
+          <label class="champ large prive"><span>${icone('lock', { taille: 13 })} Notes privées <small>jamais montrées au client</small></span><textarea data-info="notesPrivees" rows="3">${esc(v.notesPrivees)}</textarea></label>
         </div>
-      </details>
-
-      <div class="bloc">
-        <div class="bloc-titre"><h2>Étapes</h2><span class="petit" id="itineraire"></span></div>
-        <ol class="etapes" id="etapes"></ol>
-        <button class="bouton-secondaire petit-bouton" id="ajout-etape">+ Ajouter une étape (pays, ville, nombre de jours)</button>
-        <datalist id="liste-pays"></datalist>
-      </div>
-
-      <div class="trois-colonnes">
-        <aside class="bloc colonne-biblio">
-          <h2>Mes endroits</h2>
-          <input type="search" id="recherche" placeholder="Chercher un endroit…">
-          <div class="filtres-biblio">
-            <select id="f-pays"></select>
-            <select id="f-ville"></select>
-            <select id="f-cat"><option value="">Toutes les catégories</option>${Object.entries(TAXONOMIE).map(([k, c]) => `<option value="${k}">${c.icone} ${esc(c.nom)}</option>`).join('')}</select>
-            <label class="case"><input type="checkbox" id="f-coeur"> ❤ Coups de cœur</label>
-          </div>
-          <p class="aide">Glisse un endroit dans un jour, ou clique sur « + » pour l'ajouter au jour choisi.</p>
-          <ul class="biblio" id="biblio"></ul>
-        </aside>
-
-        <div class="colonne-jours" id="jours"></div>
-
-        <aside class="colonne-droite">
-          <div class="bloc"><h2>Carte</h2><div id="carte" class="carte"></div><p class="aide" id="aide-carte"></p></div>
-          <div class="bloc" id="resume"></div>
-        </aside>
-      </div>
-    </section>`;
-
-  const $ = (s) => app.querySelector(s);
-
-  // --- En-tête et infos ---
-  $('#titre').oninput = (ev) => { v.titre = ev.target.value; enregistrer(); };
-  $('#modele').onchange = (ev) => { v.modele = ev.target.checked; enregistrer(); toast(v.modele ? 'Ajouté aux modèles' : 'Retiré des modèles'); };
-  app.querySelectorAll('[data-info]').forEach((champ) => {
-    champ.oninput = () => {
-      v[champ.dataset.info] = champ.type === 'number' ? +champ.value : champ.value;
+      </section>
+      <section class="panel">
+        <div class="panel-tete"><h3>Vente</h3></div>
+        <div class="form-grille">
+          <label class="champ"><span>Prix de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 350"></label>
+          <label class="champ"><span>Vendu le</span><input data-info="venduLe" type="date" value="${esc(v.venduLe)}" ${v.vendu ? '' : 'disabled'}></label>
+          <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Les contributeurs dont les endroits sont dans ce voyage reçoivent ${r.pourcentage} % du prix, selon leur part.</small></span></label>
+          <label class="interr large"><input type="checkbox" data-info="modele" ${v.modele ? 'checked' : ''}><i></i><span><b>Modèle réutilisable</b><small>Apparaît dans « Modèles » pour le dupliquer à chaque nouveau client.</small></span></label>
+        </div>
+      </section>
+    </div>`;
+  zone.querySelectorAll('[data-info]').forEach((champ) => {
+    champ.addEventListener(champ.type === 'checkbox' ? 'change' : 'input', () => {
+      const k = champ.dataset.info;
+      v[k] = champ.type === 'checkbox' ? champ.checked : champ.type === 'number' ? +champ.value : champ.value;
+      if (k === 'vendu') {
+        v.venduLe = v.vendu ? v.venduLe || aujourdhui() : '';
+        const d = zone.querySelector('[data-info=venduLe]');
+        d.disabled = !v.vendu;
+        d.value = v.venduLe;
+      }
+      if (k === 'vendu' || k === 'modele') {
+        majEtiquette();
+        toast(k === 'vendu' ? (v.vendu ? 'Marqué comme vendu' : 'Plus marqué comme vendu') : v.modele ? 'Ajouté aux modèles' : 'Retiré des modèles');
+      }
+      if (k === 'client') majCrumb();
       enregistrer();
-      if (champ.dataset.info === 'dateDebut') rendreJours();
-      if (champ.dataset.info === 'prixVente') rendreResume();
-    };
+    });
   });
-  $('#dupliquer').onclick = async () => {
-    await sauver(v);
-    const copie = dupliquer(v);
-    await sauver(copie);
-    toast('Copie créée');
-    location.hash = `#/voyage/${copie.id}`;
-  };
-  $('#supprimer').onclick = async () => {
-    if (!confirm(`Supprimer le voyage « ${v.titre} » ? Les endroits ne sont pas effacés.`)) return;
-    clearTimeout(minuterie);
-    await db.effacer('voyages', v.id);
-    etat.voyages = etat.voyages.filter((x) => x.id !== v.id);
-    location.hash = '#/';
-  };
+}
+
+function ongletItineraire(v, zone, enregistrer, majCrumb) {
+  const biblio = { recherche: '', pays: '', ville: '__jour', categorie: '', coeur: false };
+  let jourChoisi = v.jours[0]?.id || null;
+  const sources = endroitsUtilisables();
+  const paysConnus = () => trier(uniques([...sources.map((e) => e.pays), ...v.etapes.map((e) => e.pays)]));
+  const villesConnues = (pays) => trier(uniques(sources.filter((e) => !pays || e.pays === pays).map((e) => e.ville)));
+
+  zone.innerHTML = `
+    <section class="panel etapes-panel">
+      <div class="panel-tete"><h3>Étapes</h3><span class="aide">Pays, ville et nombre de jours, dans l'ordre. Les jours se créent tout seuls.</span></div>
+      <ol class="etapes" id="etapes"></ol>
+      <button class="btn ghost sm" id="ajout-etape">${icone('plus', { taille: 14 })} Ajouter une étape</button>
+      <datalist id="liste-pays"></datalist>
+    </section>
+    <div class="trois">
+      <aside class="panel biblio-panel">
+        <div class="panel-tete"><h3>Mes endroits</h3><span class="aide" id="nb-biblio"></span></div>
+        <div class="recherche">${icone('search', { taille: 15 })}<input type="search" id="recherche" placeholder="Chercher un endroit"></div>
+        <div class="filtres-biblio">
+          <select id="f-pays" aria-label="Pays"></select>
+          <select id="f-ville" aria-label="Ville"></select>
+        </div>
+        <div class="puces-cat" id="f-cat">
+          <button class="puce on" data-cat="">Tout</button>
+          ${Object.entries(TAXONOMIE).map(([k, c]) => `<button class="puce" data-cat="${k}" title="${esc(c.nom)}" aria-label="${esc(c.nom)}">${iconeCat(k, { taille: 15 })}</button>`).join('')}
+          <button class="puce" data-coeur title="Coups de cœur" aria-label="Coups de cœur">${icone('heart', { taille: 15 })}</button>
+        </div>
+        <ul class="biblio" id="biblio"></ul>
+        <p class="aide pied-biblio">Glisse un endroit dans un jour, ou clique sur + pour l'ajouter au jour choisi.</p>
+      </aside>
+      <div class="jours" id="jours"></div>
+      <aside class="colonne-droite">
+        <section class="panel"><div class="panel-tete"><h3>Carte</h3><span class="aide" id="aide-carte"></span></div><div id="carte" class="carte"></div></section>
+        <section class="panel" id="resume"></section>
+      </aside>
+    </div>`;
+  const $ = (s) => zone.querySelector(s);
 
   // --- Étapes ---
   function rendreEtapes() {
@@ -312,43 +511,43 @@ function pageEditeur(id) {
         <input data-champ="pays" list="liste-pays" value="${esc(et.pays)}" placeholder="Pays" aria-label="Pays">
         <input data-champ="ville" list="villes-${esc(et.id)}" value="${esc(et.ville)}" placeholder="Ville" aria-label="Ville">
         <datalist id="villes-${esc(et.id)}">${villesConnues(et.pays).map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
-        <label class="etape-jours"><input data-champ="jours" type="number" min="1" max="60" value="${et.jours}" aria-label="Nombre de jours"> jours</label>
+        <label class="etape-jours"><input data-champ="jours" type="number" min="1" max="60" value="${et.jours}" aria-label="Nombre de jours"><span>jours</span></label>
         <span class="etape-boutons">
-          <button class="mini" data-bouger="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">↑</button>
-          <button class="mini" data-bouger="1" ${i === v.etapes.length - 1 ? 'disabled' : ''} aria-label="Descendre">↓</button>
-          <button class="mini danger" data-retirer aria-label="Retirer l'étape">✕</button>
+          <button class="ico-btn" data-bouger="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">${icone('arrow-up', { taille: 15 })}</button>
+          <button class="ico-btn" data-bouger="1" ${i === v.etapes.length - 1 ? 'disabled' : ''} aria-label="Descendre">${icone('arrow-down', { taille: 15 })}</button>
+          <button class="ico-btn rouge" data-retirer aria-label="Retirer l'étape">${icone('x', { taille: 15 })}</button>
         </span>
-      </li>`).join('') || '<li class="vide">Commence par ajouter une étape : un pays, une ville et le nombre de jours.</li>';
-    const total = v.jours.length;
-    $('#itineraire').textContent = v.etapes.length ? `${itineraire(v)} · ${total} jour${total > 1 ? 's' : ''}` : '';
+      </li>`).join('') || '<li class="vide-ligne">Aucune étape. Ajoute la première : un pays, une ville et le nombre de jours.</li>';
   }
-
   $('#etapes').addEventListener('change', (ev) => {
     const li = ev.target.closest('[data-etape]');
     const champ = ev.target.dataset.champ;
     if (!li || !champ) return;
-    const et = v.etapes.find((x) => x.id === li.dataset.etape);
-    et[champ] = ev.target.value.trim();
+    v.etapes.find((x) => x.id === li.dataset.etape)[champ] = ev.target.value.trim();
     synchroniserJours(v);
     enregistrer();
     rendreTout();
   });
   $('#etapes').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
     const li = ev.target.closest('[data-etape]');
-    if (!li) return;
+    if (!b || !li) return;
     const i = v.etapes.findIndex((x) => x.id === li.dataset.etape);
-    if (ev.target.dataset.bouger) {
-      const j = i + +ev.target.dataset.bouger;
+    const appliquer = () => {
+      synchroniserJours(v);
+      if (!v.jours.some((j) => j.id === jourChoisi)) jourChoisi = v.jours[0]?.id || null;
+      enregistrer();
+      rendreTout();
+    };
+    if (b.dataset.bouger) {
+      const j = i + +b.dataset.bouger;
       [v.etapes[i], v.etapes[j]] = [v.etapes[j], v.etapes[i]];
-    } else if ('retirer' in ev.target.dataset) {
+      appliquer();
+    } else if ('retirer' in b.dataset) {
       const nb = v.jours.filter((j) => j.etapeId === v.etapes[i].id).reduce((n, j) => n + j.items.length, 0);
-      if (nb && !confirm(`Cette étape contient ${nb} endroit${nb > 1 ? 's' : ''}. Les retirer du voyage ?`)) return;
-      v.etapes.splice(i, 1);
-    } else return;
-    synchroniserJours(v);
-    if (!v.jours.some((j) => j.id === jourChoisi)) jourChoisi = v.jours[0]?.id || null;
-    enregistrer();
-    rendreTout();
+      if (!nb) { v.etapes.splice(i, 1); appliquer(); return; }
+      ouvrirModale("Retirer l'étape ?", `<p>Elle contient ${pluriel(nb, 'endroit')}, qui seront retirés du voyage.</p>`, () => { v.etapes.splice(i, 1); appliquer(); }, { ok: 'Retirer', danger: true });
+    }
   });
   $('#ajout-etape').onclick = () => {
     const derniere = v.etapes[v.etapes.length - 1];
@@ -357,64 +556,66 @@ function pageEditeur(id) {
     if (!jourChoisi) jourChoisi = v.jours[0]?.id;
     enregistrer();
     rendreTout();
-    const champs = app.querySelectorAll('#etapes [data-champ="ville"]');
+    const champs = zone.querySelectorAll('#etapes [data-champ="ville"]');
     champs[champs.length - 1]?.focus();
   };
 
-  // --- Bibliothèque d'endroits ---
+  // --- Bibliothèque ---
   function villeFiltre() {
     if (biblio.ville !== '__jour') return biblio.ville;
     const j = v.jours.find((x) => x.id === jourChoisi);
     return j ? etapeDe(v, j).ville || '' : '';
   }
-
   function rendreFiltres() {
-    const pays = paysConnus();
-    $('#f-pays').innerHTML = `<option value="">Tous les pays</option>${pays.map((p) => `<option ${p === biblio.pays ? 'selected' : ''}>${esc(p)}</option>`).join('')}`;
-    const villes = villesConnues(biblio.pays);
-    $('#f-ville').innerHTML = `<option value="__jour" ${biblio.ville === '__jour' ? 'selected' : ''}>Ville du jour</option><option value="" ${biblio.ville === '' ? 'selected' : ''}>Toutes les villes</option>${villes.map((c) => `<option ${c === biblio.ville ? 'selected' : ''}>${esc(c)}</option>`).join('')}`;
+    $('#f-pays').innerHTML = `<option value="">Tous les pays</option>${paysConnus().map((p) => `<option ${p === biblio.pays ? 'selected' : ''}>${esc(p)}</option>`).join('')}`;
+    $('#f-ville').innerHTML = `<option value="__jour" ${biblio.ville === '__jour' ? 'selected' : ''}>Ville du jour</option><option value="" ${biblio.ville === '' ? 'selected' : ''}>Toutes les villes</option>${villesConnues(biblio.pays).map((c) => `<option ${c === biblio.ville ? 'selected' : ''}>${esc(c)}</option>`).join('')}`;
   }
-
   function rendreBiblio() {
     const ville = villeFiltre();
     const q = sansAccents(biblio.recherche);
     const utilises = new Set(v.jours.flatMap((j) => j.items.map((it) => it.endroitId)));
-    const liste = etat.endroits.filter((e) =>
+    const liste = sources.filter((e) =>
       (!biblio.pays || e.pays === biblio.pays) &&
       (!ville || sansAccents(e.ville) === sansAccents(ville)) &&
       (!biblio.categorie || e.categorie === biblio.categorie) &&
       (!biblio.coeur || e.coupDeCoeur) &&
       (!q || sansAccents([e.nom, e.ville, e.type, e.sousType, e.description].join(' ')).includes(q)))
-      .sort((a, b) => (b.coupDeCoeur ? 1 : 0) - (a.coupDeCoeur ? 1 : 0) || a.nom.localeCompare(b.nom, 'fr'));
+      .sort((a, b) => (b.coupDeCoeur ? 1 : 0) - (a.coupDeCoeur ? 1 : 0) || (a.nom || '').localeCompare(b.nom || '', 'fr'));
+    $('#nb-biblio').textContent = ville ? `${liste.length} à ${ville}` : `${liste.length}`;
     $('#biblio').innerHTML = liste.map((e) => {
       const cat = categorie(e);
       return `
-        <li class="endroit" draggable="true" data-endroit="${esc(e.id)}" style="--c:${cat.couleur}">
-          <span class="vignette">${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : cat.icone}</span>
+        <li class="endroit ${utilises.has(e.id) ? 'deja' : ''}" draggable="true" data-endroit="${esc(e.id)}" style="--c:${cat.couleur}">
+          <span class="vignette">${iconeCat(e.categorie, { taille: 18 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}</span>
           <span class="endroit-texte">
-            <b>${esc(e.nom)}${e.coupDeCoeur ? ' <span class="coeur">❤</span>' : ''}</b>
-            <small>${esc([e.sousType || e.type || cat.nom, e.ville].filter(Boolean).join(' · '))} ${dollars(e.prix)}</small>
+            <b>${esc(e.nom)}${e.coupDeCoeur ? icone('heart', { taille: 12, classe: 'coeur' }) : ''}</b>
+            <small>${esc([e.sousType || e.type || cat.nom, e.ville].filter(Boolean).join(' · '))}${e.prix ? ` · ${dollars(e.prix)}` : ''}</small>
           </span>
-          ${utilises.has(e.id) ? '<span class="deja" title="Déjà dans ce voyage">✓</span>' : ''}
-          <button class="mini plus" data-ajouter="${esc(e.id)}" aria-label="Ajouter au jour choisi">+</button>
+          ${utilises.has(e.id) ? `<span class="deja-ico" title="Déjà dans ce voyage">${icone('check', { taille: 14 })}</span>` : ''}
+          <button class="ico-btn plus" data-ajouter="${esc(e.id)}" aria-label="Ajouter au jour choisi">${icone('plus', { taille: 15 })}</button>
         </li>`;
-    }).join('') || `<li class="vide">${etat.endroits.length ? `Aucun endroit${ville ? ` à ${esc(ville)}` : ''} avec ces filtres.` : 'Importe d\'abord tes endroits dans « Mes données ».'}</li>`;
+    }).join('') || `<li class="vide-ligne">${sources.length ? `Aucun endroit${ville ? ` à ${esc(ville)}` : ''} avec ces filtres.` : 'Importe d\'abord tes endroits dans « Mes données ».'}</li>`;
     afficherPhotos($('#biblio'));
   }
-
   $('#recherche').oninput = (ev) => { biblio.recherche = ev.target.value; rendreBiblio(); };
-  $('#f-pays').onchange = (ev) => { biblio.pays = ev.target.value; biblio.ville = biblio.ville === '__jour' ? '__jour' : ''; rendreFiltres(); rendreBiblio(); };
+  $('#f-pays').onchange = (ev) => { biblio.pays = ev.target.value; if (biblio.ville !== '__jour') biblio.ville = ''; rendreFiltres(); rendreBiblio(); };
   $('#f-ville').onchange = (ev) => { biblio.ville = ev.target.value; rendreBiblio(); };
-  $('#f-cat').onchange = (ev) => { biblio.categorie = ev.target.value; rendreBiblio(); };
-  $('#f-coeur').onchange = (ev) => { biblio.coeur = ev.target.checked; rendreBiblio(); };
+  $('#f-cat').onclick = (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if ('coeur' in b.dataset) { biblio.coeur = !biblio.coeur; b.classList.toggle('on', biblio.coeur); } else {
+      biblio.categorie = b.dataset.cat;
+      $('#f-cat').querySelectorAll('[data-cat]').forEach((x) => x.classList.toggle('on', x === b));
+    }
+    rendreBiblio();
+  };
   $('#biblio').addEventListener('click', (ev) => {
-    const id = ev.target.dataset.ajouter;
-    if (!id) return;
+    const b = ev.target.closest('[data-ajouter]');
+    if (!b) return;
     const jour = v.jours.find((j) => j.id === jourChoisi);
     if (!jour) { toast("Ajoute d'abord une étape pour avoir des jours"); return; }
-    jour.items.push({ id: db.nouvelId(), endroitId: id, noteClient: '' });
-    enregistrer();
-    rendreJours(); rendreBiblio(); rendreResume(); majCarte();
+    jour.items.push({ id: db.nouvelId(), endroitId: b.dataset.ajouter, noteClient: '' });
+    apresChangement();
     toast(`Ajouté au jour ${v.jours.indexOf(jour) + 1}`);
   });
 
@@ -422,47 +623,48 @@ function pageEditeur(id) {
   function rendreJours() {
     $('#jours').innerHTML = v.jours.map((j, i) => {
       const et = etapeDe(v, j);
-      const lignes = j.items.map((it) => {
+      const lignes = j.items.map((it, k) => {
         const e = endroit(it.endroitId);
         const cat = categorie(e);
         return `
           <li class="item" draggable="true" data-item="${esc(it.id)}" style="--c:${cat.couleur}">
-            <span class="vignette">${e?.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : cat.icone}</span>
+            <span class="poignee" aria-hidden="true">${icone('grip-vertical', { taille: 14 })}</span>
+            <span class="vignette">${iconeCat(e?.categorie, { taille: 18 })}${e?.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}<i class="item-num">${k + 1}</i></span>
             <span class="item-texte">
               <b>${e ? esc(e.nom) : '<i>Endroit introuvable</i>'}</b>
-              <small>${esc([e?.sousType || e?.type || cat.nom].filter(Boolean).join(''))} ${dollars(e?.prix)}</small>
-              <input class="note-client" data-note="${esc(it.id)}" value="${esc(it.noteClient)}" placeholder="Conseil pour le client (optionnel)">
+              <small>${esc(e?.sousType || e?.type || cat.nom)}${e?.prix ? ` · ${dollars(e.prix)}` : ''}${e?.montant ? ` · ${esc(e.montant)} ${esc(e.devise || '')}` : ''}</small>
+              <input class="note-client" data-note="${esc(it.id)}" value="${esc(it.noteClient)}" placeholder="+ Conseil pour le client">
             </span>
-            <button class="mini danger" data-retirer-item="${esc(it.id)}" aria-label="Retirer">✕</button>
+            <button class="ico-btn rouge" data-retirer-item="${esc(it.id)}" aria-label="Retirer">${icone('x', { taille: 15 })}</button>
           </li>`;
       }).join('');
       return `
+        ${j.rang === 0 ? `<div class="sep-etape">${icone('map-pin', { taille: 14 })}<b>${esc(et.ville || et.pays || 'Étape sans nom')}</b><span>${esc([et.ville ? et.pays : '', pluriel(et.jours, 'jour')].filter(Boolean).join(' · '))}</span></div>` : ''}
         <article class="jour ${j.id === jourChoisi ? 'choisi' : ''}" data-jour="${esc(j.id)}">
           <header class="jour-tete">
             <span class="jour-num">Jour ${i + 1}</span>
-            <span class="jour-lieu">${esc(et.ville || et.pays || '')}${v.dateDebut ? ` · ${esc(dateDuJour(v, i))}` : ''}</span>
-            <input class="jour-titre" data-titre-jour="${esc(j.id)}" value="${esc(j.titre)}" placeholder="Titre du jour (ex. : Temples et marché de nuit)">
+            ${v.dateDebut ? `<span class="jour-date">${esc(dateDuJour(v, i))}</span>` : ''}
+            <input class="jour-titre" data-titre-jour="${esc(j.id)}" value="${esc(j.titre)}" placeholder="Titre du jour, ex. : Temples et marché de nuit">
           </header>
-          <ul class="items">${lignes || '<li class="depot">Glisse des endroits ici</li>'}</ul>
+          <ul class="items">${lignes || `<li class="depot">${icone('plus', { taille: 15 })} Glisse des endroits ici</li>`}</ul>
         </article>`;
-    }).join('') || '<p class="vide bloc">Les jours apparaîtront ici dès que tu ajoutes une étape.</p>';
+    }).join('') || `<div class="panel vide-bloc">${icone('route', { taille: 26, epaisseur: 1.6 })}<b>Pas encore de jours</b><span>Ajoute une étape en haut pour commencer.</span></div>`;
     afficherPhotos($('#jours'));
   }
-
+  function choisirJour(id) {
+    jourChoisi = id;
+    zone.querySelectorAll('.jour').forEach((x) => x.classList.toggle('choisi', x.dataset.jour === jourChoisi));
+    rendreBiblio(); majCarte();
+  }
   $('#jours').addEventListener('click', (ev) => {
-    const retirer = ev.target.dataset.retirerItem;
+    const retirer = ev.target.closest('[data-retirer-item]')?.dataset.retirerItem;
     if (retirer) {
       for (const j of v.jours) j.items = j.items.filter((it) => it.id !== retirer);
-      enregistrer();
-      rendreJours(); rendreBiblio(); rendreResume(); majCarte();
+      apresChangement();
       return;
     }
     const art = ev.target.closest('[data-jour]');
-    if (art && art.dataset.jour !== jourChoisi && !ev.target.matches('input')) {
-      jourChoisi = art.dataset.jour;
-      app.querySelectorAll('.jour').forEach((x) => x.classList.toggle('choisi', x.dataset.jour === jourChoisi));
-      rendreBiblio(); majCarte();
-    }
+    if (art && art.dataset.jour !== jourChoisi) choisirJour(art.dataset.jour);
   });
   $('#jours').addEventListener('input', (ev) => {
     if (ev.target.dataset.note) {
@@ -474,20 +676,20 @@ function pageEditeur(id) {
     }
   });
 
-  // --- Glisser-déposer : de la bibliothèque vers un jour, ou d'un jour à l'autre ---
+  // --- Glisser-déposer ---
+  const nettoyer = () => zone.querySelectorAll('.survol, .avant').forEach((x) => x.classList.remove('survol', 'avant'));
   $('#jours').addEventListener('dragover', (ev) => {
     const art = ev.target.closest('[data-jour]');
     if (!art) return;
     ev.preventDefault();
-    app.querySelectorAll('.survol').forEach((x) => x.classList.remove('survol'));
+    nettoyer();
     art.classList.add('survol');
+    ev.target.closest('[data-item]')?.classList.add('avant');
   });
-  $('#jours').addEventListener('dragleave', (ev) => {
-    if (!ev.relatedTarget || !ev.currentTarget.contains(ev.relatedTarget)) app.querySelectorAll('.survol').forEach((x) => x.classList.remove('survol'));
-  });
+  $('#jours').addEventListener('dragleave', (ev) => { if (!ev.relatedTarget || !ev.currentTarget.contains(ev.relatedTarget)) nettoyer(); });
   $('#jours').addEventListener('drop', (ev) => {
     const art = ev.target.closest('[data-jour]');
-    app.querySelectorAll('.survol').forEach((x) => x.classList.remove('survol'));
+    nettoyer();
     if (!art) return;
     ev.preventDefault();
     const [genre, id] = ev.dataTransfer.getData('text/plain').split(':');
@@ -505,31 +707,32 @@ function pageEditeur(id) {
     const pos = avant ? jour.items.findIndex((x) => x.id === avant.dataset.item) : -1;
     if (pos >= 0) jour.items.splice(pos, 0, item); else jour.items.push(item);
     jourChoisi = jour.id;
-    enregistrer();
-    rendreJours(); rendreBiblio(); rendreResume(); majCarte();
+    apresChangement();
   });
 
   // --- Résumé et carte ---
   function rendreResume() {
     const { total, sansPrix } = coutVoyage(v);
-    const prixVente = parseFloat(String(v.prixVente || '').replace(',', '.'));
+    const prixVente = nombre(v.prixVente);
+    const parJour = v.jours.length ? total / v.jours.length : 0;
     $('#resume').innerHTML = `
-      <h2>Résumé</h2>
+      <div class="panel-tete"><h3>Résumé</h3><a class="lien-discret" href="#/voyage/${esc(v.id)}/infos">Prix de vente</a></div>
       <dl class="chiffres">
         <div><dt>Jours</dt><dd>${v.jours.length}</dd></div>
         <div><dt>Endroits</dt><dd>${nbEndroits(v)}</dd></div>
-        <div><dt>Coût estimé sur place</dt><dd>${formatCAD(total)}</dd></div>
-        ${prixVente ? `<div><dt>Ton prix de vente</dt><dd>${formatCAD(prixVente)}</dd></div>` : ''}
+        <div><dt>Coût sur place</dt><dd>${formatCAD(total)}</dd></div>
+        <div><dt>Par jour</dt><dd>${formatCAD(parJour)}</dd></div>
+        <div class="large ${prixVente ? 'hi' : ''}"><dt>Prix de l'itinéraire</dt><dd>${prixVente ? formatCAD(prixVente) : '—'}</dd></div>
       </dl>
-      <p class="aide">Le coût additionne les prix réels que tu as notés pour chaque endroit${sansPrix ? `; ${sansPrix} endroit${sansPrix > 1 ? 's' : ''} sans prix ne compte${sansPrix > 1 ? 'nt' : ''} pas` : ''}. C'est une estimation.</p>`;
+      <p class="aide">Estimation en $ CA à partir des prix notés${sansPrix ? ` (${pluriel(sansPrix, 'endroit')} sans prix)` : ''}.</p>`;
   }
 
   function majCarte() {
-    const zone = $('#carte');
-    if (!zone) return;
-    if (!window.L) { $('#aide-carte').textContent = "La carte a besoin d'internet."; return; }
-    if (!carte || !document.body.contains(carte.getContainer())) {
-      carte = L.map(zone, { scrollWheelZoom: false }).setView([25, 110], 3);
+    const zoneCarte = $('#carte');
+    if (!zoneCarte) return;
+    if (!window.L) { $('#aide-carte').textContent = 'Carte indisponible'; return; }
+    if (!carte) {
+      carte = L.map(zoneCarte, { scrollWheelZoom: false }).setView([25, 110], 3);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(carte);
       carte.couche = L.layerGroup().addTo(carte);
     }
@@ -538,27 +741,53 @@ function pageEditeur(id) {
     const jours = jour && jour.items.length ? [jour] : v.jours;
     const points = [];
     for (const j of jours) {
+      const ligne = [];
       j.items.forEach((it, k) => {
         const e = endroit(it.endroitId);
         if (!e?.lat || !e?.lng) return;
         const n = jours.length === 1 ? k + 1 : v.jours.indexOf(j) + 1;
-        const icone = L.divIcon({ className: 'repere', html: `<span style="--c:${categorie(e).couleur}">${n}</span>`, iconSize: [26, 26] });
-        L.marker([e.lat, e.lng], { icon: icone, title: e.nom }).bindTooltip(esc(e.nom)).addTo(carte.couche);
+        L.marker([e.lat, e.lng], { icon: L.divIcon({ className: 'repere', html: `<span style="--c:${categorie(e).couleur}">${n}</span>`, iconSize: [26, 26] }), title: e.nom })
+          .bindTooltip(esc(e.nom)).addTo(carte.couche);
         points.push([e.lat, e.lng]);
+        ligne.push([e.lat, e.lng]);
       });
+      if (jours.length === 1 && ligne.length > 1) L.polyline(ligne, { color: '#ff6a47', weight: 2, dashArray: '4 6', opacity: 0.9 }).addTo(carte.couche);
     }
     if (points.length) carte.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
     const sansGps = jours.reduce((n, j) => n + j.items.filter((it) => !endroit(it.endroitId)?.lat).length, 0);
-    $('#aide-carte').textContent = jours.length === 1
-      ? `Jour ${v.jours.indexOf(jours[0]) + 1}, dans l'ordre de la journée.${sansGps ? ` ${sansGps} endroit(s) sans position GPS.` : ''}`
-      : `Tout le voyage (numéro = jour).${sansGps ? ` ${sansGps} endroit(s) sans position GPS.` : ''}`;
-    setTimeout(() => carte.invalidateSize(), 0);
+    $('#aide-carte').textContent = `${jours.length === 1 ? `Jour ${v.jours.indexOf(jours[0]) + 1}` : 'Tout le voyage'}${sansGps ? ` · ${sansGps} sans GPS` : ''}`;
+    setTimeout(() => carte && carte.invalidateSize(), 0);
   }
 
-  function rendreTout() {
-    rendreEtapes(); rendreFiltres(); rendreBiblio(); rendreJours(); rendreResume(); majCarte();
-  }
+  function apresChangement() { enregistrer(); rendreJours(); rendreBiblio(); rendreResume(); majCarte(); majCrumb(); }
+  function rendreTout() { rendreEtapes(); rendreFiltres(); rendreBiblio(); rendreJours(); rendreResume(); majCarte(); majCrumb(); }
   rendreTout();
+}
+
+function ongletClient(v, zone) {
+  let mode = 'apercu';
+  const rendre = () => {
+    zone.innerHTML = `
+      <div class="barre-client">
+        <div class="seg">
+          <button class="${mode === 'apercu' ? 'on' : ''}" data-mode="apercu">${icone('eye', { taille: 14 })} Aperçu à vendre</button>
+          <button class="${mode === 'complet' ? 'on' : ''}" data-mode="complet">${icone('file-text', { taille: 14 })} Version complète</button>
+        </div>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="imprimer">${icone('printer', { taille: 14 })} Imprimer / PDF</button>
+          <button class="btn sm" id="telecharger">${icone('download', { taille: 14 })} Télécharger la page</button>
+        </div>
+      </div>
+      <p class="aide aide-client">${mode === 'apercu'
+    ? `${icone('info', { taille: 14 })}<span>Ce que tu montres avant la vente : le trajet, les jours et le genre d'endroits. Les noms, adresses et liens sont cachés et les photos floues, sauf le jour 1, offert en exemple.</span>`
+    : `${icone('lock', { taille: 14 })}<span>La version que le client reçoit après avoir payé. Tes notes privées ne sont jamais incluses.</span>`}</p>
+      <div class="cadre-client">${htmlClient(v, mode)}</div>`;
+    afficherPhotos(zone);
+    zone.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; rendre(); }; });
+    zone.querySelector('#imprimer').onclick = () => window.print();
+    zone.querySelector('#telecharger').onclick = () => telechargerPage(v, mode);
+  };
+  rendre();
 }
 
 // ---------- Page client : version complète ou aperçu à vendre ----------
@@ -567,7 +796,9 @@ function pageEditeur(id) {
 // Les notes privées ne sont jamais montrées, dans aucune version.
 function htmlClient(v, mode) {
   const apercu = mode === 'apercu';
-  const villes = itineraire(v);
+  const couverture = photoCouverture(v);
+  const prix = nombre(v.prixVente);
+  const etapes = v.etapes.filter((et) => et.ville || et.pays);
   const jours = v.jours.map((j, i) => {
     const et = etapeDe(v, j);
     const cache = apercu && i > 0;
@@ -577,73 +808,63 @@ function htmlClient(v, mode) {
       const cat = categorie(e);
       const genre = [e.type, e.sousType].filter(Boolean).join(' · ') || cat.nom;
       const liens = cache ? '' : [
-        lienCarte(e) ? `<a href="${esc(lienCarte(e))}" target="_blank" rel="noopener">Carte</a>` : '',
+        lienCarte(e) ? `<a href="${esc(lienCarte(e))}" target="_blank" rel="noopener">Voir sur la carte</a>` : '',
         e.contacts?.site ? `<a href="${esc(lienWeb(e.contacts.site))}" target="_blank" rel="noopener">Site web</a>` : '',
         e.contacts?.reservation ? `<a href="${esc(lienWeb(e.contacts.reservation))}" target="_blank" rel="noopener">Réserver</a>` : '',
-      ].filter(Boolean).join(' · ');
+      ].filter(Boolean).join('');
       return `
         <li class="c-item" style="--c:${cat.couleur}">
-          ${e.photos?.length ? `<div class="c-photo ${cache ? 'flou' : ''}"><img data-photo="${esc(e.photos[0])}" alt=""></div>` : `<div class="c-photo c-icone">${cat.icone}</div>`}
+          <div class="c-photo ${cache ? 'flou' : ''}">${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : `<span class="c-icone">${iconeCat(e.categorie, { taille: 30, epaisseur: 1.5 })}</span>`}</div>
           <div class="c-texte">
-            <span class="c-cat">${cat.icone} ${esc(cat.nom)}</span>
+            <span class="c-cat">${iconeCat(e.categorie, { taille: 13 })}${esc(cat.nom)}</span>
             <h4>${cache ? esc(genre) : esc(e.nom)}</h4>
-            ${cache ? '<p class="c-cache">Nom, adresse et conseils dans l\'itinéraire complet</p>' : `
+            ${cache ? `<p class="c-cache">${icone('lock', { taille: 13 })}<span>Nom, adresse et conseils dans l'itinéraire complet</span></p>` : `
               <p class="c-genre">${esc(genre)}${e.prix ? ` · ${dollars(e.prix)}` : ''}</p>
-              ${e.description ? `<p>${esc(e.description)}</p>` : ''}
-              ${it.noteClient ? `<p class="c-conseil">💡 ${esc(it.noteClient)}</p>` : ''}
+              ${e.description ? `<p class="c-desc">${esc(e.description)}</p>` : ''}
+              ${it.noteClient ? `<p class="c-conseil">${icone('sparkles', { taille: 14 })}<span>${esc(it.noteClient)}</span></p>` : ''}
               ${e.adresse ? `<p class="c-petit">${esc(e.adresse)}</p>` : ''}
-              ${liens ? `<p class="c-petit">${liens}</p>` : ''}`}
+              ${liens ? `<p class="c-liens">${liens}</p>` : ''}`}
           </div>
         </li>`;
     }).join('');
+    const sous = [j.titre ? et.ville || et.pays : '', dateDuJour(v, i, { weekday: 'long', day: 'numeric', month: 'long' })].filter(Boolean).join(' · ');
     return `
       <section class="c-jour">
-        <h3><span>Jour ${i + 1}</span> ${esc(et.ville || et.pays || '')}${v.dateDebut ? ` <small>${esc(dateDuJour(v, i))}</small>` : ''}</h3>
-        ${j.titre ? `<p class="c-titre-jour">${esc(j.titre)}</p>` : ''}
-        ${apercu && i === 0 ? '<p class="c-echantillon">Jour offert en exemple : voici le niveau de détail de chaque journée.</p>' : ''}
-        <ul class="c-items">${items || '<li class="c-petit">Journée libre</li>'}</ul>
+        <div class="c-jour-tete">
+          <span class="c-jour-num"><small>Jour</small>${i + 1}</span>
+          <div>
+            <h3>${esc(j.titre || et.ville || et.pays || '')}</h3>
+            ${sous ? `<p>${esc(sous)}</p>` : ''}
+          </div>
+        </div>
+        ${apercu && i === 0 ? '<p class="c-echantillon">Journée offerte en exemple : voici le niveau de détail de chaque jour.</p>' : ''}
+        <ul class="c-items">${items || '<li class="c-libre">Journée libre</li>'}</ul>
       </section>`;
   }).join('');
-  const prix = parseFloat(String(v.prixVente || '').replace(',', '.'));
-  const appel = apercu ? `
-    <div class="c-appel">
-      <b>Ceci est un aperçu.</b> L'itinéraire complet contient le nom de chaque endroit, les adresses, les cartes, les liens pour réserver et mes conseils pour chaque journée.
-      ${prix ? `<span class="c-prix">Itinéraire complet : ${formatCAD(prix)}</span>` : ''}
-    </div>` : '';
+  const appel = (bas) => (apercu ? `
+    <div class="c-appel ${bas ? 'bas' : ''}">
+      <div>
+        <b>${bas ? 'Envie de partir ?' : 'Ceci est un aperçu'}</b>
+        <p>L'itinéraire complet contient le nom de chaque endroit, les adresses, les cartes, les liens pour réserver et mes conseils pour chaque journée.</p>
+      </div>
+      ${prix ? `<span class="c-prix"><small>Itinéraire complet</small>${formatCAD(prix)} CA</span>` : ''}
+    </div>` : '');
   return `
     <article class="client ${apercu ? 'mode-apercu' : ''}">
-      <header class="c-entete">
-        <p class="c-sur">${apercu ? 'Aperçu de voyage sur mesure' : 'Ton voyage sur mesure'}</p>
-        <h1>${esc(v.titre)}</h1>
-        <p>${esc(villes)}${v.jours.length ? ` · ${v.jours.length} jours` : ''}${v.voyageurs ? ` · ${v.voyageurs} voyageur${v.voyageurs > 1 ? 's' : ''}` : ''}</p>
-        ${v.introClient ? `<p class="c-intro">${esc(v.introClient)}</p>` : ''}
+      <header class="c-couv ${couverture ? '' : 'sans'}">
+        ${couverture ? `<img data-photo="${esc(couverture)}" alt="">` : ''}
+        <div class="c-couv-texte">
+          <p class="c-sur">${apercu ? 'Aperçu · voyage sur mesure' : 'Voyage sur mesure'}</p>
+          <h1>${esc(v.titre)}</h1>
+          <p class="c-meta">${[pluriel(v.jours.length, 'jour'), v.voyageurs ? pluriel(v.voyageurs, 'voyageur') : '', v.dateDebut ? `départ le ${dateDuJour(v, 0, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
+        </div>
       </header>
-      ${appel}
-      ${jours || '<p>Aucun jour pour l\'instant.</p>'}
-      ${appel}
+      ${v.introClient ? `<p class="c-intro">${esc(v.introClient)}</p>` : ''}
+      ${etapes.length ? `<ol class="c-route">${etapes.map((et) => `<li><b>${esc(et.ville || et.pays)}</b><span>${pluriel(et.jours, 'jour')}</span></li>`).join('')}</ol>` : ''}
+      ${appel(false)}
+      ${jours || '<p class="c-libre">Aucun jour pour l\'instant.</p>'}
+      ${appel(true)}
     </article>`;
-}
-
-function pageClient(id, mode) {
-  const v = etat.voyages.find((x) => x.id === id);
-  if (!v) { location.hash = '#/'; return; }
-  app.innerHTML = `
-    <div class="barre-client">
-      <a class="rond" href="#/voyage/${esc(v.id)}" aria-label="Retour au voyage">←</a>
-      <div class="segments">
-        <a href="#/client/${esc(v.id)}/apercu" class="${mode === 'apercu' ? 'choisi' : ''}">Aperçu à vendre</a>
-        <a href="#/client/${esc(v.id)}/complet" class="${mode === 'complet' ? 'choisi' : ''}">Version complète</a>
-      </div>
-      <button class="bouton-secondaire petit-bouton" id="imprimer">Imprimer / PDF</button>
-      <button class="bouton-principal petit-bouton" id="telecharger">Télécharger la page</button>
-    </div>
-    <p class="aide centre">${mode === 'apercu'
-      ? "Ce que tu peux montrer avant la vente : le trajet, les jours et le genre d'endroits. Les noms sont cachés et les photos floues, sauf pour le jour 1."
-      : 'La version que le client reçoit après avoir payé. Tes notes privées ne sont jamais incluses.'}</p>
-    ${htmlClient(v, mode)}`;
-  afficherPhotos(app);
-  app.querySelector('#imprimer').onclick = () => window.print();
-  app.querySelector('#telecharger').onclick = () => telechargerPage(v, mode);
 }
 
 function miniature(blob, largeur) {
@@ -653,7 +874,7 @@ function miniature(blob, largeur) {
     img.onload = () => {
       const c = document.createElement('canvas');
       c.width = largeur;
-      c.height = Math.max(1, Math.round(largeur * img.height / img.width));
+      c.height = Math.max(1, Math.round((largeur * img.height) / img.width));
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
       ok(c.toDataURL('image/jpeg', 0.6));
@@ -662,12 +883,12 @@ function miniature(blob, largeur) {
     img.src = url;
   });
 }
+const enDataUrl = (blob) => new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(blob); });
 
-// Fabrique un seul fichier .html (photos incluses) à envoyer au client par courriel ou WhatsApp.
+// Fabrique un seul fichier .html (photos et police incluses) à envoyer au client.
 async function telechargerPage(v, mode) {
   const bouton = app.querySelector('#telecharger');
   bouton.disabled = true;
-  bouton.textContent = 'Préparation…';
   try {
     const boite = document.createElement('div');
     boite.innerHTML = htmlClient(v, mode);
@@ -676,11 +897,13 @@ async function telechargerPage(v, mode) {
       if (!p) { img.remove(); continue; }
       // Dans l'aperçu, les photos cachées sont réduites à une toute petite taille :
       // impossible de retrouver la vraie photo en enlevant le flou.
-      img.src = img.closest('.flou') ? await miniature(p.blob, 48) : await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(p.blob); });
+      img.src = img.closest('.flou') ? await miniature(p.blob, 48) : await enDataUrl(p.blob);
       img.removeAttribute('data-photo');
     }
-    const css = await (await fetch('css/generateur.css')).text();
-    const page = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(v.titre)}</title><style>${css}</style></head><body class="page-client-seule">${boite.innerHTML}</body></html>`;
+    const css = await (await fetch('css/client.css')).text();
+    let police = '';
+    try { police = `@font-face{font-family:'Figtree';src:url(${await enDataUrl(await (await fetch('fonts/figtree.woff2')).blob())}) format('woff2');font-weight:300 900}`; } catch (_) { /* police du système */ }
+    const page = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(v.titre)}</title><style>${police}${css}</style></head><body class="page-client-seule">${boite.innerHTML}</body></html>`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([page], { type: 'text/html' }));
     a.download = `${sansAccents(v.titre).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'voyage'}-${mode === 'apercu' ? 'apercu' : 'complet'}.html`;
@@ -691,51 +914,332 @@ async function telechargerPage(v, mode) {
     toast("La page n'a pas pu être créée.");
   } finally {
     bouton.disabled = false;
-    bouton.textContent = 'Télécharger la page';
   }
 }
 
+// ---------- Contributeurs ----------
+const barre = (p, classe = '') => `<span class="bar ${classe}"><i style="width:${Math.round(Math.min(1, Math.max(0, p)) * 100)}%"></i></span>`;
+const initiales = (nom) => esc((nom || '?').trim().split(/\s+/).map((m) => m[0]).slice(0, 2).join('').toUpperCase());
+
+function pageContributeurs(onglet) {
+  const n = aValider().length;
+  const bilans = etat.contributeurs.map((c) => ({ c, b: bilanContributeur(c) }));
+  const du = bilans.reduce((s, x) => s + x.b.du, 0);
+  const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
+  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['soumissions', 'inbox', 'À valider', n], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
+  app.innerHTML = `
+    ${entete('Contributeurs', "Les personnes qui ajoutent des endroits pour toi, ce qu'elles ont envoyé et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
+    <div class="kpis">
+      <div class="kpi"><span>${icone('users', { taille: 15 })} Contributeurs</span><b>${etat.contributeurs.length}</b><small>${pluriel(bilans.reduce((s, x) => s + x.b.acceptes, 0), 'endroit accepté', 'endroits acceptés')}</small></div>
+      <a class="kpi ${n ? 'hi' : ''}" href="#/contributeurs/soumissions"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
+      <div class="kpi ${du ? 'warn' : ''}"><span>${icone('wallet', { taille: 15 })} À payer</span><b>${formatArgent(du)}</b><small>Total dû maintenant</small></div>
+      <div class="kpi"><span>${icone('circle-check-big', { taille: 15 })} Déjà payé</span><b>${formatArgent(paye)}</b><small>${pluriel(etat.paiements.length, 'paiement')}</small></div>
+    </div>
+    <nav class="tabs">${onglets.map(([k, ico, nom, c]) => `<a class="tab ${k === onglet ? 'on' : ''}" href="#/contributeurs/${k}">${icone(ico, { taille: 15 })}${nom}${c !== '' ? `<span class="n">${c}</span>` : ''}</a>`).join('')}</nav>
+    <div id="contenu"></div>`;
+  app.querySelector('#ajout-contrib').onclick = () => formulaireContributeur();
+  const zone = app.querySelector('#contenu');
+  if (onglet === 'soumissions') ongletSoumissions(zone);
+  else if (onglet === 'paiements') ongletPaiements(zone, bilans);
+  else if (onglet === 'regles') ongletRegles(zone);
+  else ongletListeContrib(zone, bilans);
+}
+
+function formulaireContributeur(c = null) {
+  ouvrirModale(c ? 'Modifier le contributeur' : 'Nouveau contributeur', `
+    <div class="form-grille">
+      <label class="champ large"><span>Nom</span><input name="nom" required value="${esc(c?.nom)}" placeholder="Ex. : Mai Tran"></label>
+      <label class="champ"><span>Ville</span><input name="ville" value="${esc(c?.ville)}" placeholder="Ex. : Hanoï"></label>
+      <label class="champ"><span>Pays</span><input name="pays" value="${esc(c?.pays)}" placeholder="Ex. : Vietnam"></label>
+      <label class="champ large"><span>Contact <small>courriel, WhatsApp, Instagram…</small></span><input name="contact" value="${esc(c?.contact)}"></label>
+      <label class="champ large"><span>Façon de le payer <small>PayPal, Wise, virement…</small></span><input name="paiement" value="${esc(c?.paiement)}"></label>
+      <label class="champ large"><span>Notes</span><textarea name="notes" rows="2">${esc(c?.notes)}</textarea></label>
+    </div>`, async (val) => {
+    if (!val.nom.trim()) return false;
+    const objet = { ...(c || { id: db.nouvelId(), creeLe: new Date().toISOString() }), ...val, nom: val.nom.trim() };
+    await sauver('contributeurs', objet);
+    toast(c ? 'Contributeur modifié' : 'Contributeur ajouté');
+    router();
+    return true;
+  }, { ok: c ? 'Enregistrer' : 'Ajouter' });
+}
+
+function ongletListeContrib(zone, bilans) {
+  const r = etat.regles;
+  const explications = `
+    <div class="grille-3 explique">
+      <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Tu valides chaque endroit. Plus la fiche est complète, plus elle a de chances d'être acceptée.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${r.cibleParCategorie} endroits acceptés dans chacune des ${r.categoriesBonus.length} catégories choisies.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${r.pourcentage} % des ventes</b><p>Quand un itinéraire vendu utilise ses endroits, selon sa part du voyage. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits.</p></div>
+    </div>`;
+  if (!bilans.length) {
+    zone.innerHTML = `
+      <div class="panel vide-bloc">
+        ${icone('users', { taille: 28, epaisseur: 1.6 })}
+        <b>Aucun contributeur pour l'instant</b>
+        <span>Quand quelqu'un ajoutera des endroits pour toi, crée-le ici. Il t'envoie le fichier de sauvegarde de son appli, et tu l'importes dans « Mes données » en choisissant son nom.</span>
+        <button class="btn" id="ajout-vide">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>
+      </div>
+      ${explications}`;
+    zone.querySelector('#ajout-vide').onclick = () => formulaireContributeur();
+    return;
+  }
+  bilans.sort((a, b) => b.b.du - a.b.du || b.b.acceptes - a.b.acceptes);
+  zone.innerHTML = `
+    <div class="liste-contrib">
+      ${bilans.map(({ c, b }) => {
+        const villeProche = b.villes.find((x) => !x.complete);
+        const nbBonus = b.villes.filter((x) => x.complete).length;
+        return `
+        <section class="panel contrib">
+          <div class="contrib-tete">
+            <span class="avatar">${initiales(c.nom)}</span>
+            <div class="contrib-nom"><b>${esc(c.nom)}</b><small>${esc([c.ville, c.pays].filter(Boolean).join(', ') || 'Ville non précisée')}${c.contact ? ` · ${esc(c.contact)}` : ''}</small></div>
+            <div class="head-actions">
+              <button class="btn ${b.du > 0 ? '' : 'ghost'} sm" data-payer="${esc(c.id)}" ${b.du > 0 ? '' : 'disabled'}>${icone('banknote', { taille: 14 })} ${b.du > 0 ? `Payer ${formatArgent(b.du)}` : 'Rien à payer'}</button>
+              <button class="ico-btn" data-modifier="${esc(c.id)}" aria-label="Modifier">${icone('pencil', { taille: 15 })}</button>
+            </div>
+          </div>
+          <div class="contrib-chiffres">
+            <div><b>${b.acceptes}</b><span>acceptés</span></div>
+            <div class="${b.enAttente ? 'hi' : ''}"><b>${b.enAttente}</b><span>à valider</span></div>
+            <div><b>${b.refuses}</b><span>refusés</span></div>
+            <div><b>${formatArgent(b.gagne)}</b><span>gagné</span></div>
+            <div><b>${formatArgent(b.paye)}</b><span>payé</span></div>
+            <div class="${b.du ? 'warn' : ''}"><b>${formatArgent(b.du)}</b><span>à payer</span></div>
+          </div>
+          <div class="recompenses">
+            <div class="recomp">
+              <div class="recomp-tete">${icone('trophy', { taille: 15 })}<b>Ville complète</b><span>${nbBonus ? `${nbBonus} × ${formatArgent(r.bonusVille)}` : formatArgent(r.bonusVille)}</span></div>
+              ${villeProche ? `${barre(villeProche.progres)}<p>${esc(villeProche.ville || '?')} à ${Math.round(villeProche.progres * 100)} %. Manque : ${esc(villeProche.manque.slice(0, 2).join(', '))}${villeProche.manque.length > 2 ? '…' : ''}</p>` : `${barre(nbBonus ? 1 : 0, nbBonus ? 'ok' : '')}<p>${b.villes.length ? 'Toutes ses villes sont complètes.' : "Aucun endroit accepté pour l'instant."}</p>`}
+            </div>
+            <div class="recomp">
+              <div class="recomp-tete">${icone('gift', { taille: 15 })}<b>${esc(r.recompenseVoyage)}</b><span>${r.seuilVoyage} endroits</span></div>
+              ${barre(b.progresVoyage, b.progresVoyage >= 1 ? 'ok' : '')}<p>${b.progresVoyage >= 1 ? 'Objectif atteint !' : `${b.acceptes} / ${r.seuilVoyage}, encore ${r.seuilVoyage - b.acceptes}`}</p>
+            </div>
+            <div class="recomp">
+              <div class="recomp-tete">${icone('percent', { taille: 15 })}<b>Part des ventes</b><span>${r.pourcentage} %</span></div>
+              <p>${b.ventes.length ? b.ventes.map((x) => `${esc(x.titre)} : ${formatArgent(x.montant)}`).join(' · ') : 'Aucun itinéraire vendu avec ses endroits.'}</p>
+            </div>
+          </div>
+        </section>`;
+      }).join('')}
+    </div>
+    ${explications}`;
+  zone.querySelectorAll('[data-modifier]').forEach((b) => { b.onclick = () => formulaireContributeur(etat.contributeurs.find((c) => c.id === b.dataset.modifier)); });
+  zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
+}
+
+function formulairePaiement(contributeurId) {
+  const c = etat.contributeurs.find((x) => x.id === contributeurId);
+  const b = bilanContributeur(c);
+  ouvrirModale(`Paiement à ${esc(c.nom)}`, `
+    <div class="form-grille">
+      <label class="champ"><span>Montant ($ CA)</span><input name="montant" inputmode="decimal" required value="${b.du ? b.du.toFixed(2) : ''}"></label>
+      <label class="champ"><span>Date</span><input name="date" type="date" value="${aujourdhui()}"></label>
+      <label class="champ large"><span>Note <small>ex. : PayPal, référence…</small></span><input name="note" value="${esc(c.paiement || '')}"></label>
+    </div>
+    <p class="aide">À payer en ce moment : ${formatArgent(b.du)}. Ceci ne fait pas le virement : ça note seulement que tu l'as fait.</p>`, async (val) => {
+    const montant = nombre(val.montant);
+    if (!(montant > 0)) return false;
+    await sauver('paiements', { id: db.nouvelId(), contributeurId, montant, date: val.date || aujourdhui(), note: val.note.trim() });
+    toast('Paiement noté');
+    router();
+    return true;
+  }, { ok: 'Noter le paiement' });
+}
+
+function ongletSoumissions(zone) {
+  const liste = aValider().sort((a, b) => completude(b).score - completude(a).score);
+  if (!liste.length) {
+    zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un contributeur (dans « Mes données »), ses nouveaux endroits arrivent ici.</span></div>`;
+    return;
+  }
+  zone.innerHTML = `
+    <div class="barre-actions"><span>${pluriel(liste.length, 'endroit')} en attente, les plus complets en premier.</span>
+      <button class="btn ghost sm" id="accepter-complets">${icone('check', { taille: 14 })} Accepter ceux à 80 % ou plus</button></div>
+    <div class="soumissions">
+      ${liste.map((e) => {
+        const cat = categorie(e);
+        const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
+        const { score, manque } = completude(e);
+        return `
+          <article class="panel soum" style="--c:${cat.couleur}">
+            <div class="soum-photo">${iconeCat(e.categorie, { taille: 26, epaisseur: 1.5 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}${e.photos?.length > 1 ? `<span class="soum-nb">${e.photos.length} photos</span>` : ''}</div>
+            <div class="soum-corps">
+              <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type].filter(Boolean).join(' · '))}</span>
+              <b class="soum-nom">${esc(e.nom)}</b>
+              <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))} · par ${esc(c?.nom || 'inconnu')} · reçu le ${esc(dateCourte(e.recuLe))}</small>
+              <div class="score">${barre(score / 100, score >= 80 ? 'ok' : score >= 50 ? '' : 'bad')}<span>${score} % complet</span></div>
+              ${manque.length ? `<p class="manque">Manque : ${esc(manque.join(', '))}</p>` : ''}
+              <details><summary>Voir la fiche</summary>
+                <dl class="fiche-courte">
+                  ${e.description ? `<dt>Description</dt><dd>${esc(e.description)}</dd>` : ''}
+                  ${e.notes ? `<dt>Notes privées</dt><dd>${esc(e.notes)}</dd>` : ''}
+                  ${e.prix || e.montant ? `<dt>Prix</dt><dd>${dollars(e.prix)} ${esc(e.montant || '')} ${esc(e.montant ? e.devise : '')}</dd>` : ''}
+                  ${e.adresse ? `<dt>Adresse</dt><dd>${esc(e.adresse)}</dd>` : ''}
+                  ${e.lat ? `<dt>GPS</dt><dd><a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lng}" target="_blank" rel="noopener">${e.lat}, ${e.lng}</a></dd>` : ''}
+                  ${e.verifieLe ? `<dt>Visité le</dt><dd>${esc(dateCourte(e.verifieLe))}</dd>` : ''}
+                </dl>
+              </details>
+            </div>
+            <div class="soum-actions">
+              <button class="btn sm" data-accepter="${esc(e.id)}">${icone('check', { taille: 14 })} Accepter</button>
+              <button class="btn danger sm" data-refuser="${esc(e.id)}">${icone('x', { taille: 14 })} Refuser</button>
+            </div>
+          </article>`;
+      }).join('')}
+    </div>`;
+  afficherPhotos(zone);
+  const decider = async (id, statut, raison = '') => {
+    const e = endroit(id);
+    Object.assign(e, { statut, decideLe: new Date().toISOString(), raisonRefus: raison || undefined });
+    await sauver('endroits', e);
+  };
+  zone.querySelectorAll('[data-accepter]').forEach((b) => { b.onclick = async () => { await decider(b.dataset.accepter, 'accepte'); toast('Endroit accepté'); router(); }; });
+  zone.querySelectorAll('[data-refuser]').forEach((b) => {
+    b.onclick = () => ouvrirModale('Refuser cet endroit ?', `<label class="champ"><span>Raison <small>optionnel, pour l'expliquer au contributeur</small></span><input name="raison" placeholder="Ex. : photo floue, endroit fermé…"></label>`, async (val) => {
+      await decider(b.dataset.refuser, 'refuse', val.raison.trim());
+      toast('Endroit refusé');
+      router();
+      return true;
+    }, { ok: 'Refuser', danger: true });
+  });
+  zone.querySelector('#accepter-complets').onclick = async () => {
+    const ok = liste.filter((e) => completude(e).score >= 80);
+    for (const e of ok) await decider(e.id, 'accepte');
+    toast(ok.length ? pluriel(ok.length, 'endroit accepté', 'endroits acceptés') : 'Aucun endroit à 80 % ou plus');
+    router();
+  };
+}
+
+function ongletPaiements(zone, bilans) {
+  const tries = [...etat.paiements].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const nom = (id) => etat.contributeurs.find((c) => c.id === id)?.nom || 'Contributeur supprimé';
+  const dus = bilans.filter((x) => x.b.du > 0).sort((a, b) => b.b.du - a.b.du);
+  zone.innerHTML = `
+    <div class="grille-2">
+      <section class="panel">
+        <div class="panel-tete"><h3>À payer</h3></div>
+        ${dus.length ? `<ul class="lignes">${dus.map(({ c, b }) => `<li><span class="avatar petit">${initiales(c.nom)}</span><span class="l-txt"><b>${esc(c.nom)}</b><small>${pluriel(b.acceptes, 'endroit')}${b.bonus ? ` · bonus ${formatArgent(b.bonus)}` : ''}${b.commissions ? ` · ventes ${formatArgent(b.commissions)}` : ''}</small></span><b class="l-montant">${formatArgent(b.du)}</b><button class="btn sm" data-payer="${esc(c.id)}">Payer</button></li>`).join('')}</ul>` : "<p class=\"vide-ligne\">Personne à payer pour l'instant.</p>"}
+      </section>
+      <section class="panel">
+        <div class="panel-tete"><h3>Historique</h3></div>
+        ${tries.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Contributeur</th><th>Note</th><th class="num">Montant</th><th></th></tr></thead><tbody>
+          ${tries.map((p) => `<tr><td>${esc(dateCourte(p.date))}</td><td>${esc(nom(p.contributeurId))}</td><td class="doux">${esc(p.note || '')}</td><td class="num">${formatArgent(nombre(p.montant))}</td><td><button class="ico-btn rouge" data-effacer-paiement="${esc(p.id)}" aria-label="Effacer">${icone('trash-2', { taille: 14 })}</button></td></tr>`).join('')}
+        </tbody></table>` : '<p class="vide-ligne">Aucun paiement noté.</p>'}
+      </section>
+    </div>`;
+  zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
+  zone.querySelectorAll('[data-effacer-paiement]').forEach((b) => {
+    b.onclick = () => ouvrirModale('Effacer ce paiement ?', '<p>Le montant redeviendra « à payer ».</p>', async () => {
+      await db.effacer('paiements', b.dataset.effacerPaiement);
+      etat.paiements = etat.paiements.filter((p) => p.id !== b.dataset.effacerPaiement);
+      router();
+    }, { ok: 'Effacer', danger: true });
+  });
+}
+
+function ongletRegles(zone) {
+  const r = etat.regles;
+  zone.innerHTML = `
+    <form class="panel regles" id="regles">
+      <p class="aide">Ces règles servent à calculer ce que tu dois à chaque contributeur. Tu pourras les ajuster après tes tests.</p>
+      <div class="form-grille">
+        <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
+        <label class="champ"><span>Pourcentage sur les ventes (%)</span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
+        <label class="champ"><span>Bonus ville complète ($ CA)</span><input name="bonusVille" inputmode="decimal" value="${r.bonusVille}"></label>
+        <label class="champ"><span>Endroits par catégorie pour une ville complète</span><input name="cibleParCategorie" type="number" min="1" value="${r.cibleParCategorie}"></label>
+        <fieldset class="champ large"><span>Catégories comptées pour le bonus</span>
+          <div class="cases">${Object.entries(TAXONOMIE).map(([k, c]) => `<label class="case"><input type="checkbox" name="cat" value="${k}" ${r.categoriesBonus.includes(k) ? 'checked' : ''}>${iconeCat(k, { taille: 14 })}${esc(c.nom)}</label>`).join('')}</div>
+        </fieldset>
+        <label class="champ"><span>Récompense des meilleurs</span><input name="recompenseVoyage" value="${esc(r.recompenseVoyage)}"></label>
+        <label class="champ"><span>À partir de (endroits acceptés)</span><input name="seuilVoyage" type="number" min="1" value="${r.seuilVoyage}"></label>
+      </div>
+      <div class="pied-form"><button class="btn">${icone('save', { taille: 15 })} Enregistrer les règles</button></div>
+    </form>`;
+  zone.querySelector('#regles').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const f = new FormData(ev.target);
+    const nouvelles = {
+      parEndroit: nombre(f.get('parEndroit')), pourcentage: nombre(f.get('pourcentage')), bonusVille: nombre(f.get('bonusVille')),
+      cibleParCategorie: Math.max(1, parseInt(f.get('cibleParCategorie'), 10) || 1), categoriesBonus: f.getAll('cat'),
+      recompenseVoyage: String(f.get('recompenseVoyage') || '').trim() || REGLES_DEFAUT.recompenseVoyage,
+      seuilVoyage: Math.max(1, parseInt(f.get('seuilVoyage'), 10) || 1),
+    };
+    await db.ecrireReglage('reglesContrib', nouvelles);
+    etat.regles = { ...REGLES_DEFAUT, ...nouvelles };
+    toast('Règles enregistrées');
+  };
+}
+
 // ---------- Mes données ----------
-async function pageDonnees() {
+function pageDonnees() {
   const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
   const pays = uniques(etat.endroits.map((e) => e.pays));
   app.innerHTML = `
-    <section class="page-donnees">
-      <h1>Mes données</h1>
-      <div class="bloc">
-        <h2>1. Importer les endroits de ton cellulaire</h2>
+    ${entete('Mes données', "Tout est gardé dans ce navigateur, sur cet ordinateur. Rien n'est envoyé en ligne.")}
+    <div class="kpis kpis-3">
+      <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${etat.endroits.length}</b><small>${pluriel(pays.length, 'pays', 'pays')}</small></div>
+      <div class="kpi"><span>${icone('image', { taille: 15 })} Photos</span><b>${nbPhotos}</b><small>incluses dans les copies</small></div>
+      <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${etat.voyages.length}</b><small>et ${pluriel(etat.contributeurs.length, 'contributeur')}</small></div>
+    </div>
+    <div class="grille-2">
+      <section class="panel">
+        <div class="panel-tete"><h3>Importer un fichier</h3></div>
         <ol class="etapes-texte">
-          <li>Sur ton cell, ouvre l'appli, va dans <b>Réglages</b> et touche <b>Faire une copie de sauvegarde</b>.</li>
+          <li>Sur le cell, ouvre l'appli, va dans <b>Réglages</b> et touche <b>Faire une copie de sauvegarde</b>.</li>
           <li>Envoie le fichier à ton ordi (courriel, AirDrop, Google Drive…).</li>
-          <li>Ici, choisis ce fichier. Les nouveaux endroits s'ajoutent, et ceux déjà présents sont mis à jour.</li>
+          <li>Dis de qui vient le fichier, puis choisis-le.</li>
         </ol>
-        <label class="bouton-principal">Choisir le fichier de sauvegarde<input type="file" accept=".json,application/json" id="importer" hidden></label>
-        <p class="petit">Sur cet appareil : ${etat.endroits.length} endroits, ${nbPhotos} photos, ${pays.length} pays, ${etat.voyages.length} voyages.</p>
-      </div>
-      <div class="bloc">
-        <h2>2. Garder une copie de tes voyages</h2>
-        <p class="petit">Tes voyages sont gardés dans ce navigateur seulement. Fais une copie de temps en temps et garde-la dans ton Google Drive ou tes courriels.</p>
-        <button class="bouton-secondaire" id="exporter">Télécharger une copie (endroits + voyages)</button>
-      </div>
-    </section>`;
-
+        <label class="champ"><span>Ce fichier vient de</span>
+          <select id="source">
+            <option value="">Moi (mon cellulaire)</option>
+            ${etat.contributeurs.map((c) => `<option value="${esc(c.id)}">${esc(c.nom)} (contributeur)</option>`).join('')}
+          </select>
+        </label>
+        <p class="aide" id="aide-source">Tes endroits sont ajoutés ou mis à jour, et utilisables tout de suite.</p>
+        <label class="btn btn-fichier">${icone('folder-open', { taille: 15 })} Choisir le fichier<input type="file" accept=".json,application/json" id="importer" hidden></label>
+      </section>
+      <section class="panel">
+        <div class="panel-tete"><h3>Garder une copie</h3></div>
+        <p class="doux">Tes voyages, contributeurs et paiements sont seulement dans ce navigateur. Télécharge une copie de temps en temps et garde-la dans ton Google Drive ou tes courriels.</p>
+        <button class="btn ghost" id="exporter">${icone('download', { taille: 15 })} Télécharger une copie complète</button>
+        <p class="aide">Pour la remettre : choisis-la ci-contre avec « Moi ».</p>
+      </section>
+    </div>`;
+  const source = app.querySelector('#source');
+  source.onchange = () => {
+    app.querySelector('#aide-source').textContent = source.value
+      ? 'Ses endroits arrivent dans « Contributeurs > À valider ». Ils seront utilisables une fois acceptés.'
+      : 'Tes endroits sont ajoutés ou mis à jour, et utilisables tout de suite.';
+  };
   app.querySelector('#importer').onchange = async (ev) => {
     const fichier = ev.target.files[0];
     if (!fichier) return;
     try {
-      const n = await db.importerTout(JSON.parse(await fichier.text()));
+      const donnees = JSON.parse(await fichier.text());
+      if (source.value) {
+        const n = await db.importerContribution(donnees, source.value);
+        await charger();
+        toast(`${pluriel(n, 'nouvel endroit', 'nouveaux endroits')} à valider`);
+        location.hash = '#/contributeurs/soumissions';
+        return;
+      }
+      const n = await db.importerTout(donnees);
       await charger();
-      toast(`${n} endroit${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''} ou mis à jour`);
-      pageDonnees();
+      toast(pluriel(n, 'endroit ajouté ou mis à jour', 'endroits ajoutés ou mis à jour'));
+      router();
     } catch (err) {
       toast(err.message || 'Ce fichier ne peut pas être lu.');
     }
+    ev.target.value = '';
   };
   app.querySelector('#exporter').onclick = async () => {
     const donnees = await db.exporterTout();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(donnees)], { type: 'application/json' }));
-    a.download = `generateur-voyages-copie-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `studio-voyages-copie-${aujourdhui()}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
@@ -748,8 +1252,9 @@ app.addEventListener('dragstart', (ev) => {
   const it = ev.target.closest?.('[data-item]');
   if (e) ev.dataTransfer.setData('text/plain', `e:${e.dataset.endroit}`);
   else if (it) ev.dataTransfer.setData('text/plain', `i:${it.dataset.item}`);
+  else return;
   ev.dataTransfer.effectAllowed = 'move';
 });
 charger().then(() => { db.demanderStockagePersistant(); return router(); }).catch((err) => {
-  app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
+  app.innerHTML = `<p class="vide-ligne">Erreur au démarrage : ${esc(err.message)}</p>`;
 });

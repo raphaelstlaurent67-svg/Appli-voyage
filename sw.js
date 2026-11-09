@@ -1,8 +1,9 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v7';
+const VERSION = 'v8';
 const FICHIERS = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'generateur.html', 'css/generateur.css', 'js/generateur.js', 'fonts/figtree.woff2', 'fonts/bricolage.woff2',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'js/icones.js', 'fonts/figtree.woff2',
+  'generateur.html', 'css/generateur.css', 'css/client.css', 'js/generateur.js', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'manifest.webmanifest', 'icons/icone.svg', 'icons/icone-192.png', 'icons/icone-512.png',
 ];
 

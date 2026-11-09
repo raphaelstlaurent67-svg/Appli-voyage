@@ -3,27 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0e4a5a">
-  <title>Générateur de voyages</title>
+  <meta name="theme-color" content="#0b0b10">
+  <title>Studio · Générateur de voyages</title>
   <link rel="icon" href="icons/icone.svg" type="image/svg+xml">
   <link rel="preload" href="fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
-  <!-- Carte gratuite (OpenStreetMap), sans compte. Le reste marche même si elle ne charge pas. -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <!-- Carte gratuite (OpenStreetMap), sans compte. Leaflet est inclus dans le projet. -->
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="css/generateur.css">
+  <link rel="stylesheet" href="css/client.css">
 </head>
 <body>
-  <header class="barre">
-    <a class="marque" href="#/">🧭 <span>Générateur de voyages</span></a>
-    <nav class="onglets">
-      <a href="#/" data-page="voyages">Voyages</a>
-      <a href="#/donnees" data-page="donnees">Mes données</a>
-      <a href="index.html" class="discret">Appli des endroits ↗</a>
-    </nav>
-  </header>
-  <main id="app"></main>
+  <div class="app">
+    <aside class="side" id="side"></aside>
+    <main class="main" id="app"></main>
+  </div>
+  <div id="modale" hidden></div>
   <div id="toast" role="status"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script type="module" src="js/generateur.js"></script>
 </body>
 </html>

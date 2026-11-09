@@ -26,6 +26,10 @@ Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages 
 - **Carte** (OpenStreetMap, gratuite) et **résumé** : nombre de jours et d'endroits, coût estimé, prix de vente.
 - **Réutiliser** : dupliquer un voyage, ou le marquer « Modèle réutilisable ».
 - **Page client** : « Aperçu à vendre » (noms, adresses et liens cachés, photos floues, sauf le jour 1 donné en exemple) ou « Version complète ». Les notes privées ne sont jamais montrées. Imprimer en PDF ou télécharger un seul fichier .html à envoyer.
+- **Contributeurs** : la liste des personnes qui ajoutent des endroits, ce qu'elles ont gagné, payé et ce qui leur est dû, et à quel point elles sont proches de chaque récompense (ville complète, voyage à rabais, part des ventes).
+  - Importer leur fichier dans « Mes données » en choisissant leur nom : leurs endroits arrivent dans « À valider », triés du plus complet au moins complet.
+  - Accepter ou refuser (avec une raison), un par un ou « ceux à 80 % ou plus ». Seuls les endroits acceptés servent dans les voyages.
+  - Noter chaque paiement fait (le Studio ne fait pas le virement). Les règles (1 $ par endroit, bonus de ville, pourcentage…) se changent dans l'onglet « Règles ».
 
 ## Modifier les listes
 
@@ -41,9 +45,12 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `index.html` : la page de l'appli
 - `css/style.css` : l'apparence
 - `js/app.js` : les écrans (liste, formulaire, fiche, villes, réglages)
-- `generateur.html`, `js/generateur.js`, `css/generateur.css` : le générateur de voyages
+- `generateur.html`, `js/generateur.js`, `css/generateur.css` : le générateur de voyages (« Studio »)
+- `css/client.css` : l'apparence de la page envoyée au client (aussi copiée dans la page téléchargée)
+- `js/icones.js` : les icônes (Lucide, licence ISC dans `vendor/LUCIDE-LICENSE`)
+- `vendor/leaflet/` : la carte (Leaflet, licence BSD), incluse pour ne dépendre d'aucun autre site
 - `js/db.js` : l'enregistrement des données sur le téléphone et la copie de sauvegarde
 - `js/taxonomie.js` : les catégories, monnaies et façons de joindre un endroit
 - `js/lieux.js` : les pays d'Asie et leurs villes
-- `fonts/` : les polices Bricolage Grotesque et Figtree (licence SIL Open Font), incluses pour marcher sans internet
+- `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet
