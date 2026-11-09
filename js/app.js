@@ -611,7 +611,7 @@ async function pageFormulaire(id) {
         <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier…"></label>
         <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
         <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Colle le lien partagé par Google Maps"></label>
-        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">📍 Enregistrer ma position actuelle</button>
+        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">📍 Reprendre ma position actuelle</button>
         <p class="aide" id="texte-position"></p>
       </section>
 
@@ -812,30 +812,41 @@ async function pageFormulaire(id) {
     const texte = app.querySelector('#texte-position');
     if (!f.lat) { texte.textContent = ''; return; }
     const url = `https://www.google.com/maps/search/?api=1&query=${f.lat},${f.lng}`;
-    texte.innerHTML = `✓ Position enregistrée${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a>`;
+    texte.innerHTML = `✓ Position ${f.positionAuto ? 'prise automatiquement' : 'enregistrée'}${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a> · <button type="button" class="lien" id="retirer-position">Retirer</button>`;
+    texte.querySelector('#retirer-position').onclick = () => {
+      delete f.lat; delete f.lng; delete f.precision; delete f.positionAuto;
+      afficherPosition();
+    };
   }
 
-  app.querySelector('#ma-position').addEventListener('click', () => {
+  // auto = true quand on ouvre un nouvel endroit : la position se prend toute seule,
+  // parce qu'on est normalement sur place. On peut la retirer si on n'y est pas.
+  function prendrePosition(auto = false) {
     const texte = app.querySelector('#texte-position');
     if (!navigator.geolocation) { texte.textContent = 'Position non disponible sur cet appareil.'; return; }
-    texte.textContent = 'Recherche de ta position…';
+    texte.textContent = auto ? 'Prise de ta position automatiquement…' : 'Recherche de ta position…';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!document.body.contains(texte)) return;
         f.lat = +pos.coords.latitude.toFixed(6);
         f.lng = +pos.coords.longitude.toFixed(6);
         f.precision = Math.round(pos.coords.accuracy);
+        f.positionAuto = auto;
         afficherPosition();
       },
       (err) => {
+        if (!document.body.contains(texte)) return;
         texte.textContent = err.code === 1
           ? "Ton téléphone a refusé l'accès à la position. Va dans Réglages > Confidentialité > Service de localisation et permets-le pour Safari (ou Chrome)."
           : err.code === 3
             ? 'La position prend trop de temps. Sors à découvert ou réessaie dans un instant.'
             : "Impossible d'obtenir ta position pour le moment. Réessaie dans un instant.";
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: auto ? 60000 : 0 },
     );
-  });
+  }
+
+  app.querySelector('#ma-position').addEventListener('click', () => prendrePosition(false));
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -872,6 +883,8 @@ async function pageFormulaire(id) {
   majPhotos();
   majDevises();
   afficherPosition();
+  // Nouvel endroit (sauf un trajet) : position GPS prise automatiquement.
+  if (!existant && !f.lat && f.categorie !== 'trajets') prendrePosition(true);
 }
 
 // ---------- Villes (jours recommandés) ----------
@@ -945,6 +958,12 @@ async function pageReglages() {
       <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : 'Aucune copie faite pour le moment.'}</p>
       <button class="bouton-principal" id="exporter">Faire une copie de sauvegarde</button>
       <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">🧭 Générateur de voyages</h2>
+      <p class="petit">Pour assembler tes endroits en voyages, jour par jour. Fait pour l'ordinateur, mais marche aussi ici.</p>
+      <a class="bouton-secondaire bouton-bloc" href="generateur.html">Ouvrir le générateur</a>
     </section>
 
     <section class="section">

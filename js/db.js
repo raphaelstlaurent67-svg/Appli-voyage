@@ -2,7 +2,7 @@
 // Fonctionne sans internet. Une sauvegarde en ligne viendra s'ajouter plus tard.
 
 const NOM_BASE = 'appli-voyage';
-const VERSION = 1;
+const VERSION = 2; // 2 : ajout des voyages (générateur)
 let basePromise;
 
 function ouvrir() {
@@ -15,6 +15,7 @@ function ouvrir() {
         if (!db.objectStoreNames.contains('villes')) db.createObjectStore('villes', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('reglages')) db.createObjectStore('reglages', { keyPath: 'cle' });
+        if (!db.objectStoreNames.contains('voyages')) db.createObjectStore('voyages', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -86,6 +87,7 @@ export async function exporterTout() {
     exporteLe: new Date().toISOString(),
     endroits: await tous('endroits'),
     villes: await tous('villes'),
+    voyages: await tous('voyages'),
     reglages: await tous('reglages'),
     photos: photosTexte,
   };
@@ -103,6 +105,10 @@ export async function importerTout(donnees) {
   for (const v of donnees.villes || []) {
     const actuelle = await lire('villes', v.id);
     if (!actuelle || (v.modifieLe || '') > (actuelle.modifieLe || '')) await ecrire('villes', v);
+  }
+  for (const v of donnees.voyages || []) {
+    const actuel = await lire('voyages', v.id);
+    if (!actuel || (v.modifieLe || '') > (actuel.modifieLe || '')) await ecrire('voyages', v);
   }
   for (const r of donnees.reglages || []) await ecrire('reglages', r);
   for (const p of donnees.photos || []) {
