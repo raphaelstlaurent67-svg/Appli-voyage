@@ -374,7 +374,7 @@ function htmlDatesDemande(d, long = false) {
   if (d.mode === 'total') {
     const n = d.duree || 0;
     return `<ul class="${long ? 'dates-demande' : 'liste-simple'}">
-      <li><b>Voyage au complet : ${pluriel(n, 'jour')}</b>${long ? '<span>' : ', '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
+      <li><b>Voyage au complet : ${d.plage ? `${d.plage.replace('-', ' à ')} jours` : pluriel(n, 'jour')}</b>${long ? '<span>' : ', '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
       <li><b>${esc(d.pays.map((p) => p.nom).join(' → '))}</b>${long ? `<span>${esc(d.repartition?.trim() || 'Il te laisse répartir le temps entre les pays.')}</span>` : d.repartition?.trim() ? `, ${esc(d.repartition.trim())}` : ', répartition libre'}</li>
     </ul>`;
   }
@@ -444,7 +444,7 @@ async function creerDepuisDemande(d) {
     d.courriel ? `Courriel : ${d.courriel}` : '',
     d.telephone ? `Téléphone : ${d.telephone}` : '',
     d.langue === 'en' ? 'Le client a rempli la fiche en anglais.' : '',
-    d.mode === 'total' ? `Durée totale demandée : ${pluriel(d.duree || 0, 'jour')}, répartie également entre les pays (à ajuster).${d.repartition?.trim() ? ` Sa préférence : ${d.repartition.trim()}` : ''}` : '',
+    d.mode === 'total' ? `Durée totale demandée : ${d.plage ? `${d.plage.replace('-', ' à ')} jours` : pluriel(d.duree || 0, 'jour')}, répartie également entre les pays (à ajuster).${d.repartition?.trim() ? ` Sa préférence : ${d.repartition.trim()}` : ''}` : '',
     d.message ? `Message : ${d.message}` : '',
   ].filter(Boolean).join('\n');
   v.demande = d;
