@@ -728,3 +728,4 @@ input[type='date'] { color-scheme: dark; }
 .demande-voyage[open] summary .chevron { transform: rotate(180deg); }
 .demande-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding: 4px 18px 18px; border-top: 1px solid var(--ln); padding-top: 16px; }
 @media (max-width: 900px) { .demande-grille { grid-template-columns: 1fr; } }
+.sideFoot .installer { margin: 0 -10px 4px; width: calc(100% + 20px); color: var(--ac2); }

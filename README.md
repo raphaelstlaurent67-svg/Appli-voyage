@@ -35,8 +35,10 @@ Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages 
 ## Fiche client (`demande.html`)
 
 Le questionnaire que Raph envoie à un client (Studio > Fiche client > Copier le lien).
-Le client choisit ses pays, ses dates sur un calendrier, ses envies (combien de fois),
-puis ses coordonnées. Ses réponses sont rangées dans un lien (rien n'est envoyé sur
+En français ou en anglais (boutons FR / EN en haut). Le client choisit ses pays, puis
+soit la durée de son voyage au complet (ex. 3 semaines, Raph répartit), soit ses dates
+pays par pays sur un calendrier, ses envies (combien de fois), puis ses coordonnées.
+Le résumé peut être enregistré en image pour le montrer aux autres voyageurs. Ses réponses sont rangées dans un lien (rien n'est envoyé sur
 internet) qu'il renvoie par courriel ou message. En cliquant sur ce lien, le Studio
 montre la demande et crée le voyage : un pays par étape, avec le bon nombre de jours,
 et un encadré « Ce que veut le client » qui compare ses envies à ce qui est prévu.
@@ -65,6 +67,7 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/monde.js` : les pays du monde par continent, et des villes hors Asie
 - `demande.html`, `js/demande.js`, `css/demande.css` : la fiche client
 - `js/code-demande.js` : met la demande dans un lien, et l'inverse
+- `js/installer.js` : bouton « Installer sur mon ordi » (les 3 applis ont chacune leur manifeste : `manifest.webmanifest`, `studio/manifest.webmanifest`, `demande.webmanifest`)
 - `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet

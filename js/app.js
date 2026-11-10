@@ -2,6 +2,7 @@ import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEV
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
 import * as sync from './sync.js';
+import * as pwa from './installer.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 
@@ -1047,6 +1048,13 @@ async function pageReglages() {
       <p class="petit">Pour assembler tes endroits en voyages. Fait pour l'ordinateur, mais marche aussi ici.</p>
       <a class="bouton-secondaire bouton-bloc" href="studio/">Ouvrir le Studio</a>
     </section>
+    ${pwa.dejaInstallee() ? '' : `
+    <section class="section">
+      <h2 class="section-titre">${icone('download', { taille: 20 })} Mettre l'appli sur cet appareil</h2>
+      <p class="petit">Pour l'ouvrir d'un clic, comme une vraie appli, sur ton cell ou ton ordi.</p>
+      <button class="bouton-secondaire bouton-bloc" id="installer">Installer l'appli</button>
+      <p class="petit" id="aide-installer" hidden>${pwa.EXPLICATION.fr}</p>
+    </section>`}
 
     <section class="section">
       <h2 class="section-titre">${icone('save', { taille: 20 })} Copie dans un fichier</h2>
@@ -1062,6 +1070,9 @@ async function pageReglages() {
         ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
       </div>
     </section>`;
+
+  const boutonInstaller = app.querySelector('#installer');
+  if (boutonInstaller) boutonInstaller.onclick = async () => { if (!(await pwa.installer())) app.querySelector('#aide-installer').hidden = false; };
 
   const sauverRegion = async () => { await db.ecrireReglage('region', etat.region); };
   app.querySelector('#continent').onchange = async (ev) => {
