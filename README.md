@@ -42,6 +42,20 @@ Le résumé peut être enregistré en image pour le montrer aux autres voyageurs
 internet) qu'il renvoie par courriel ou message. En cliquant sur ce lien, le Studio
 montre la demande et crée le voyage : un pays par étape, avec le bon nombre de jours,
 et un encadré « Ce que veut le client » qui compare ses envies à ce qui est prévu.
+Si Raph entre son numéro de cell dans Studio > Fiche client, le lien contient `?tel=` et
+le client a un bouton « Envoyer par message » qui ouvre un texto déjà rempli.
+
+## Site web (`site/`)
+
+La page publique qui présente le service et envoie vers la fiche client
+(`site/index.html`, `js/site.js`, `css/site.css`). Pour changer le nom de la marque
+partout sur le site, changer `MARQUE` en haut de `js/site.js`.
+
+## Photos (`js/photos.js`)
+
+Photos libres de droits d'Unsplash (gratuites, même pour un usage commercial), chargées
+directement depuis Unsplash. Une photo par pays (affichée sur les côtés de la fiche quand
+on choisit un pays, et sur les cartes du site) et une série qui défile en fond.
 
 ## Modifier les listes
 
@@ -67,6 +81,8 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/monde.js` : les pays du monde par continent, et des villes hors Asie
 - `demande.html`, `js/demande.js`, `css/demande.css` : la fiche client
 - `js/code-demande.js` : met la demande dans un lien, et l'inverse
+- `site/`, `js/site.js`, `css/site.css` : le site web public
+- `js/photos.js` : les photos de voyage (Unsplash)
 - `js/installer.js` : bouton « Installer sur mon ordi » (les 3 applis ont chacune leur manifeste : `manifest.webmanifest`, `studio/manifest.webmanifest`, `demande.webmanifest`)
 - `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
