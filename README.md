@@ -45,6 +45,21 @@ et un encadré « Ce que veut le client » qui compare ses envies à ce qui est 
 Si Raph entre son numéro de cell dans Studio > Fiche client, le lien contient `?tel=` et
 le client a un bouton « Envoyer par message » qui ouvre un texto déjà rempli.
 
+## Appli des contributeurs (`contribuer.html`)
+
+Une version très simple de l'appli pour les gens qui ajoutent des endroits pour Raph
+(anglais ou français). Dans le Studio, « Contributeurs > Ajouter un contributeur » donne
+un lien à lui envoyer (`contribuer.html?c=<id>&n=<nom>`). La personne ajoute ses endroits
+(photos, catégorie, nom, pourquoi y aller, prix, position), puis touche « Envoyer » : un
+fichier part par message ou courriel. Raph l'importe dans « Mes données » : le fichier est
+reconnu tout seul et les endroits arrivent dans « À valider ».
+
+Les infos cachées des photos (appareil, date, GPS, logiciel) sont lues avant de réduire
+la photo (`js/exif.js`). Dans « À valider », le Studio vérifie chaque photo : appareil
+photo présent, date récente, prise près de l'endroit, pas déjà reçue (empreinte d'image).
+Les fiches sûres s'acceptent en un clic ; pour une photo douteuse, les boutons Google et
+TinEye copient la photo et ouvrent la recherche par image (coller avec Ctrl+V).
+
 ## Site web (`site/`)
 
 La page publique qui présente le service et envoie vers la fiche client
@@ -83,6 +98,8 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/code-demande.js` : met la demande dans un lien, et l'inverse
 - `site/`, `js/site.js`, `css/site.css` : le site web public
 - `js/photos.js` : les photos de voyage (Unsplash)
+- `contribuer.html`, `js/contribuer.js`, `css/contribuer.css` : l'appli des contributeurs
+- `js/exif.js` : lit l'appareil, la date et le GPS cachés dans une photo
 - `js/installer.js` : bouton « Installer sur mon ordi » (les 3 applis ont chacune leur manifeste : `manifest.webmanifest`, `studio/manifest.webmanifest`, `demande.webmanifest`)
 - `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet

@@ -729,3 +729,29 @@ input[type='date'] { color-scheme: dark; }
 .demande-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding: 4px 18px 18px; border-top: 1px solid var(--ln); padding-top: 16px; }
 @media (max-width: 900px) { .demande-grille { grid-template-columns: 1fr; } }
 .sideFoot .installer { margin: 0 -10px 4px; width: calc(100% + 20px); color: var(--ac2); }
+
+/* ---------- Accueil : les choix du menu, avec une phrase ---------- */
+.choix-accueil { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 26px; }
+.choix { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; transition: border-color .15s, background .15s; }
+.choix:hover { border-color: var(--ln2); background: var(--p2); }
+.choix b { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.choix small { display: block; color: var(--dim); margin-top: 3px; line-height: 1.45; }
+.choix.hi { border-color: rgba(255, 106, 71, 0.35); }
+
+/* ---------- À valider : vérification des photos ---------- */
+.verif { display: grid; gap: 8px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--p2); border: 1px solid var(--ln); }
+.verif-tete { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; }
+.verif.vert .verif-tete { color: var(--ok); }
+.verif.orange .verif-tete { color: var(--warn); }
+.verif.rouge .verif-tete { color: #ff7b72; }
+.verif ul { margin: 0; padding-left: 18px; color: var(--dim); font-size: 13px; display: grid; gap: 2px; }
+.verif-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.verif-photo { display: grid; gap: 4px; width: 92px; }
+.verif-photo img { width: 92px; height: 70px; object-fit: cover; border-radius: 8px; border: 2px solid transparent; }
+.verif-photo.rouge img { border-color: var(--bad); }
+.verif-photo.orange img { border-color: var(--warn); }
+.verif-photo .chercher { display: flex; gap: 4px; }
+.verif-photo .chercher button { flex: 1; font-size: 11px; font-weight: 700; padding: 3px 0; border-radius: 6px; border: 1px solid var(--ln); background: var(--p1); color: var(--dim); cursor: pointer; }
+.verif-photo .chercher button:hover { color: var(--tx, #fff); border-color: var(--ln2); }
+.lien-invit { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.lien-invit code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 10px; border-radius: 8px; background: var(--p2); border: 1px solid var(--ln); font-size: 12px; color: var(--dim); }

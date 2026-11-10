@@ -161,7 +161,7 @@ function dureeTexte(n, unite = 'nuits') {
   if (!n) return '';
   const s = Math.floor(n / 7);
   const base = unite === 'jours' ? t().jours(n) : t().nuitsTxt(n);
-  return s ? `${base} · ${t().semaines(s, n % 7)}` : base;
+  return s ? `${base}, ${t().semaines(s, n % 7)}` : base;
 }
 
 // Durée totale du voyage (en jours), quel que soit le mode.
@@ -367,7 +367,7 @@ function etapeDates(zone) {
   };
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
-    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)} · ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
+    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)}, ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
   };
   zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
 }
@@ -388,7 +388,7 @@ function datesTotal(zone, choixMode) {
       ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}" data-long>${nom}</button>`).join('')}
       <label class="autre-duree ${rapide ? '' : 'choisi'}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="21" max="365" value="${rapide ? '' : n}" placeholder="${n}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
     </div>
-    ${s && !rapide ? `<p class="doux duree-resume">${t().jours(n)} · ${t().semaines(s, n % 7)}</p>` : ''}` : ''}
+    ${s && !rapide ? `<p class="doux duree-resume">${t().jours(n)}, ${t().semaines(s, n % 7)}</p>` : ''}` : ''}
     ${choixMode}
     <p class="petit-titre">${t().quandPars} <small>${t().optionnel}</small></p>
     <div class="choix-dates une" style="--c:${coul(0)}">
@@ -426,7 +426,7 @@ function datesPays(zone, choixMode) {
         <i></i><span><b>${esc(nomPays(x.nom))}</b><small>${x.debut && x.fin ? plage(x.debut, x.fin) : x.debut ? t().choisisDepart : t().aChoisir}</small></span>
       </button>`).join('')}</div>
     <div class="choix-dates" style="--c:${coul(paysActif)}">
-      <div class="case-date ${!p.debut || p.fin ? 'attend' : ''}"><small>${t().arrivee} · ${esc(nomPays(p.nom))}</small><b>${p.debut ? jolie(p.debut) : t().choisisJour}</b></div>
+      <div class="case-date ${!p.debut || p.fin ? 'attend' : ''}"><small>${t().arrivee}, ${esc(nomPays(p.nom))}</small><b>${p.debut ? jolie(p.debut) : t().choisisJour}</b></div>
       ${icone('arrow-right', { taille: 18 })}
       <div class="case-date ${p.debut && !p.fin ? 'attend' : ''}"><small>${t().depart}</small><b>${p.fin ? jolie(p.fin) : '—'}</b></div>
       <div class="case-duree">${p.debut && p.fin ? dureeTexte(nuits(p.debut, p.fin)) : ''}</div>
@@ -434,7 +434,7 @@ function datesPays(zone, choixMode) {
     ${calendrier(d.pays.map((x, i) => ({ debut: x.debut, fin: x.fin, i })), paysActif)}
     ${debut && fin ? `
       <div class="ligne-temps">
-        <p class="petit-titre">${t().tonVoyage} · ${jolie(debut, { day: 'numeric', month: 'long' })} ${t().au} ${jolie(fin, { day: 'numeric', month: 'long' })} · ${dureeTexte(total)}</p>
+        <p class="petit-titre">${t().tonVoyage}, ${jolie(debut, { day: 'numeric', month: 'long' })} ${t().au} ${jolie(fin, { day: 'numeric', month: 'long' })}, ${dureeTexte(total)}</p>
         <div class="barre-temps">${d.pays.map((x, i) => {
           if (!x.debut || !x.fin) return '';
           const largeur = Math.max(4, (nuits(x.debut, x.fin) / Math.max(1, total)) * 100);
@@ -536,8 +536,8 @@ function carteResume() {
   return `
     <article class="carte-resume">
       <div class="cr-haut">
-        <p class="cr-sur">${t().monVoyage}${d.nom.trim() ? ` · ${esc(d.nom.trim())}` : ''}</p>
-        <h2>${d.pays.map((x) => esc(nomPays(x.nom))).join(' · ')}</h2>
+        <p class="cr-sur">${t().monVoyage}${d.nom.trim() ? `, ${esc(d.nom.trim())}` : ''}</p>
+        <h2>${d.pays.map((x) => esc(nomPays(x.nom))).join(', ')}</h2>
         <p class="cr-dates">${icone('calendar', { taille: 16 })} ${esc(sousTitreDates())}</p>
         <div class="cr-stats">
           <div><b>${d.voyageurs}</b><span>${t().voyageursN(d.voyageurs)}</span></div>
@@ -591,10 +591,10 @@ async function imageResume() {
   // Le titre passe à la ligne entre deux pays, jamais au milieu d'un nom.
   const titre = [];
   for (const nomP of d.pays.map((p) => nomPays(p.nom))) {
-    const essai = titre.length ? `${titre[titre.length - 1]} · ${nomP}` : nomP;
+    const essai = titre.length ? `${titre[titre.length - 1]}, ${nomP}` : nomP;
     if (titre.length && x.measureText(essai).width <= L) titre[titre.length - 1] = essai; else titre.push(nomP);
   }
-  y += 24; texte(`${t().monVoyage}${d.nom.trim() ? ` · ${d.nom.trim()}` : ''}`.toUpperCase(), gauche, y, 700, 24, 'rgba(255,255,255,.85)');
+  y += 24; texte(`${t().monVoyage}${d.nom.trim() ? `, ${d.nom.trim()}` : ''}`.toUpperCase(), gauche, y, 700, 24, 'rgba(255,255,255,.85)');
   y += 8;
   for (const l of titre) { y += 72; texte(l, gauche, y, 800, 64, '#fff'); }
   y += 52; texte(sousTitreDates(), gauche, y, 600, 32, 'rgba(255,255,255,.92)');

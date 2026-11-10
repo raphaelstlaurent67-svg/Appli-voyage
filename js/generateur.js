@@ -8,6 +8,7 @@ import { icone, iconeCat } from './icones.js';
 import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
+import { distanceM } from './exif.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -245,6 +246,15 @@ function bilanContributeur(c) {
 }
 
 // ---------- Barre latérale ----------
+// Le menu, dans l'ordre. L'accueil reprend la même liste avec une phrase pour chaque choix.
+const MENU = [
+  ['#/', 'house', 'Accueil', ''],
+  ['#/contributeurs', 'users', 'Contributeurs', 'Ajoute des contributeurs, envoie-leur leur lien, vois ce que tu leur dois.'],
+  ['#/a-valider', 'inbox', 'À valider', 'Les endroits reçus. Les photos sont vérifiées pour toi.'],
+  ['#/demandes', 'send', 'Fiche client', 'Le lien à envoyer à un client pour sa demande de voyage.'],
+  ['#/ventes', 'banknote', 'Ventes', 'Ce que tes itinéraires ont rapporté.'],
+  ['#/donnees', 'folder-open', 'Mes données', 'Importer un fichier de contributeur, garder une copie.'],
+];
 function rendreSide() {
   const route = location.hash || '#/';
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
@@ -254,22 +264,17 @@ function rendreSide() {
   side.innerHTML = `
     <a class="brand" href="#/">
       <span class="mk">${icone('compass', { taille: 17, epaisseur: 2.2 })}</span>
-      <span><b>Studio</b><span class="st"><i class="dot"></i>${pluriel(endroitsUtilisables().length, 'endroit')}</span></span>
+      <span><b>Studio</b></span>
     </a>
     <nav class="sideNav">
-      ${lienNav('#/', 'layout-grid', "Vue d'ensemble")}
-      ${lienNav('#/a-valider', 'inbox', 'À valider', n ? `<span class="pastille-n">${n}</span>` : '')}
-      ${lienNav('#/demandes', 'send', 'Fiche client')}
-      ${lienNav('#/ventes', 'banknote', 'Ventes')}
-      ${lienNav('#/contributeurs', 'users', 'Contributeurs')}
-      ${lienNav('#/donnees', 'folder-open', 'Mes données')}
+      ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/a-valider' && n ? `<span class="pastille-n">${n}</span>` : '')).join('')}
     </nav>
     <div class="sideLab">Voyages</div>
     <div class="sideVoyages">
       ${tries.map((v) => `
         <a class="camp ${route.startsWith(`#/voyage/${v.id}`) ? 'on' : ''}" href="#/voyage/${esc(v.id)}">
           <span class="nm"><i class="cdot ${v.vendu ? 'vendu' : v.modele ? 'modele' : ''}"></i><span>${esc(v.titre)}</span></span>
-          <span class="sub">${v.modele ? 'Modèle · ' : v.vendu ? 'Vendu · ' : ''}${pluriel(v.jours.length, 'jour')} · ${pluriel(nbEndroits(v), 'endroit')}</span>
+          <span class="sub">${v.modele ? 'Modèle, ' : v.vendu ? 'Vendu, ' : ''}${pluriel(v.jours.length, 'jour')}, ${pluriel(nbEndroits(v), 'endroit')}</span>
         </a>`).join('')}
       <button class="navBtn" id="side-nouveau">${icone('plus', { taille: 16 })}<span>Nouveau voyage</span></button>
     </div>
@@ -369,13 +374,13 @@ function htmlDatesDemande(d, long = false) {
   if (d.mode === 'total') {
     const n = d.duree || 0;
     return `<ul class="${long ? 'dates-demande' : 'liste-simple'}">
-      <li><b>Voyage au complet : ${pluriel(n, 'jour')}</b>${long ? '<span>' : ' · '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
-      <li><b>${esc(d.pays.map((p) => p.nom).join(' → '))}</b>${long ? `<span>${esc(d.repartition?.trim() || 'Il te laisse répartir le temps entre les pays.')}</span>` : d.repartition?.trim() ? ` · ${esc(d.repartition.trim())}` : ' · répartition libre'}</li>
+      <li><b>Voyage au complet : ${pluriel(n, 'jour')}</b>${long ? '<span>' : ', '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
+      <li><b>${esc(d.pays.map((p) => p.nom).join(' → '))}</b>${long ? `<span>${esc(d.repartition?.trim() || 'Il te laisse répartir le temps entre les pays.')}</span>` : d.repartition?.trim() ? `, ${esc(d.repartition.trim())}` : ', répartition libre'}</li>
     </ul>`;
   }
   return `<ul class="${long ? 'dates-demande' : 'liste-simple'}">${d.pays.map((p) => (long
     ? `<li><b>${esc(p.nom)}</b><span>${esc(jolieDate(p.debut, opts))} → ${esc(jolieDate(p.fin, { ...opts, year: 'numeric' }))}</span><small>${pluriel(nuits(p.debut, p.fin), 'nuit')}</small></li>`
-    : `<li><b>${esc(p.nom)}</b> · ${esc(jolieDate(p.debut))} → ${esc(jolieDate(p.fin))} · ${pluriel(nuits(p.debut, p.fin), 'nuit')}</li>`)).join('')}</ul>`;
+    : `<li><b>${esc(p.nom)}</b>, ${esc(jolieDate(p.debut))} → ${esc(jolieDate(p.fin))}, ${pluriel(nuits(p.debut, p.fin), 'nuit')}</li>`)).join('')}</ul>`;
 }
 const voyageDeDemande = (d) => etat.voyages.find((v) => v.demande && v.demande.envoyeLe === d.envoyeLe && v.demande.nom === d.nom);
 
@@ -413,7 +418,7 @@ const htmlIncontournables = (d) => {
 function htmlDemandeVoyage(v) {
   const d = v.demande;
   return `
-    <summary>${icone('inbox', { taille: 16 })}<b>Ce que veut le client</b><span class="aide">${[esc(d.nom), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d), `demande du ${esc(dateCourte(d.envoyeLe))}`].filter(Boolean).join(' · ')}</span>${icone('chevron-down', { taille: 16, classe: 'chevron' })}</summary>
+    <summary>${icone('inbox', { taille: 16 })}<b>Ce que veut le client</b><span class="aide">${[esc(d.nom), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d), `demande du ${esc(dateCourte(d.envoyeLe))}`].filter(Boolean).join(', ')}</span>${icone('chevron-down', { taille: 16, classe: 'chevron' })}</summary>
     <div class="demande-grille">
       <div><p class="mini-titre">Envies <small>prévu / voulu</small></p>${htmlEnvies(d, prevusParCategorie(v))}</div>
       <div><p class="mini-titre">À voir absolument</p>${htmlIncontournables(d)}
@@ -425,7 +430,7 @@ function htmlDemandeVoyage(v) {
 
 async function creerDepuisDemande(d) {
   const v = nouveauVoyage();
-  v.titre = `${d.pays.map((p) => p.nom).join(', ')} · ${d.nom}`.slice(0, 90);
+  v.titre = `${d.pays.map((p) => p.nom).join(', ')}, ${d.nom}`.slice(0, 90);
   v.client = d.nom;
   v.dateDebut = d.mode === 'total' ? d.depart || '' : d.pays.map((p) => p.debut).filter(Boolean).sort()[0] || '';
   v.voyageurs = d.voyageurs || 2;
@@ -459,7 +464,7 @@ async function pageDemande(code) {
   const existe = voyageDeDemande(d);
   const total = joursDemande(d);
   app.innerHTML = `
-    ${entete(`Demande de ${esc(d.nom)}`, `${esc(d.pays.map((p) => p.nom).join(' → '))} · ${[pluriel(total, 'jour'), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d)].filter(Boolean).join(' · ')}`,
+    ${entete(`Demande de ${esc(d.nom)}`, `${esc(d.pays.map((p) => p.nom).join(' → '))}, ${[pluriel(total, 'jour'), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d)].filter(Boolean).join(', ')}`,
       existe ? `<a class="btn" href="#/voyage/${esc(existe.id)}">${icone('route', { taille: 15 })} Ouvrir le voyage</a>` : `<button class="btn" id="creer">${icone('plus', { taille: 15 })} Créer le voyage</button>`)}
     ${existe ? `<div class="encart"><span class="rond-ico">${icone('check', { taille: 18 })}</span><div><b>Le voyage existe déjà</b><p>Tu as déjà créé « ${esc(existe.titre)} » à partir de cette demande.</p></div><a class="btn" href="#/voyage/${esc(existe.id)}">Ouvrir</a></div>`
       : `<div class="encart"><span class="rond-ico">${icone('inbox', { taille: 18 })}</span><div><b>Nouvelle demande</b><p>Clique sur « Créer le voyage » : les pays, les jours et les envies du client y seront déjà. Tu n'auras qu'à choisir les villes et les endroits.</p></div><button class="btn" id="creer2">Créer le voyage</button></div>`}
@@ -574,12 +579,18 @@ function pageAccueil() {
   const ventes = vendus.reduce((n, v) => n + nombre(v.prixVente), 0);
   const n = aValider().length;
   app.innerHTML = `
-    ${entete("Vue d'ensemble", `${pluriel(clients.length, 'voyage')} · ${pluriel(modeles.length, 'modèle')}`, `<button class="btn" id="nouveau">${icone('plus', { taille: 15 })} Nouveau voyage</button>`)}
-    <div class="kpis">
-      <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${utilisables.length}</b><small>${pluriel(villes.length, 'ville')} · ${pluriel(pays.length, 'pays', 'pays')}</small></div>
+    ${entete('Accueil', '', `<button class="btn" id="nouveau">${icone('plus', { taille: 15 })} Nouveau voyage</button>`)}
+    <div class="choix-accueil">
+      ${MENU.slice(1).map(([href, ico, nom, phrase]) => `
+        <a class="panel choix ${href === '#/a-valider' && n ? 'hi' : ''}" href="${href}">
+          <span class="rond-ico">${icone(ico, { taille: 18 })}</span>
+          <span><b>${nom}${href === '#/a-valider' && n ? ` <span class="pastille-n">${n}</span>` : ''}</b><small>${phrase}</small></span>
+        </a>`).join('')}
+    </div>
+    <div class="kpis kpis-3">
+      <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${utilisables.length}</b><small>${pluriel(villes.length, 'ville')}, ${pluriel(pays.length, 'pays', 'pays')}</small></div>
       <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
-      <a class="kpi" href="#/ventes"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')} · voir le graphique</small></a>
-      <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits de contributeurs' : 'Rien en attente'}</small></a>
+      <a class="kpi" href="#/ventes"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></a>
     </div>
     ${etat.endroits.length ? '' : `
       <div class="encart">
@@ -604,7 +615,7 @@ function pageVoyage(id, onglet) {
   const v = structuredClone(trouve);
   synchroniserJours(v);
   let minuterie;
-  const crumb = () => [itineraire(v) || 'Parcours à faire', pluriel(v.jours.length, 'jour'), pluriel(nbEndroits(v), 'endroit'), v.client].filter(Boolean).map(esc).join(' · ');
+  const crumb = () => [itineraire(v) || 'Parcours à faire', pluriel(v.jours.length, 'jour'), pluriel(nbEndroits(v), 'endroit'), v.client].filter(Boolean).map(esc).join(', ');
   const majCrumb = () => { const c = app.querySelector('#crumb'); if (c) c.innerHTML = crumb(); };
   const enregistrer = () => {
     clearTimeout(minuterie);
@@ -857,7 +868,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
           <span class="vignette">${iconeCat(e.categorie, { taille: 18 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}</span>
           <span class="endroit-texte">
             <b>${esc(e.nom)}${e.coupDeCoeur ? icone('heart', { taille: 12, classe: 'coeur' }) : ''}</b>
-            <small>${esc([e.sousType || e.type || cat.nom, e.ville].filter(Boolean).join(' · '))}${e.prix ? ` · ${dollars(e.prix)}` : ''}</small>
+            <small>${esc([e.sousType || e.type || cat.nom, e.ville].filter(Boolean).join(', '))}${e.prix ? `, ${dollars(e.prix)}` : ''}</small>
           </span>
           ${utilises.has(e.id) ? `<span class="deja-ico" title="Déjà dans ce voyage">${icone('check', { taille: 14 })}</span>` : ''}
           <button class="ico-btn plus" data-ajouter="${esc(e.id)}" aria-label="Ajouter au jour choisi">${icone('plus', { taille: 15 })}</button>
@@ -900,14 +911,14 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
             <span class="vignette">${iconeCat(e?.categorie, { taille: 18 })}${e?.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}<i class="item-num">${k + 1}</i></span>
             <span class="item-texte">
               <b>${e ? esc(e.nom) : '<i>Endroit introuvable</i>'}</b>
-              <small>${esc(e?.sousType || e?.type || cat.nom)}${e?.prix ? ` · ${dollars(e.prix)}` : ''}${e?.montant ? ` · ${esc(e.montant)} ${esc(e.devise || '')}` : ''}</small>
+              <small>${esc(e?.sousType || e?.type || cat.nom)}${e?.prix ? `, ${dollars(e.prix)}` : ''}${e?.montant ? `, ${esc(e.montant)} ${esc(e.devise || '')}` : ''}</small>
               <input class="note-client" data-note="${esc(it.id)}" value="${esc(it.noteClient)}" placeholder="+ Conseil pour le client">
             </span>
             <button class="ico-btn rouge" data-retirer-item="${esc(it.id)}" aria-label="Retirer">${icone('x', { taille: 15 })}</button>
           </li>`;
       }).join('');
       return `
-        ${j.rang === 0 ? `<div class="sep-etape">${icone('map-pin', { taille: 14 })}<b>${esc(et.ville || et.pays || 'Étape sans nom')}</b><span>${esc([et.ville ? et.pays : '', pluriel(et.jours, 'jour')].filter(Boolean).join(' · '))}</span></div>` : ''}
+        ${j.rang === 0 ? `<div class="sep-etape">${icone('map-pin', { taille: 14 })}<b>${esc(et.ville || et.pays || 'Étape sans nom')}</b><span>${esc([et.ville ? et.pays : '', pluriel(et.jours, 'jour')].filter(Boolean).join(', '))}</span></div>` : ''}
         <article class="jour ${j.id === jourChoisi ? 'choisi' : ''}" data-jour="${esc(j.id)}">
           <header class="jour-tete">
             <span class="jour-num">Jour ${i + 1}</span>
@@ -986,7 +997,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     $('#resume').innerHTML = `
       <span><b>${v.jours.length}</b> ${v.jours.length > 1 ? 'jours' : 'jour'}</span>
       <span><b>${nbEndroits(v)}</b> ${nbEndroits(v) > 1 ? 'endroits' : 'endroit'}</span>
-      <span title="Estimation en $ CA à partir des prix notés${sansPrix ? ` (${pluriel(sansPrix, 'endroit')} sans prix)` : ''}"><b>${formatCAD(total)}</b> sur place${parJour ? ` · ${formatCAD(parJour)}/jour` : ''}</span>
+      <span title="Estimation en $ CA à partir des prix notés${sansPrix ? ` (${pluriel(sansPrix, 'endroit')} sans prix)` : ''}"><b>${formatCAD(total)}</b> sur place${parJour ? `, ${formatCAD(parJour)}/jour` : ''}</span>
       <a href="#/voyage/${esc(v.id)}/infos" class="${prixVente ? 'hi' : ''}"><b>${prixVente ? formatCAD(prixVente) : 'Prix ?'}</b> prix de vente</a>`;
   }
 
@@ -997,7 +1008,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     if (!carte) {
       carte = L.map(zoneCarte, { scrollWheelZoom: false }).setView([25, 110], 3);
       // Fond de carte d'OpenStreetMap France : les noms des pays et des villes sont en français.
-      L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: '© OpenStreetMap France · © les contributeurs d\'OpenStreetMap' }).addTo(carte);
+      L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: '© OpenStreetMap France, © les contributeurs d\'OpenStreetMap' }).addTo(carte);
       carte.couche = L.layerGroup().addTo(carte);
     }
     carte.couche.clearLayers();
@@ -1019,7 +1030,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     }
     if (points.length) carte.fitBounds(points, { padding: [30, 30], maxZoom: 15 });
     const sansGps = jours.reduce((n, j) => n + j.items.filter((it) => !endroit(it.endroitId)?.lat).length, 0);
-    $('#aide-carte').textContent = `${jours.length === 1 ? `Jour ${v.jours.indexOf(jours[0]) + 1}` : 'Tout le voyage'}${sansGps ? ` · ${sansGps} sans GPS` : ''}`;
+    $('#aide-carte').textContent = `${jours.length === 1 ? `Jour ${v.jours.indexOf(jours[0]) + 1}` : 'Tout le voyage'}${sansGps ? `, ${sansGps} sans GPS` : ''}`;
     setTimeout(() => carte && carte.invalidateSize(), 0);
   }
 
@@ -1070,7 +1081,7 @@ function htmlClient(v, mode) {
       const e = endroit(it.endroitId);
       if (!e) return '';
       const cat = categorie(e);
-      const genre = [e.type, e.sousType].filter(Boolean).join(' · ') || cat.nom;
+      const genre = [e.type, e.sousType].filter(Boolean).join(', ') || cat.nom;
       const liens = cache ? '' : [
         lienCarte(e) ? `<a href="${esc(lienCarte(e))}" target="_blank" rel="noopener">Voir sur la carte</a>` : '',
         e.contacts?.site ? `<a href="${esc(lienWeb(e.contacts.site))}" target="_blank" rel="noopener">Site web</a>` : '',
@@ -1083,7 +1094,7 @@ function htmlClient(v, mode) {
             <span class="c-cat">${iconeCat(e.categorie, { taille: 13 })}${esc(cat.nom)}</span>
             <h4>${cache ? esc(genre) : esc(e.nom)}</h4>
             ${cache ? `<p class="c-cache">${icone('lock', { taille: 13 })}<span>Nom, adresse et conseils dans l'itinéraire complet</span></p>` : `
-              <p class="c-genre">${esc(genre)}${e.prix ? ` · ${dollars(e.prix)}` : ''}</p>
+              <p class="c-genre">${esc(genre)}${e.prix ? `, ${dollars(e.prix)}` : ''}</p>
               ${e.description ? `<p class="c-desc">${esc(e.description)}</p>` : ''}
               ${it.noteClient ? `<p class="c-conseil">${icone('sparkles', { taille: 14 })}<span>${esc(it.noteClient)}</span></p>` : ''}
               ${e.adresse ? `<p class="c-petit">${esc(e.adresse)}</p>` : ''}
@@ -1091,7 +1102,7 @@ function htmlClient(v, mode) {
           </div>
         </li>`;
     }).join('');
-    const sous = [j.titre ? et.ville || et.pays : '', dateDuJour(v, i, { weekday: 'long', day: 'numeric', month: 'long' })].filter(Boolean).join(' · ');
+    const sous = [j.titre ? et.ville || et.pays : '', dateDuJour(v, i, { weekday: 'long', day: 'numeric', month: 'long' })].filter(Boolean).join(', ');
     return `
       <section class="c-jour">
         <div class="c-jour-tete">
@@ -1118,9 +1129,9 @@ function htmlClient(v, mode) {
       <header class="c-couv ${couverture ? '' : 'sans'}">
         ${couverture ? `<img data-photo="${esc(couverture)}" alt="">` : ''}
         <div class="c-couv-texte">
-          <p class="c-sur">${apercu ? 'Aperçu · voyage sur mesure' : 'Voyage sur mesure'}</p>
+          <p class="c-sur">${apercu ? 'Aperçu du voyage sur mesure' : 'Voyage sur mesure'}</p>
           <h1>${esc(v.titre)}</h1>
-          <p class="c-meta">${[pluriel(v.jours.length, 'jour'), v.voyageurs ? pluriel(v.voyageurs, 'voyageur') : '', v.dateDebut ? `départ le ${dateDuJour(v, 0, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
+          <p class="c-meta">${[pluriel(v.jours.length, 'jour'), v.voyageurs ? pluriel(v.voyageurs, 'voyageur') : '', v.dateDebut ? `départ le ${dateDuJour(v, 0, { day: 'numeric', month: 'long', year: 'numeric' })}` : ''].filter(Boolean).map(esc).join(', ')}</p>
         </div>
       </header>
       ${v.introClient ? `<p class="c-intro">${esc(v.introClient)}</p>` : ''}
@@ -1281,6 +1292,18 @@ function pageVentes(periode) {
     </section>`;
 }
 
+// Le lien que le contributeur ouvre sur son cellulaire : l'appli simple, déjà à son nom.
+const lienInvitation = (c) => `${new URL('../contribuer.html', location.href).href}?c=${encodeURIComponent(c.id)}&n=${encodeURIComponent(c.nom)}`;
+function montrerInvitation(c) {
+  const l = lienInvitation(c);
+  ouvrirModale(`Le lien de ${esc(c.nom)}`, `
+    <p class="doux">Envoie ce lien à ${esc(c.nom)}. Sur son cellulaire, il ouvre l'appli des contributeurs, déjà à son nom. Quand ses endroits sont prêts, il touche « Envoyer » et te transmet un fichier, que tu importes dans « Mes données ».</p>
+    <div class="lien-invit"><code>${esc(l)}</code></div>`, async () => {
+    try { await navigator.clipboard.writeText(l); toast('Lien copié'); } catch (_) { prompt('Copie ce lien :', l); }
+    return true;
+  }, { ok: 'Copier le lien' });
+}
+
 function formulaireContributeur(c = null) {
   ouvrirModale(c ? 'Modifier le contributeur' : 'Nouveau contributeur', `
     <div class="form-grille">
@@ -1296,6 +1319,7 @@ function formulaireContributeur(c = null) {
     await sauver('contributeurs', objet);
     toast(c ? 'Contributeur modifié' : 'Contributeur ajouté');
     router();
+    if (!c) setTimeout(() => montrerInvitation(objet), 50);
     return true;
   }, { ok: c ? 'Enregistrer' : 'Ajouter' });
 }
@@ -1313,7 +1337,7 @@ function ongletListeContrib(zone, bilans) {
       <div class="panel vide-bloc">
         ${icone('users', { taille: 28, epaisseur: 1.6 })}
         <b>Aucun contributeur pour l'instant</b>
-        <span>Quand quelqu'un ajoutera des endroits pour toi, crée-le ici. Il t'envoie le fichier de sauvegarde de son appli, et tu l'importes dans « Mes données » en choisissant son nom.</span>
+        <span>Ajoute une personne ici : tu reçois un lien à lui envoyer. Elle ouvre l'appli des contributeurs sur son cellulaire, ajoute ses endroits, puis t'envoie un fichier que tu importes dans « Mes données ».</span>
         <button class="btn" id="ajout-vide">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>
       </div>
       ${explications}`;
@@ -1330,9 +1354,10 @@ function ongletListeContrib(zone, bilans) {
         <section class="panel contrib">
           <div class="contrib-tete">
             <span class="avatar">${initiales(c.nom)}</span>
-            <div class="contrib-nom"><b>${esc(c.nom)}</b><small>${esc([c.ville, c.pays].filter(Boolean).join(', ') || 'Ville non précisée')}${c.contact ? ` · ${esc(c.contact)}` : ''}</small></div>
+            <div class="contrib-nom"><b>${esc(c.nom)}</b><small>${esc([c.ville, c.pays].filter(Boolean).join(', ') || 'Ville non précisée')}${c.contact ? `, ${esc(c.contact)}` : ''}</small></div>
             <div class="head-actions">
               <button class="btn ${b.du > 0 ? '' : 'ghost'} sm" data-payer="${esc(c.id)}" ${b.du > 0 ? '' : 'disabled'}>${icone('banknote', { taille: 14 })} ${b.du > 0 ? `Payer ${formatArgent(b.du)}` : 'Rien à payer'}</button>
+              <button class="btn ghost sm" data-invitation="${esc(c.id)}">${icone('link', { taille: 14 })} Son lien</button>
               <button class="ico-btn" data-modifier="${esc(c.id)}" aria-label="Modifier">${icone('pencil', { taille: 15 })}</button>
             </div>
           </div>
@@ -1355,7 +1380,7 @@ function ongletListeContrib(zone, bilans) {
             </div>
             <div class="recomp">
               <div class="recomp-tete">${icone('percent', { taille: 15 })}<b>Part des ventes</b><span>${pct(r.pourcentage)}</span></div>
-              <p>${b.ventes.length ? b.ventes.map((x) => `${esc(x.titre)} : ${formatArgent(x.montant)}`).join(' · ') : 'Aucun itinéraire vendu avec ses endroits.'}</p>
+              <p>${b.ventes.length ? b.ventes.map((x) => `${esc(x.titre)} : ${formatArgent(x.montant)}`).join(', ') : 'Aucun itinéraire vendu avec ses endroits.'}</p>
             </div>
           </div>
         </section>`;
@@ -1363,6 +1388,7 @@ function ongletListeContrib(zone, bilans) {
     </div>
     ${explications}`;
   zone.querySelectorAll('[data-modifier]').forEach((b) => { b.onclick = () => formulaireContributeur(etat.contributeurs.find((c) => c.id === b.dataset.modifier)); });
+  zone.querySelectorAll('[data-invitation]').forEach((b) => { b.onclick = () => montrerInvitation(etat.contributeurs.find((c) => c.id === b.dataset.invitation)); });
   zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
 }
 
@@ -1385,6 +1411,98 @@ function formulairePaiement(contributeurId) {
   }, { ok: 'Noter le paiement' });
 }
 
+// ---------- Vérification des photos des contributeurs ----------
+// Aucun outil gratuit ne fouille tout internet tout seul. Le Studio fait donc ce qui est
+// faisable sans service payant :
+//  1. il lit les infos cachées de la photo (envoyées par l'appli des contributeurs) :
+//     appareil, date, position GPS, logiciel de retouche ;
+//  2. il compare chaque photo à toutes les autres photos déjà reçues (même photo réutilisée) ;
+//  3. pour une photo douteuse, un clic copie la photo et ouvre Google Lens ou TinEye :
+//     on colle (Ctrl+V) et on voit si elle existe déjà ailleurs (Google Maps, Reddit, Facebook…).
+const empreintes = new Map(); // id photo -> empreinte de 64 bits (« dHash »)
+async function empreinte(id) {
+  if (empreintes.has(id)) return empreintes.get(id);
+  let h = null;
+  try {
+    const p = await db.lire('photos', id);
+    const bmp = await createImageBitmap(p.blob);
+    const c = document.createElement('canvas');
+    c.width = 9; c.height = 8;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0, 9, 8);
+    const d = ctx.getImageData(0, 0, 9, 8).data;
+    const gris = (i) => d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+    h = '';
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (y * 9 + x) * 4; h += gris(i) > gris(i + 4) ? '1' : '0'; }
+  } catch (_) { h = null; }
+  empreintes.set(id, h);
+  return h;
+}
+const ecartBits = (a, b) => { let n = 0; for (let i = 0; i < 64; i++) if (a[i] !== b[i]) n++; return n; };
+const RETOUCHE = /photoshop|lightroom|canva|snapseed|picsart|gimp|facetune|vsco|meitu|remini/i;
+const distTexte = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`);
+
+async function indexPhotos() {
+  const index = [];
+  for (const e of etat.endroits) for (const id of e.photos || []) index.push({ id, endroitId: e.id, h: await empreinte(id) });
+  return index;
+}
+
+// Résultat : vert (rien à signaler), orange (à regarder), rouge (presque sûrement pas la sienne).
+async function verifierPhotos(e, index) {
+  let niveau = 'vert';
+  const pire = (n) => { if (n === 'rouge' || (n === 'orange' && niveau === 'vert')) niveau = n; };
+  const photos = [];
+  for (const pid of e.photos || []) {
+    const info = e.photosInfo?.[pid];
+    const raisons = [];
+    let n = 'vert';
+    const marquer = (x, r) => { raisons.push(r); if (x === 'rouge' || n === 'vert') n = x; };
+    if (!info) marquer('orange', 'envoyée sans les infos de la photo (ancienne version de l\'appli)');
+    else {
+      if (!info.appareil) marquer('orange', 'aucun appareil photo dans le fichier : capture d\'écran ou image d\'internet ?');
+      if (info.logiciel && RETOUCHE.test(info.logiciel)) marquer('orange', `retouchée avec ${info.logiciel}`);
+      if (info.datePhoto) {
+        const mois = (Date.now() - new Date(info.datePhoto)) / 2.63e9;
+        if (mois > 18) marquer('orange', `prise en ${info.datePhoto.slice(0, 4)}`);
+      } else if (info.appareil) marquer('orange', 'date de la prise inconnue');
+      if (info.lat != null && e.lat) {
+        const m = distanceM(info, { lat: +e.lat, lng: +e.lng });
+        if (m > 1000) marquer('rouge', `prise à ${distTexte(m)} de l'endroit`);
+      }
+    }
+    const h = await empreinte(pid);
+    if (h) {
+      const double = index.find((x) => x.id !== pid && x.endroitId !== e.id && x.h && ecartBits(x.h, h) <= 5);
+      if (double) {
+        const autre = endroit(double.endroitId);
+        // La photo la plus ancienne est sans doute l'originale : seule la copie est en rouge.
+        if ((autre?.creeLe || '') <= (e.creeLe || '')) marquer('rouge', `même photo que « ${autre?.nom || 'un autre endroit'} », reçu avant`);
+        else marquer('orange', `la même photo a été réutilisée plus tard pour « ${autre?.nom || 'un autre endroit'} »`);
+      }
+    }
+    photos.push({ id: pid, niveau: n, raisons });
+    pire(n);
+  }
+  if (!photos.length) pire('orange');
+  return { niveau, photos };
+}
+
+// Copie la photo puis ouvre Google Lens ou TinEye : il reste à coller (Ctrl+V).
+function chercherEnLigne(pid, moteur) {
+  window.open(moteur === 'tineye' ? 'https://tineye.com/' : 'https://lens.google.com/', '_blank', 'noopener');
+  const png = db.lire('photos', pid).then(async (p) => {
+    const bmp = await createImageBitmap(p.blob);
+    const c = document.createElement('canvas');
+    c.width = bmp.width; c.height = bmp.height;
+    c.getContext('2d').drawImage(bmp, 0, 0);
+    return new Promise((ok) => c.toBlob(ok, 'image/png'));
+  });
+  navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+    .then(() => toast('Photo copiée : dans la page qui s\'ouvre, fais Ctrl+V'))
+    .catch(() => toast('Copie impossible : enregistre la photo et dépose-la dans la page'));
+}
+
 function ongletSoumissions(zone) {
   const liste = aValider().sort((a, b) => completude(b).score - completude(a).score);
   if (!liste.length) {
@@ -1393,7 +1511,8 @@ function ongletSoumissions(zone) {
   }
   zone.innerHTML = `
     <div class="barre-actions"><span>${pluriel(liste.length, 'endroit')} en attente, les plus complets en premier.</span>
-      <button class="btn ghost sm" id="accepter-complets">${icone('check', { taille: 14 })} Accepter ceux à 80 % ou plus</button></div>
+      <button class="btn sm" id="accepter-verts" disabled>${icone('shield-check', { taille: 14 })} Accepter toutes les fiches sûres</button></div>
+    <p class="aide">Une fiche est sûre quand ses photos ont passé la vérification (appareil photo, date, position, aucune copie) et qu'elle a sa position et une vraie description. Regarde seulement les autres.</p>
     <div class="soumissions">
       ${liste.map((e) => {
         const cat = categorie(e);
@@ -1403,11 +1522,12 @@ function ongletSoumissions(zone) {
           <article class="panel soum" style="--c:${cat.couleur}">
             <div class="soum-photo">${iconeCat(e.categorie, { taille: 26, epaisseur: 1.5 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}${e.photos?.length > 1 ? `<span class="soum-nb">${e.photos.length} photos</span>` : ''}</div>
             <div class="soum-corps">
-              <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type].filter(Boolean).join(' · '))}</span>
+              <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type].filter(Boolean).join(', '))}</span>
               <b class="soum-nom">${esc(e.nom)}</b>
-              <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))} · par ${esc(c?.nom || 'inconnu')} · reçu le ${esc(dateCourte(e.recuLe))}</small>
+              <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))}. Par ${esc(c?.nom || 'inconnu')}, reçu le ${esc(dateCourte(e.recuLe))}</small>
               <div class="score">${barre(score / 100, score >= 80 ? 'ok' : score >= 50 ? '' : 'bad')}<span>${score} % complet</span></div>
               ${manque.length ? `<p class="manque">Manque : ${esc(manque.join(', '))}</p>` : ''}
+              <div class="verif" data-verif="${esc(e.id)}"><div class="verif-tete">${icone('shield-check', { taille: 15 })} Vérification des photos…</div></div>
               <details><summary>Voir la fiche</summary>
                 <dl class="fiche-courte">
                   ${e.description ? `<dt>Description</dt><dd>${esc(e.description)}</dd>` : ''}
@@ -1441,12 +1561,42 @@ function ongletSoumissions(zone) {
       return true;
     }, { ok: 'Refuser', danger: true });
   });
-  zone.querySelector('#accepter-complets').onclick = async () => {
-    const ok = liste.filter((e) => completude(e).score >= 80);
-    for (const e of ok) await decider(e.id, 'accepte');
-    toast(ok.length ? pluriel(ok.length, 'endroit accepté', 'endroits acceptés') : 'Aucun endroit à 80 % ou plus');
-    router();
-  };
+  // Vérification des photos, puis le bouton « Accepter toutes les fiches sûres ».
+  const resultats = new Map();
+  (async () => {
+    const index = await indexPhotos();
+    for (const e of liste) {
+      const r = await verifierPhotos(e, index);
+      resultats.set(e.id, r);
+      const boite = zone.querySelector(`[data-verif="${CSS.escape(e.id)}"]`);
+      if (!boite) continue;
+      const titres = { vert: 'Photos vérifiées : rien à signaler', orange: 'Photos à regarder', rouge: 'Photo probablement pas la sienne' };
+      const raisons = r.photos.flatMap((p) => p.raisons);
+      boite.className = `verif ${r.niveau}`;
+      boite.innerHTML = `
+        <div class="verif-tete">${icone(r.niveau === 'vert' ? 'shield-check' : 'shield-alert', { taille: 15 })} ${r.photos.length ? titres[r.niveau] : 'Aucune photo'}</div>
+        ${raisons.length ? `<ul>${[...new Set(raisons)].map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+        ${r.niveau !== 'vert' && r.photos.length ? `<div class="verif-photos">${r.photos.map((p) => `
+          <div class="verif-photo ${p.niveau}"><img data-photo="${esc(p.id)}" alt="">
+            <div class="chercher"><button type="button" data-chercher="${esc(p.id)}" data-moteur="google" title="Chercher cette photo sur Google Lens">Google</button><button type="button" data-chercher="${esc(p.id)}" data-moteur="tineye" title="Chercher cette photo sur TinEye">TinEye</button></div>
+          </div>`).join('')}</div>` : ''}`;
+      afficherPhotos(boite);
+    }
+    const surs = liste.filter((e) => resultats.get(e.id)?.niveau === 'vert' && e.lat && (e.description || '').length >= 20);
+    const bouton = zone.querySelector('#accepter-verts');
+    if (!bouton) return;
+    bouton.disabled = !surs.length;
+    bouton.innerHTML = `${icone('shield-check', { taille: 14 })} ${surs.length === 1 ? 'Accepter la fiche sûre' : surs.length ? `Accepter les ${surs.length} fiches sûres` : 'Aucune fiche sûre pour l\'instant'}`;
+    bouton.onclick = async () => {
+      for (const e of surs) await decider(e.id, 'accepte');
+      toast(pluriel(surs.length, 'endroit accepté', 'endroits acceptés'));
+      router();
+    };
+  })();
+  zone.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-chercher]');
+    if (b) chercherEnLigne(b.dataset.chercher, b.dataset.moteur);
+  });
 }
 
 function ongletPaiements(zone, bilans) {
@@ -1457,7 +1607,7 @@ function ongletPaiements(zone, bilans) {
     <div class="grille-2">
       <section class="panel">
         <div class="panel-tete"><h3>À payer</h3></div>
-        ${dus.length ? `<ul class="lignes">${dus.map(({ c, b }) => `<li><span class="avatar petit">${initiales(c.nom)}</span><span class="l-txt"><b>${esc(c.nom)}</b><small>${pluriel(b.acceptes, 'endroit')}${b.bonus ? ` · bonus ${formatArgent(b.bonus)}` : ''}${b.commissions ? ` · ventes ${formatArgent(b.commissions)}` : ''}</small></span><b class="l-montant">${formatArgent(b.du)}</b><button class="btn sm" data-payer="${esc(c.id)}">Payer</button></li>`).join('')}</ul>` : "<p class=\"vide-ligne\">Personne à payer pour l'instant.</p>"}
+        ${dus.length ? `<ul class="lignes">${dus.map(({ c, b }) => `<li><span class="avatar petit">${initiales(c.nom)}</span><span class="l-txt"><b>${esc(c.nom)}</b><small>${pluriel(b.acceptes, 'endroit')}${b.bonus ? `, bonus ${formatArgent(b.bonus)}` : ''}${b.commissions ? `, ventes ${formatArgent(b.commissions)}` : ''}</small></span><b class="l-montant">${formatArgent(b.du)}</b><button class="btn sm" data-payer="${esc(c.id)}">Payer</button></li>`).join('')}</ul>` : "<p class=\"vide-ligne\">Personne à payer pour l'instant.</p>"}
       </section>
       <section class="panel">
         <div class="panel-tete"><h3>Historique</h3></div>
@@ -1544,7 +1694,7 @@ async function pageDonnees() {
         <ol class="etapes-texte">
           <li>Sur le cell, ouvre l'appli, va dans <b>Réglages</b> et touche <b>Faire une copie de sauvegarde</b>.</li>
           <li>Envoie le fichier à ton ordi (courriel, AirDrop, Google Drive…).</li>
-          <li>Dis de qui vient le fichier, puis choisis-le.</li>
+          <li>Dis de qui vient le fichier, puis choisis-le. Un fichier envoyé par l'appli des contributeurs est reconnu tout seul.</li>
         </ol>
         <label class="champ"><span>Ce fichier vient de</span>
           <select id="source">
@@ -1601,10 +1751,15 @@ async function pageDonnees() {
     if (!fichier) return;
     try {
       const donnees = JSON.parse(await fichier.text());
-      if (source.value) {
-        const n = await db.importerContribution(donnees, source.value);
+      let qui = source.value;
+      if (donnees.type === 'contribution' && donnees.contributeur?.id) {
+        qui = donnees.contributeur.id;
+        if (!etat.contributeurs.some((c) => c.id === qui)) await sauver('contributeurs', { id: qui, nom: donnees.contributeur.nom || 'Contributeur', creeLe: new Date().toISOString() });
+      }
+      if (qui) {
+        const n = await db.importerContribution(donnees, qui);
         await charger();
-        const siens = etat.endroits.filter((e) => e.contributeurId === source.value);
+        const siens = etat.endroits.filter((e) => e.contributeurId === qui);
         sync.marquer(siens.map(sync.cheminEndroit), siens.flatMap((e) => (e.photos || []).map(sync.cheminPhoto)));
         toast(`${pluriel(n, 'nouvel endroit', 'nouveaux endroits')} à valider`);
         location.hash = '#/a-valider';
