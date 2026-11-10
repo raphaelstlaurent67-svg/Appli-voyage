@@ -31,7 +31,7 @@ const TXT = {
     introPays: "Un ou plusieurs, dans l'ordre du voyage.", chercher: 'Chercher un pays',
     resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Votre trajet',
     plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisissez au moins un pays',
-    combien: 'Nombre de jours', plusDe: '14+', autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[14, '2 semaines'], [21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
+    combien: 'Nombre de jours', plusDe: '21+', autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Départ', optionnel: 'optionnel', touchDepart: 'Touchez votre jour de départ',
     pasSur: 'Pas encore sûr ? Laissez vide.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
@@ -66,7 +66,7 @@ const TXT = {
     introPays: 'One or more, in travel order.', chercher: 'Search a country',
     resultats: 'Results', populaires: 'Popular', aucunPays: 'No country found.', trajet: 'Your route',
     plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove', choisisPays: 'Pick at least one country',
-        combien: 'Number of days', plusDe: '14+', autreDuree: 'How many days?', autre: 'Other', longs: [[14, '2 weeks'], [21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
+        combien: 'Number of days', plusDe: '21+', autreDuree: 'How many days?', autre: 'Other', longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Departure', optionnel: 'optional', touchDepart: 'Tap your departure day',
     pasSur: 'Not sure yet? Leave it empty.', depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
@@ -378,15 +378,15 @@ function datesTotal(zone, choixMode) {
   const n = d.duree;
   const s = Math.floor(n / 7);
   const fin = finVoyage();
-  const long = n >= 14 || dureeLibre;
+  const long = n >= 21 || dureeLibre;
   const rapide = t().longs.some(([j]) => j === n);
   zone.innerHTML = `
     <p class="petit-titre premier">${t().combien}</p>
-    <div class="grille-duree">${Array.from({ length: 13 }, (_, i) => i + 1).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}">${j}</button>`).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
+    <div class="grille-duree">${[[3, 6], [7, 13], [14, 20]].map(([a, z]) => Array.from({ length: z - a + 1 }, (_, i) => a + i).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}"${j === 3 ? ' style="grid-column-start:1"' : ''}>${j}</button>`).join('') + (z === 6 ? '<span class="vide-duree"></span>' : '')).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
     ${long ? `
     <div class="durees-longues">
       ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}" data-long>${nom}</button>`).join('')}
-      <label class="autre-duree ${rapide ? '' : 'choisi'}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="14" max="365" value="${rapide ? '' : n}" placeholder="${n}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
+      <label class="autre-duree ${rapide ? '' : 'choisi'}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="21" max="365" value="${rapide ? '' : n}" placeholder="${n}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
     </div>
     ${s && !rapide ? `<p class="doux duree-resume">${t().jours(n)} · ${t().semaines(s, n % 7)}</p>` : ''}` : ''}
     ${choixMode}
@@ -405,7 +405,7 @@ let dureeLibre = false; // « 14+ » touché : on montre le champ pour écrire l
 function clicTotal(b) {
   if (b.dataset.duree) d.duree = Math.max(15, Math.min(365, (d.duree || 14) + +b.dataset.duree));
   else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; dureeLibre = b.dataset.long != null; }
-  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 14) d.duree = 14; }
+  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 21) d.duree = 21; }
   else if (b.dataset.effacer != null) d.depart = '';
   else if (b.dataset.jour) d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour;
 }
