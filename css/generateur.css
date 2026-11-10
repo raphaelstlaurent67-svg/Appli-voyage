@@ -755,3 +755,22 @@ input[type='date'] { color-scheme: dark; }
 .verif-photo .chercher button:hover { color: var(--tx, #fff); border-color: var(--ln2); }
 .lien-invit { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .lien-invit code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 10px; border-radius: 8px; background: var(--p2); border: 1px solid var(--ln); font-size: 12px; color: var(--dim); }
+
+/* Suivi sur place : la page privée du client */
+.barre-client .aide-client { flex: 1; min-width: 260px; margin-bottom: 0; }
+.marge-panel { margin-top: 16px; }
+.marge-seg { margin: 14px 0 10px; }
+.options-suivi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.option-suivi { padding: 12px; border: 1px dashed var(--ln2); border-radius: 12px; gap: 8px; }
+.option-suivi input[type=file] { font-size: 12.5px; padding: 6px; }
+.liste-suivi { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.liste-suivi li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--p2); border: 1px solid var(--ln); }
+.liste-suivi li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.liste-suivi small { color: var(--dim); }
+.reponses { display: flex; flex-wrap: wrap; gap: 6px; }
+.reponses .puce { display: inline-flex; align-items: center; gap: 4px; }
+.texte-modele { width: 100%; font-size: 13.5px; }
+.pitch { margin-top: 16px; }
+.pitch p { color: var(--tx); line-height: 1.65; max-width: 860px; }
+.pitch .seg { margin-left: auto; }
+@media (max-width: 900px) { .options-suivi { grid-template-columns: 1fr; } }

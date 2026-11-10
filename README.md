@@ -104,3 +104,7 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet
+
+## Suivi sur place (page privée du client)
+
+Dans le Studio, chaque voyage a un onglet « Suivi sur place ». Raph y écrit un mot au client, ajoute des nouvelles du terrain (texte, photos, lien de vidéo) et des choix à faire (2 ou 3 options, avec photo ou un endroit de sa carte). « Télécharger la page » crée un seul fichier .html à envoyer au client par WhatsApp ou courriel. Le client y voit son voyage qui se remplit, choisit ses options et les envoie à Raph en un clic (WhatsApp, texto ou courriel). L'onglet contient aussi un modèle de courriel (FR/EN) pour demander la visite gratuite d'un hôtel. L'accueil du Studio présente le projet en 30 secondes (FR/EN).
