@@ -1,6 +1,6 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v17';
+const VERSION = 'v18';
 const FICHIERS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'js/icones.js', 'js/sync.js', 'js/monde.js',
   'demande.html',

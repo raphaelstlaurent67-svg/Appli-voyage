@@ -302,17 +302,15 @@ button:disabled { cursor: default; }
 .merci .carte-resume { max-width: 460px; justify-self: center; }
 .merci > .bouton.secondaire { max-width: 460px; justify-self: center; }
 
-/* Durée : 1 à 14 jours en un clic, « 14+ » pour écrire un nombre */
+/* Durée : 3 à 6, 7 à 13, 14 à 20, puis « 21+ » pour les longs voyages */
 .petit-titre.premier { margin-top: 0; }
-.grille-duree { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 420px; }
+.grille-duree { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-width: 420px; }
 .grille-duree button, .durees-longues button {
   height: 40px; border-radius: 11px; border: 1px solid var(--ligne); background: var(--carte);
   font-size: 15px; font-weight: 700; transition: background .15s, border-color .15s, color .15s;
 }
 .grille-duree button:hover, .durees-longues button:hover { border-color: var(--encre); }
 .grille-duree button.choisi, .durees-longues button.choisi { background: var(--encre); border-color: var(--encre); color: #fff; }
-.grille-duree .plus { font-size: 14px; grid-column: 1 / -1; }
-.vide-duree { grid-column: span 3; }
 .durees-longues { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 420px; margin-top: 10px; }
 .durees-longues button { font-size: 14px; font-weight: 600; padding: 0 6px; }
 .autre-duree {

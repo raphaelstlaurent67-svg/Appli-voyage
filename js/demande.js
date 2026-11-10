@@ -31,7 +31,7 @@ const TXT = {
     introPays: "Un ou plusieurs, dans l'ordre du voyage.", chercher: 'Chercher un pays',
     resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Votre trajet',
     plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisissez au moins un pays',
-    combien: 'Nombre de jours', plusDe: '21+', autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
+    combien: 'Nombre de jours', plusDe: '21+', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Départ', optionnel: 'optionnel', touchDepart: 'Touchez votre jour de départ',
     pasSur: 'Pas encore sûr ? Laissez vide.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
@@ -66,7 +66,7 @@ const TXT = {
     introPays: 'One or more, in travel order.', chercher: 'Search a country',
     resultats: 'Results', populaires: 'Popular', aucunPays: 'No country found.', trajet: 'Your route',
     plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove', choisisPays: 'Pick at least one country',
-        combien: 'Number of days', plusDe: '21+', autreDuree: 'How many days?', autre: 'Other', longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
+        combien: 'Number of days', plusDe: '21+', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other', longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Departure', optionnel: 'optional', touchDepart: 'Tap your departure day',
     pasSur: 'Not sure yet? Leave it empty.', depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
@@ -127,7 +127,7 @@ const NOM_EN = (() => {
 const langueParam = ['fr', 'en'].includes(params.get('lang')) ? params.get('lang') : '';
 const vide = () => ({
   f: 'demande', v: 2, langue: langueParam || (/^fr/i.test(navigator.language || 'fr') ? 'fr' : 'en'),
-  mode: 'total', duree: 0, depart: '', repartition: '',
+  mode: 'total', duree: 0, plage: '', depart: '', repartition: '',
   pays: [], envies: {}, voyageurs: 2, style: 'moyen', nom: '', courriel: '', telephone: '', message: '',
 });
 let d = vide();
@@ -164,10 +164,15 @@ function dureeTexte(n, unite = 'nuits') {
   return s ? `${base}, ${t().semaines(s, n % 7)}` : base;
 }
 
+// Les durées courtes se choisissent par tranche (« 3 à 6 ») ; d.duree garde alors le plus grand nombre.
+const PLAGES = [[3, 6], [7, 13], [14, 20]];
+const plageChoisie = () => (d.mode === 'total' && d.plage ? d.plage.split('-').map(Number) : null);
+const dureeAffichee = () => { const p = plageChoisie(); return p ? t().plageJours(p[0], p[1]) : dureeTexte(d.duree, 'jours'); };
+
 // Durée totale du voyage (en jours), quel que soit le mode.
 const totalJours = () => (d.mode === 'total' ? d.duree : d.pays.reduce((n, x) => n + nuits(x.debut, x.fin), 0));
 const debutVoyage = () => (d.mode === 'total' ? d.depart : d.pays.map((x) => x.debut).filter(Boolean).sort()[0] || '');
-const finVoyage = () => (d.mode === 'total' ? (d.depart && d.duree ? ajouterJours(d.depart, d.duree) : '') : d.pays.map((x) => x.fin).filter(Boolean).sort().pop() || '');
+const finVoyage = () => (d.mode === 'total' ? (d.depart && d.duree && !d.plage ? ajouterJours(d.depart, d.duree) : '') : d.pays.map((x) => x.fin).filter(Boolean).sort().pop() || '');
 
 // ---------- Photo en fond, sur les côtés de la fiche (grands écrans) ----------
 // La photo du pays choisi (ou du pays dont on choisit les dates) ; sinon, des photos de voyage qui défilent.
@@ -367,7 +372,7 @@ function etapeDates(zone) {
   };
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
-    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)}, ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
+    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); d.plage = ''; garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)}, ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
   };
   zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
 }
@@ -378,11 +383,11 @@ function datesTotal(zone, choixMode) {
   const n = d.duree;
   const s = Math.floor(n / 7);
   const fin = finVoyage();
-  const long = n >= 21 || dureeLibre;
+  const long = !d.plage && (n >= 21 || dureeLibre);
   const rapide = t().longs.some(([j]) => j === n);
   zone.innerHTML = `
     <p class="petit-titre premier">${t().combien}</p>
-    <div class="grille-duree">${[[3, 6], [7, 13], [14, 20]].map(([a, z]) => Array.from({ length: z - a + 1 }, (_, i) => a + i).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}"${j === 3 ? ' style="grid-column-start:1"' : ''}>${j}</button>`).join('') + (z === 6 ? '<span class="vide-duree"></span>' : '')).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
+    <div class="grille-duree">${PLAGES.map(([a, z]) => `<button class="${d.plage === `${a}-${z}` && !long ? 'choisi' : ''}" data-plage="${a}-${z}">${t().plageTxt(a, z)}</button>`).join('')}<button class="${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
     ${long ? `
     <div class="durees-longues">
       ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}" data-long>${nom}</button>`).join('')}
@@ -404,8 +409,9 @@ function datesTotal(zone, choixMode) {
 let dureeLibre = false; // « 14+ » touché : on montre le champ pour écrire le nombre de jours
 function clicTotal(b) {
   if (b.dataset.duree) d.duree = Math.max(15, Math.min(365, (d.duree || 14) + +b.dataset.duree));
-  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; dureeLibre = b.dataset.long != null; }
-  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 21) d.duree = 21; }
+  else if (b.dataset.plage) { d.plage = b.dataset.plage; d.duree = +d.plage.split('-')[1]; dureeLibre = false; }
+  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; d.plage = ''; dureeLibre = b.dataset.long != null; }
+  else if (b.dataset.plusLong != null) { dureeLibre = true; d.plage = ''; if (d.duree < 21) d.duree = 21; }
   else if (b.dataset.effacer != null) d.depart = '';
   else if (b.dataset.jour) d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour;
 }
@@ -541,7 +547,7 @@ function carteResume() {
         <p class="cr-dates">${icone('calendar', { taille: 16 })} ${esc(sousTitreDates())}</p>
         <div class="cr-stats">
           <div><b>${d.voyageurs}</b><span>${t().voyageursN(d.voyageurs)}</span></div>
-          <div><b>${total || '—'}</b><span>${t().joursMot(total)}</span></div>
+          <div><b>${plageChoisie() ? t().plageTxt(...plageChoisie()) : total || '—'}</b><span>${t().joursMot(total)}</span></div>
           <div><b class="mot">${esc(t().styles[d.style])}</b><span>style</span></div>
         </div>
       </div>
@@ -601,7 +607,7 @@ async function imageResume() {
   y += 36;
   const yStats = y;
   const largeurStat = (L - 40) / 3;
-  [[String(d.voyageurs), t().voyageursN(d.voyageurs)], [String(total || '—'), t().joursMot(total)], [t().styles[d.style], 'style']].forEach(([v, lbl], i) => {
+  [[String(d.voyageurs), t().voyageursN(d.voyageurs)], [plageChoisie() ? t().plageTxt(...plageChoisie()) : String(total || '—'), t().joursMot(total)], [t().styles[d.style], 'style']].forEach(([v, lbl], i) => {
     const sx = gauche + i * (largeurStat + 20);
     actions.push(() => { rond(sx, yStats, largeurStat, 132, 24); x.fillStyle = 'rgba(255,255,255,.18)'; x.fill(); });
     texte(v, sx + 24, yStats + 68, 800, v.length > 7 ? 38 : 52, '#fff');
@@ -695,7 +701,7 @@ async function partagerImage() {
 // ---------- Envoi ----------
 function texteMessage(lien) {
   const lignes = d.mode === 'total'
-    ? `- ${d.pays.map((x) => nomPays(x.nom)).join(', ')}\n- ${t().dureeTotale}${d.langue === 'en' ? ':' : ' :'} ${dureeTexte(d.duree, 'jours')}${d.depart ? `\n- ${t().departLe(jolie(d.depart, { day: 'numeric', month: 'long', year: 'numeric' }))}` : ''}`
+    ? `- ${d.pays.map((x) => nomPays(x.nom)).join(', ')}\n- ${t().dureeTotale}${d.langue === 'en' ? ':' : ' :'} ${dureeAffichee()}${d.depart ? `\n- ${t().departLe(jolie(d.depart, { day: 'numeric', month: 'long', year: 'numeric' }))}` : ''}`
     : d.pays.map((x) => `- ${nomPays(x.nom)}${d.langue === 'en' ? ':' : ' :'} ${plage(x.debut, x.fin, true)} (${t().nuitsTxt(nuits(x.debut, x.fin))})`).join('\n');
   return t().corps(lignes, d.voyageurs, lien, d.nom);
 }
@@ -707,6 +713,7 @@ async function envoyer() {
   garder();
   // On n'envoie que ce qui sert au mode choisi.
   const envoi = structuredClone(d);
+  if (envoi.mode !== 'total') envoi.plage = '';
   if (envoi.mode === 'total') envoi.pays.forEach((p) => { p.debut = ''; p.fin = ''; });
   else { envoi.duree = totalJours(); envoi.depart = debutVoyage(); envoi.repartition = ''; }
   const code = await encoder(envoi);
