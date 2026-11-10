@@ -253,7 +253,7 @@ function rendreSide() {
       <button class="navBtn" id="side-nouveau">${icone('plus', { taille: 16 })}<span>Nouveau voyage</span></button>
     </div>
     <div class="sideFoot">
-      <a href="index.html">${icone('external-link', { taille: 13 })} Appli des endroits</a>
+      <a href="../index.html">${icone('external-link', { taille: 13 })} Appli des endroits</a>
       <span>Données gardées sur cet ordinateur</span>
     </div>`;
   side.querySelector('#side-nouveau').onclick = creerVoyage;
@@ -900,9 +900,9 @@ async function telechargerPage(v, mode) {
       img.src = img.closest('.flou') ? await miniature(p.blob, 48) : await enDataUrl(p.blob);
       img.removeAttribute('data-photo');
     }
-    const css = await (await fetch('css/client.css')).text();
+    const css = await (await fetch(new URL('../css/client.css', import.meta.url))).text();
     let police = '';
-    try { police = `@font-face{font-family:'Figtree';src:url(${await enDataUrl(await (await fetch('fonts/figtree.woff2')).blob())}) format('woff2');font-weight:300 900}`; } catch (_) { /* police du système */ }
+    try { police = `@font-face{font-family:'Figtree';src:url(${await enDataUrl(await (await fetch(new URL('../fonts/figtree.woff2', import.meta.url))).blob())}) format('woff2');font-weight:300 900}`; } catch (_) { /* police du système */ }
     const page = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(v.titre)}</title><style>${police}${css}</style></head><body class="page-client-seule">${boite.innerHTML}</body></html>`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([page], { type: 'text/html' }));
@@ -1247,7 +1247,7 @@ function pageDonnees() {
 
 // ---------- Démarrage ----------
 // Permet d'installer le Studio comme une appli sur l'ordinateur (et de l'ouvrir sans internet).
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
 window.addEventListener('hashchange', router);
 app.addEventListener('dragstart', (ev) => {
   const e = ev.target.closest?.('[data-endroit]');
