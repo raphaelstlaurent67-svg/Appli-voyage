@@ -16,7 +16,7 @@ Appli pour noter rapidement, depuis le téléphone, les hébergements, restos, a
 
 La sauvegarde en ligne automatique viendra dans une prochaine version.
 
-## Générateur de voyages (`generateur.html`)
+## Générateur de voyages (`studio/`)
 
 Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages jour par jour. Seul Raph l'utilise.
 
@@ -38,14 +38,14 @@ Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages 
 
 ## Essayer l'appli sur l'ordinateur
 
-Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localhost:8000 dans le navigateur (le générateur : http://localhost:8000/generateur.html).
+Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localhost:8000 dans le navigateur (le générateur : http://localhost:8000/studio/).
 
 ## Organisation des fichiers
 
 - `index.html` : la page de l'appli
 - `css/style.css` : l'apparence
 - `js/app.js` : les écrans (liste, formulaire, fiche, villes, réglages)
-- `generateur.html`, `js/generateur.js`, `css/generateur.css` : le générateur de voyages (« Studio »)
+- `studio/` (page et manifeste), `js/generateur.js`, `css/generateur.css` : le générateur de voyages (« Studio »)
 - `css/client.css` : l'apparence de la page envoyée au client (aussi copiée dans la page téléchargée)
 - `js/icones.js` : les icônes (Lucide, licence ISC dans `vendor/LUCIDE-LICENSE`)
 - `vendor/leaflet/` : la carte (Leaflet, licence BSD), incluse pour ne dépendre d'aucun autre site

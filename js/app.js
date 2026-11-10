@@ -997,7 +997,7 @@ async function pageReglages() {
     <section class="section">
       <h2 class="section-titre">${icone('route', { taille: 20 })} Générateur de voyages</h2>
       <p class="petit">Pour assembler tes endroits en voyages, jour par jour. Fait pour l'ordinateur, mais marche aussi ici.</p>
-      <a class="bouton-secondaire bouton-bloc" href="generateur.html">Ouvrir le générateur</a>
+      <a class="bouton-secondaire bouton-bloc" href="studio/">Ouvrir le générateur</a>
     </section>
 
     <section class="section">
