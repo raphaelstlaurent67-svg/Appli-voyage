@@ -568,6 +568,12 @@ function tuileVoyage(v) {
     </a>`;
 }
 
+
+// Le projet expliqué en 30 secondes (pour Philippe, un client, un futur contributeur).
+const PITCH = {
+  fr: "Je construis une carte du monde remplie uniquement d'endroits vérifiés par des gens de la place. Partout dans le monde, des locaux photographient les meilleurs restos, bars, hôtels et activités de leur ville directement dans mon application, et ils sont payés pour chaque endroit accepté. Chaque photo est vérifiée : prise sur place, pas copiée d'internet. À partir de cette carte, je crée des voyages sur mesure pour ceux qui veulent vivre un pays comme quelqu'un de la place, et pour les plus exigeants, je vais moi-même sur le terrain préparer leur voyage. Des guides locaux existent, des agences aussi, mais personne ne fait encore les deux : une carte bâtie par des locaux, et des voyages sur mesure construits à partir d'elle.",
+  en: "I'm building a world map filled only with places verified by people who actually live there. Locals everywhere photograph the best restaurants, bars, hotels and activities in their city straight from my app, and they get paid for every place accepted. Every photo is checked: taken on the spot, never copied from the internet. From that map, I design custom trips for travellers who want to live a country like a local, and for the most demanding clients, I go on the ground myself to prepare their trip. Local guides exist, agencies exist, but nobody does both yet: a map built by locals, and tailor-made trips built from it.",
+};
 function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const modeles = tries.filter((v) => v.modele);
@@ -592,6 +598,11 @@ function pageAccueil() {
       <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
       <a class="kpi" href="#/ventes"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></a>
     </div>
+    <section class="panel pitch">
+      <div class="panel-tete"><h3>Ton projet en 30 secondes</h3><div class="seg"><button class="on" data-pitch="fr">Français</button><button data-pitch="en">English</button></div></div>
+      <p id="pitch-texte">${esc(PITCH.fr)}</p>
+      <div class="rangee-btn"><button class="btn ghost sm" id="copier-pitch">${icone('copy', { taille: 14 })} Copier</button></div>
+    </section>
     ${etat.endroits.length ? '' : `
       <div class="encart">
         <span class="rond-ico">${icone('upload', { taille: 18 })}</span>
@@ -602,6 +613,15 @@ function pageAccueil() {
     <div class="tiles">${clients.map(tuileVoyage).join('') || `<button class="tile tile-vide" id="nouveau2">${icone('plus', { taille: 22 })}<span>Créer ton premier voyage</span></button>`}</div>
     <h2 class="titre-section">Modèles réutilisables <small>Un voyage type (ex. « Japon 14 jours ») à dupliquer pour chaque client</small></h2>
     <div class="tiles">${modeles.map(tuileVoyage).join('') || '<p class="vide-ligne">Aucun modèle. Dans un voyage, onglet « Infos et vente », coche « Modèle réutilisable ».</p>'}</div>`;
+  let languePitch = 'fr';
+  app.querySelectorAll('[data-pitch]').forEach((b) => {
+    b.onclick = () => {
+      languePitch = b.dataset.pitch;
+      app.querySelectorAll('[data-pitch]').forEach((x) => x.classList.toggle('on', x === b));
+      app.querySelector('#pitch-texte').textContent = PITCH[languePitch];
+    };
+  });
+  app.querySelector('#copier-pitch').onclick = async () => { try { await navigator.clipboard.writeText(PITCH[languePitch]); toast('Texte copié'); } catch (_) { toast('Sélectionne le texte pour le copier'); } };
   app.querySelector('#nouveau').onclick = creerVoyage;
   const n2 = app.querySelector('#nouveau2');
   if (n2) n2.onclick = creerVoyage;
@@ -623,7 +643,7 @@ function pageVoyage(id, onglet) {
     majDemande();
   };
   const etiquette = () => (v.vendu ? '<span class="etiq ok">Vendu</span>' : v.modele ? '<span class="etiq">Modèle</span>' : '');
-  const onglets = [['itineraire', 'route', 'Itinéraire'], ['infos', 'file-text', 'Infos et vente'], ['client', 'eye', 'Page client']];
+  const onglets = [['itineraire', 'route', 'Itinéraire'], ['infos', 'file-text', 'Infos et vente'], ['client', 'eye', 'Page client'], ['suivi', 'send', 'Suivi sur place']];
 
   app.innerHTML = `
     <div class="head">
@@ -673,6 +693,7 @@ function pageVoyage(id, onglet) {
   const majEtiquette = () => { app.querySelector('#etiq').innerHTML = etiquette(); };
   if (onglet === 'infos') ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb);
   else if (onglet === 'client') ongletClient(v, zone);
+  else if (onglet === 'suivi') ongletSuivi(v, zone, enregistrer);
   else ongletItineraire(v, zone, enregistrer, majCrumb);
 }
 
@@ -1189,6 +1210,410 @@ async function telechargerPage(v, mode) {
     toast("La page n'a pas pu être créée.");
   } finally {
     bouton.disabled = false;
+  }
+}
+
+// ---------- Suivi client : la page privée du voyage en préparation ----------
+// Pendant que Raph est sur place, le client reçoit une page à lui : le voyage qui se remplit,
+// les nouvelles du terrain (texte, photos, vidéo), des choix à faire, et un bouton pour écrire
+// à Raph en direct (WhatsApp, texto ou courriel). La page est un seul fichier .html à envoyer.
+const nouveauSuivi = () => ({ objectif: 30, mot: '', nouvelles: [], choix: [] });
+const numeroWhatsApp = (tel) => { const c = String(tel || '').replace(/\D/g, ''); return c.length === 10 ? `1${c}` : c; };
+const endroitsDuVoyage = (v) => uniques(v.jours.flatMap((j) => j.items.map((it) => it.endroitId))).map(endroit).filter(Boolean);
+const OPTIONS_PAR_CHOIX = 3;
+
+function reduirePhoto(fichier, max = 1600) {
+  return new Promise((ok) => {
+    const img = new Image();
+    const url = URL.createObjectURL(fichier);
+    img.onload = () => {
+      const r = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * r);
+      c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => ok(b || fichier), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ok(fichier); };
+    img.src = url;
+  });
+}
+async function garderPhotos(fichiers) {
+  const ids = [];
+  for (const f of fichiers) {
+    const id = `suivi-${db.nouvelId()}`;
+    await db.ecrire('photos', { id, blob: await reduirePhoto(f) });
+    ids.push(id);
+  }
+  return ids;
+}
+
+// Ce que le client voit.
+function htmlSuivi(v, contact) {
+  const s = v.suivi || nouveauSuivi();
+  const prenom = contact.prenom || 'moi';
+  const reperes = endroitsDuVoyage(v);
+  const objectif = Math.max(1, Math.round(nombre(s.objectif)) || 30);
+  const part = Math.min(1, reperes.length / objectif);
+  const couverture = photoCouverture(v);
+  const etapes = v.etapes.filter((et) => et.ville || et.pays).map((et) => ({
+    nom: et.ville || et.pays,
+    n: uniques(v.jours.filter((j) => j.etapeId === et.id).flatMap((j) => j.items.map((it) => it.endroitId))).length,
+  }));
+  const derniers = [...reperes].sort((a, b) => (b.creeLe || '').localeCompare(a.creeLe || '')).slice(0, 12);
+  const nouvelles = [...s.nouvelles].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const wa = numeroWhatsApp(contact.tel);
+  const tel = String(contact.tel || '').replace(/[^\d+]/g, '');
+  const bonjour = `Bonjour ${contact.prenom || ''}`.trim() + ',';
+  const lienDirect = (canal) => {
+    const t = encodeURIComponent(`${bonjour} `);
+    if (canal === 'wa') return `https://wa.me/${wa}?text=${t}`;
+    if (canal === 'sms') return `sms:${tel}?&body=${t}`;
+    return `mailto:${contact.courriel}?subject=${encodeURIComponent(v.titre)}`;
+  };
+  const canaux = [wa ? ['wa', 'message-circle', 'WhatsApp'] : null, tel ? ['sms', 'phone', 'Texto'] : null, contact.courriel ? ['courriel', 'mail', 'Courriel'] : null].filter(Boolean);
+  const boutons = (lien) => canaux.map(([k, ico, nom]) => `<a class="s-canal ${k}" data-canal="${k}" href="${esc(lien(k))}" target="_blank" rel="noopener">${icone(ico, { taille: 16 })}${nom}</a>`).join('');
+  const option = (c, o) => {
+    const e = o.endroitId ? endroit(o.endroitId) : null;
+    const titre = o.titre || e?.nom || '';
+    const photo = o.photo || e?.photos?.[0] || '';
+    const texte = o.texte || e?.description || '';
+    return `
+      <button type="button" class="s-option ${c.reponse === o.id ? 'on' : ''}" data-choix="${esc(c.id)}" data-option="${esc(o.id)}" data-libelle="${esc(titre)}">
+        <span class="s-opt-photo">${photo ? `<img data-photo="${esc(photo)}" alt="">` : icone('image', { taille: 26, epaisseur: 1.5 })}</span>
+        <span class="s-opt-texte"><b>${esc(titre)}</b>${texte ? `<small>${esc(texte)}</small>` : ''}</span>
+        <span class="s-coche">${icone('check', { taille: 16 })}</span>
+      </button>`;
+  };
+  return `
+    <article class="client suivi" data-cle="${esc(v.id)}" data-titre="${esc(v.titre)}" data-wa="${esc(wa)}" data-tel="${esc(tel)}" data-courriel="${esc(contact.courriel || '')}" data-bonjour="${esc(bonjour)}">
+      <header class="c-couv ${couverture ? '' : 'sans'}">
+        ${couverture ? `<img data-photo="${esc(couverture)}" alt="">` : ''}
+        <div class="c-couv-texte">
+          <p class="c-sur">Votre voyage en préparation</p>
+          <h1>${esc(v.titre)}</h1>
+          <p class="c-meta">${esc([v.client, contact.prenom ? `préparé sur place par ${contact.prenom}` : 'préparé sur place'].filter(Boolean).join(', '))}</p>
+        </div>
+      </header>
+      ${s.mot ? `<p class="c-intro">${esc(s.mot)}</p>` : ''}
+
+      <section class="s-bloc s-progres">
+        <p class="s-titre">Sur le terrain pour vous</p>
+        <div class="s-compte"><b>${reperes.length}</b><span>endroit${reperes.length > 1 ? 's' : ''} repéré${reperes.length > 1 ? 's' : ''} sur ${objectif}</span></div>
+        <div class="s-barre"><i style="width:${Math.round(part * 100)}%"></i></div>
+        ${etapes.length ? `<ol class="s-etapes">${etapes.map((et) => `<li class="${et.n ? 'fait' : ''}"><b>${esc(et.nom)}</b><span>${et.n ? `${et.n} repéré${et.n > 1 ? 's' : ''}` : 'bientôt'}</span></li>`).join('')}</ol>` : ''}
+      </section>
+
+      ${s.choix.length ? `
+      <section class="s-bloc">
+        <p class="s-titre">À vous de choisir</p>
+        <p class="s-aide">Touchez ce qui vous attire le plus, puis envoyez-moi vos choix.</p>
+        ${s.choix.map((c) => `
+          <div class="s-choix" data-question="${esc(c.question)}" data-reponse="${esc(c.reponse || '')}">
+            <h3>${esc(c.question)}</h3>
+            <div class="s-options">${c.options.map((o) => option(c, o)).join('')}</div>
+          </div>`).join('')}
+        ${canaux.length ? `<div class="s-envoyer" hidden><b>Envoyer mes choix</b><div class="s-canaux">${boutons(lienDirect)}</div></div>` : ''}
+      </section>` : ''}
+
+      ${nouvelles.length ? `
+      <section class="s-bloc">
+        <p class="s-titre">Nouvelles du terrain</p>
+        ${nouvelles.map((n) => `
+          <div class="s-nouvelle">
+            <p class="s-date">${esc(new Date(n.date).toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' }))}${n.lieu ? `, ${esc(n.lieu)}` : ''}</p>
+            ${n.texte ? `<p class="s-texte">${esc(n.texte)}</p>` : ''}
+            ${n.photos?.length ? `<div class="s-photos n${Math.min(3, n.photos.length)}">${n.photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : ''}
+            ${n.video ? `<a class="s-video" href="${esc(lienWeb(n.video))}" target="_blank" rel="noopener">${icone('eye', { taille: 16 })}Voir la vidéo</a>` : ''}
+          </div>`).join('')}
+      </section>` : ''}
+
+      ${derniers.length ? `
+      <section class="s-bloc">
+        <p class="s-titre">Derniers endroits repérés</p>
+        <div class="s-reperes">${derniers.map((e) => `
+          <div class="s-repere">
+            <span class="s-rep-photo">${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : iconeCat(e.categorie, { taille: 24, epaisseur: 1.5 })}</span>
+            <b>${esc(e.nom)}</b><small>${esc([categorie(e).nom, e.ville].filter(Boolean).join(', '))}</small>
+          </div>`).join('')}</div>
+      </section>` : ''}
+
+      ${canaux.length ? `
+      <nav class="s-contact">
+        <span>Une question, une envie ? Écrivez à ${esc(prenom)}, en direct.</span>
+        <div class="s-canaux">${boutons(lienDirect)}</div>
+      </nav>` : ''}
+    </article>`;
+}
+
+// Rend la page vivante : choisir une option, puis l'envoyer. Copiée telle quelle dans le fichier
+// du client, donc elle ne doit rien utiliser d'autre qu'elle-même.
+function scriptSuivi(racine) {
+  const page = racine.querySelector('.suivi');
+  if (!page) return;
+  const cle = `choix-${page.dataset.cle}`;
+  let choix = {};
+  try { choix = JSON.parse(localStorage.getItem(cle) || '{}'); } catch (_) { /* rien */ }
+  page.querySelectorAll('.s-choix').forEach((sec) => {
+    const id = sec.querySelector('.s-option')?.dataset.choix;
+    if (id && !(id in choix) && sec.dataset.reponse) choix[id] = sec.dataset.reponse;
+  });
+  const lien = (canal, texte) => {
+    const t = encodeURIComponent(texte);
+    if (canal === 'wa') return `https://wa.me/${page.dataset.wa}?text=${t}`;
+    if (canal === 'sms') return `sms:${page.dataset.tel}?&body=${t}`;
+    return `mailto:${page.dataset.courriel}?subject=${encodeURIComponent(page.dataset.titre)}&body=${t}`;
+  };
+  const maj = () => {
+    page.querySelectorAll('.s-option').forEach((b) => b.classList.toggle('on', choix[b.dataset.choix] === b.dataset.option));
+    const lignes = [...page.querySelectorAll('.s-choix')].map((sec) => {
+      const b = sec.querySelector('.s-option.on');
+      return b ? `- ${sec.dataset.question} : ${b.dataset.libelle}` : '';
+    }).filter(Boolean);
+    const boite = page.querySelector('.s-envoyer');
+    if (!boite) return;
+    boite.hidden = !lignes.length;
+    const texte = `${page.dataset.bonjour}\n\nMes choix pour « ${page.dataset.titre} » :\n${lignes.join('\n')}`;
+    boite.querySelectorAll('a[data-canal]').forEach((a) => { a.href = lien(a.dataset.canal, texte); });
+  };
+  page.addEventListener('click', (ev) => {
+    const b = ev.target.closest('.s-option');
+    if (!b) return;
+    choix[b.dataset.choix] = choix[b.dataset.choix] === b.dataset.option ? '' : b.dataset.option;
+    try { localStorage.setItem(cle, JSON.stringify(choix)); } catch (_) { /* rien */ }
+    maj();
+  });
+  maj();
+}
+
+const MODELE_VISITE = {
+  fr: (h, p, v) => `Bonjour,
+
+Je prépare un voyage sur mesure pour des clients qui visiteront ${v || '[ville]'} bientôt, et je cherche les meilleurs hôtels où les envoyer.
+
+Serait-il possible de visiter ${h || '[nom de l\'hôtel]'} (une chambre type et les espaces communs) pendant mon passage, le [date] ? Une visite de 20 minutes me suffit.
+
+Merci beaucoup,
+${p || '[ton prénom]'}
+Voyages sur mesure`,
+  en: (h, p, v) => `Hello,
+
+I am planning a custom trip for clients who will visit ${v || '[city]'} soon, and I am looking for the best hotels to recommend to them.
+
+Would it be possible to do a short site inspection of ${h || '[hotel name]'} (a sample room and the common areas) during my stay, on [date]? Twenty minutes would be plenty.
+
+Thank you very much,
+${p || '[your first name]'}
+Custom travel planning`,
+};
+
+async function ongletSuivi(v, zone, enregistrer) {
+  if (!v.suivi) v.suivi = nouveauSuivi();
+  const s = v.suivi;
+  const contact = {
+    prenom: await db.lireReglage('prenomSuivi', ''),
+    tel: await db.lireReglage('telFiche', ''),
+    courriel: await db.lireReglage('courrielFiche', ''),
+  };
+  const paysVoyage = new Set(v.etapes.map((et) => et.pays).filter(Boolean));
+  const proposables = endroitsUtilisables().filter((e) => !paysVoyage.size || paysVoyage.has(e.pays));
+  const parVille = {};
+  proposables.forEach((e) => { (parVille[e.ville || e.pays || 'Autre'] ||= []).push(e); });
+  const selectEndroit = (i) => `<select data-opt-endroit="${i}"><option value="">Ou un endroit de ta carte…</option>${trier(Object.keys(parVille)).map((vil) => `<optgroup label="${esc(vil)}">${parVille[vil].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((e) => `<option value="${esc(e.id)}">${esc(e.nom)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  let langueVisite = 'fr';
+  const sauverEtRendre = () => { enregistrer(); rendre(); };
+
+  function apercu() {
+    const cadre = zone.querySelector('#apercu-suivi');
+    cadre.innerHTML = htmlSuivi(v, contact);
+    afficherPhotos(cadre);
+    scriptSuivi(cadre);
+  }
+
+  function rendre() {
+    const nouvelles = [...s.nouvelles].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    zone.innerHTML = `
+      <div class="barre-client">
+        <p class="aide-client">${icone('lock', { taille: 14 })}<span>Une page privée, juste pour ${esc(v.client || 'ce client')} : son voyage qui se remplit, tes nouvelles, ses choix à faire, et un bouton pour t'écrire en direct. Envoie le fichier par WhatsApp ou courriel, et renvoie-le à chaque nouvelle.</span></p>
+        <div class="head-actions">
+          <button class="btn sm" id="telecharger-suivi">${icone('download', { taille: 14 })} Télécharger la page</button>
+          ${navigator.canShare ? `<button class="btn ghost sm" id="partager-suivi">${icone('send', { taille: 14 })} Envoyer</button>` : ''}
+        </div>
+      </div>
+      <div class="grille-2">
+        <section class="panel">
+          <div class="panel-tete"><h3>La page</h3></div>
+          <div class="form-grille">
+            <label class="champ"><span>Ton prénom</span><input id="s-prenom" value="${esc(contact.prenom)}" placeholder="Ex. : Raph"></label>
+            <label class="champ"><span>Objectif d'endroits</span><input id="s-objectif" type="number" min="1" value="${esc(s.objectif)}"></label>
+            <label class="champ"><span>Ton cell <small>WhatsApp et texto</small></span><input id="s-tel" type="tel" value="${esc(contact.tel)}" placeholder="514 555-1234"></label>
+            <label class="champ"><span>Ton courriel</span><input id="s-courriel" type="email" value="${esc(contact.courriel)}" placeholder="toi@exemple.com"></label>
+            <label class="champ large"><span>Mot pour le client <small>en haut de sa page</small></span><textarea id="s-mot" rows="3" placeholder="Ex. : Je suis à Kyoto depuis trois jours. Chaque endroit de votre voyage, je l'aurai vu de mes yeux.">${esc(s.mot)}</textarea></label>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-tete"><h3>Une nouvelle du terrain</h3><span class="aide">Tous les 2 ou 3 jours</span></div>
+          <div class="form-grille">
+            <label class="champ large"><span>Ton message</span><textarea id="n-texte" rows="3" placeholder="Ex. : Testé ce matin le petit marché derrière votre ryokan. Vous allez l'adorer."></textarea></label>
+            <label class="champ"><span>Où <small>optionnel</small></span><input id="n-lieu" placeholder="Ex. : Kyoto"></label>
+            <label class="champ"><span>Lien d'une vidéo <small>optionnel</small></span><input id="n-video" placeholder="YouTube, Google Drive…"></label>
+            <label class="champ large"><span>Photos <small>optionnel</small></span><input id="n-photos" type="file" accept="image/*" multiple></label>
+          </div>
+          <div class="rangee-btn"><button class="btn" id="publier">${icone('plus', { taille: 15 })} Ajouter la nouvelle</button></div>
+          ${nouvelles.length ? `<ul class="liste-suivi">${nouvelles.map((n) => `
+            <li><span><b>${esc(dateCourte(n.date))}${n.lieu ? `, ${esc(n.lieu)}` : ''}</b><small>${esc((n.texte || '').slice(0, 90))}${(n.texte || '').length > 90 ? '…' : ''}${n.photos?.length ? `, ${pluriel(n.photos.length, 'photo')}` : ''}${n.video ? ', vidéo' : ''}</small></span>
+            <button class="btn danger sm" data-effacer-nouvelle="${esc(n.id)}" aria-label="Retirer">${icone('trash-2', { taille: 14 })}</button></li>`).join('')}</ul>` : ''}
+        </section>
+      </div>
+
+      <section class="panel marge-panel">
+        <div class="panel-tete"><h3>Un choix à lui faire faire</h3><span class="aide">Il touche ce qu'il préfère, puis t'envoie ses choix en un clic</span></div>
+        <label class="champ"><span>La question</span><input id="c-question" placeholder="Ex. : Pour vos deux nuits à Kyoto ?"></label>
+        <div class="options-suivi">${Array.from({ length: OPTIONS_PAR_CHOIX }, (_, i) => `
+          <fieldset class="champ option-suivi">
+            <span>Option ${i + 1}${i > 1 ? ' <small>optionnel</small>' : ''}</span>
+            <input data-opt-titre="${i}" placeholder="${['Ex. : Ryokan avec onsen privé', 'Ex. : Hôtel design au centre', ''][i]}">
+            <textarea data-opt-texte="${i}" rows="2" placeholder="Une phrase pour le faire rêver"></textarea>
+            ${selectEndroit(i)}
+            <input data-opt-photo="${i}" type="file" accept="image/*">
+          </fieldset>`).join('')}</div>
+        <div class="rangee-btn"><button class="btn" id="ajouter-choix">${icone('plus', { taille: 15 })} Ajouter le choix</button></div>
+        ${s.choix.length ? `<ul class="liste-suivi">${s.choix.map((c) => `
+          <li><span><b>${esc(c.question)}</b><span class="reponses">${c.options.map((o) => `<button class="puce ${c.reponse === o.id ? 'on' : ''}" data-marquer="${esc(c.id)}|${esc(o.id)}" title="Il a choisi ça">${c.reponse === o.id ? icone('check', { taille: 12 }) : ''}${esc(o.titre || endroit(o.endroitId)?.nom || '?')}</button>`).join('')}</span></span>
+          <button class="btn danger sm" data-effacer-choix="${esc(c.id)}" aria-label="Retirer">${icone('trash-2', { taille: 14 })}</button></li>`).join('')}</ul>
+          <p class="aide">Quand il t'envoie sa réponse, clique sur l'option qu'il a choisie : elle sera cochée sur sa page.</p>` : ''}
+      </section>
+
+      <section class="panel marge-panel">
+        <div class="panel-tete"><h3>Visiter un hôtel gratuitement</h3><span class="aide">Les hôtels font visiter aux gens qui leur envoient des clients</span></div>
+        <div class="form-grille">
+          <label class="champ"><span>Nom de l'hôtel</span><input id="v-hotel" placeholder="Ex. : Hoshinoya Kyoto"></label>
+          <label class="champ"><span>Ville</span><input id="v-ville" value="${esc(v.etapes.find((et) => et.ville)?.ville || '')}"></label>
+        </div>
+        <div class="seg marge-seg"><button class="${langueVisite === 'fr' ? 'on' : ''}" data-langue-visite="fr">Français</button><button class="${langueVisite === 'en' ? 'on' : ''}" data-langue-visite="en">English</button></div>
+        <textarea id="v-texte" class="texte-modele" rows="11" readonly></textarea>
+        <div class="rangee-btn"><button class="btn ghost" id="copier-visite">${icone('copy', { taille: 15 })} Copier le courriel</button></div>
+      </section>
+
+      <h2 class="titre-section">Ce que ${esc(v.client || 'le client')} voit <small>Touche une option pour essayer</small></h2>
+      <div class="cadre-client" id="apercu-suivi"></div>`;
+    apercu();
+    brancher();
+  }
+
+  function brancher() {
+    const champ = (id) => zone.querySelector(id);
+    const reglage = (id, cle, k) => { champ(id).oninput = () => { contact[k] = champ(id).value.trim(); db.ecrireReglage(cle, contact[k]); apercu(); majVisite(); }; };
+    reglage('#s-prenom', 'prenomSuivi', 'prenom');
+    reglage('#s-tel', 'telFiche', 'tel');
+    reglage('#s-courriel', 'courrielFiche', 'courriel');
+    champ('#s-objectif').oninput = () => { s.objectif = +champ('#s-objectif').value || 30; enregistrer(); apercu(); };
+    champ('#s-mot').oninput = () => { s.mot = champ('#s-mot').value; enregistrer(); apercu(); };
+
+    champ('#publier').onclick = async () => {
+      const texte = champ('#n-texte').value.trim();
+      const fichiers = [...champ('#n-photos').files];
+      const video = champ('#n-video').value.trim();
+      if (!texte && !fichiers.length && !video) return toast('Écris un message ou ajoute une photo');
+      champ('#publier').disabled = true;
+      const photos = await garderPhotos(fichiers);
+      s.nouvelles.push({ id: db.nouvelId(), date: new Date().toISOString(), texte, lieu: champ('#n-lieu').value.trim(), video, photos });
+      toast('Nouvelle ajoutée. Renvoie la page au client.');
+      sauverEtRendre();
+    };
+    zone.querySelectorAll('[data-effacer-nouvelle]').forEach((b) => { b.onclick = () => { s.nouvelles = s.nouvelles.filter((n) => n.id !== b.dataset.effacerNouvelle); sauverEtRendre(); }; });
+
+    // Choisir un endroit remplit le titre et le texte de l'option.
+    zone.querySelectorAll('[data-opt-endroit]').forEach((sel) => {
+      sel.onchange = () => {
+        const e = endroit(sel.value);
+        const i = sel.dataset.optEndroit;
+        if (!e) return;
+        zone.querySelector(`[data-opt-titre="${i}"]`).value = e.nom;
+        const t = zone.querySelector(`[data-opt-texte="${i}"]`);
+        if (!t.value.trim()) t.value = e.description || '';
+      };
+    });
+    champ('#ajouter-choix').onclick = async () => {
+      const question = champ('#c-question').value.trim();
+      if (!question) return toast('Écris la question');
+      const options = [];
+      for (let i = 0; i < OPTIONS_PAR_CHOIX; i++) {
+        const titre = zone.querySelector(`[data-opt-titre="${i}"]`).value.trim();
+        const endroitId = zone.querySelector(`[data-opt-endroit="${i}"]`).value;
+        const fichier = zone.querySelector(`[data-opt-photo="${i}"]`).files[0];
+        if (!titre && !endroitId) continue;
+        const e = endroit(endroitId);
+        options.push({
+          id: db.nouvelId(), titre: titre || e?.nom || '', texte: zone.querySelector(`[data-opt-texte="${i}"]`).value.trim(), endroitId,
+          photo: fichier ? (await garderPhotos([fichier]))[0] : '',
+        });
+      }
+      if (options.length < 2) return toast('Il faut au moins 2 options');
+      s.choix.push({ id: db.nouvelId(), question, options, reponse: '' });
+      toast('Choix ajouté');
+      sauverEtRendre();
+    };
+    zone.querySelectorAll('[data-marquer]').forEach((b) => {
+      b.onclick = () => {
+        const [cid, oid] = b.dataset.marquer.split('|');
+        const c = s.choix.find((x) => x.id === cid);
+        c.reponse = c.reponse === oid ? '' : oid;
+        try { localStorage.removeItem(`choix-${v.id}`); } catch (_) { /* rien */ }
+        sauverEtRendre();
+      };
+    });
+    zone.querySelectorAll('[data-effacer-choix]').forEach((b) => { b.onclick = () => { s.choix = s.choix.filter((c) => c.id !== b.dataset.effacerChoix); sauverEtRendre(); }; });
+
+    const majVisite = () => { champ('#v-texte').value = MODELE_VISITE[langueVisite](champ('#v-hotel').value.trim(), contact.prenom, champ('#v-ville').value.trim()); };
+    champ('#v-hotel').oninput = majVisite;
+    champ('#v-ville').oninput = majVisite;
+    zone.querySelectorAll('[data-langue-visite]').forEach((b) => {
+      b.onclick = () => { langueVisite = b.dataset.langueVisite; zone.querySelectorAll('[data-langue-visite]').forEach((x) => x.classList.toggle('on', x === b)); majVisite(); };
+    });
+    champ('#copier-visite').onclick = async () => { try { await navigator.clipboard.writeText(champ('#v-texte').value); toast('Courriel copié'); } catch (_) { champ('#v-texte').select(); } };
+    majVisite();
+
+    champ('#telecharger-suivi').onclick = () => envoyerSuivi(v, contact, false);
+    const p = champ('#partager-suivi');
+    if (p) p.onclick = () => envoyerSuivi(v, contact, true);
+  }
+  rendre();
+}
+
+// Fabrique le fichier .html du client (photos, police et petit script inclus).
+async function envoyerSuivi(v, contact, partager) {
+  const boutons = app.querySelectorAll('#telecharger-suivi, #partager-suivi');
+  boutons.forEach((b) => { b.disabled = true; });
+  try {
+    const boite = document.createElement('div');
+    boite.innerHTML = htmlSuivi(v, contact);
+    for (const img of boite.querySelectorAll('img[data-photo]')) {
+      const p = await db.lire('photos', img.dataset.photo);
+      if (!p) { img.remove(); continue; }
+      img.src = await miniature(p.blob, img.closest('.c-couv') ? 1600 : 1000);
+      img.removeAttribute('data-photo');
+    }
+    const css = await (await fetch(new URL('../css/client.css', import.meta.url))).text();
+    let police = '';
+    try { police = `@font-face{font-family:'Figtree';src:url(${await enDataUrl(await (await fetch(new URL('../fonts/figtree.woff2', import.meta.url))).blob())}) format('woff2');font-weight:300 900}`; } catch (_) { /* police du système */ }
+    const page = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(v.titre)}</title><style>${police}${css}</style></head><body class="page-client-seule">${boite.innerHTML}<script>(${scriptSuivi.toString()})(document);</script></body></html>`;
+    const nom = `suivi-${sansAccents(v.titre).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'voyage'}.html`;
+    const fichier = new File([page], nom, { type: 'text/html' });
+    if (partager && navigator.canShare?.({ files: [fichier] })) {
+      try { await navigator.share({ files: [fichier], title: v.titre }); return; } catch (err) { if (err?.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(fichier);
+    a.download = nom;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Page téléchargée. Envoie-la au client.');
+  } catch (err) {
+    toast("La page n'a pas pu être créée.");
+  } finally {
+    boutons.forEach((b) => { b.disabled = false; });
   }
 }
 
