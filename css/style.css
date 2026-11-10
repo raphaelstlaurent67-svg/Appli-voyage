@@ -278,11 +278,11 @@ body[data-page="ajouter"] .nav, body[data-page="modifier"] .nav { display: none;
 .champ { display: flex; flex-direction: column; gap: 6px; }
 .champ > span { font-weight: 650; font-size: .88rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .champ small { font-weight: 500; color: var(--doux); }
-.champ input, .champ textarea, .montant input, .villes textarea, .taux input {
+.champ input, .champ select, .champ textarea, .montant input, .villes textarea, .taux input {
   width: 100%; min-height: 52px; padding: 14px; border-radius: 10px;
   border: 1px solid var(--bordure-forte); background: var(--surface); color: var(--encre);
 }
-.champ input:focus, .champ textarea:focus, .montant input:focus, .villes textarea:focus, .taux input:focus {
+.champ input:focus, .champ select:focus, .champ textarea:focus, .montant input:focus, .villes textarea:focus, .taux input:focus {
   outline: none; border-color: var(--encre); box-shadow: 0 0 0 1px var(--encre);
 }
 .champ textarea { resize: vertical; }
@@ -532,3 +532,16 @@ body[data-page="reglages"] .section { gap: 12px; }
   opacity: 0; pointer-events: none; transition: .25s; z-index: 30; white-space: nowrap; box-shadow: var(--ombre);
 }
 #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Envoi automatique au Studio */
+.etat-envoi { display: flex; align-items: center; gap: 6px; margin: 10px 20px 0; color: var(--doux); font-size: 13px; font-weight: 600; }
+.etat-envoi .ico { flex: none; }
+.etat-envoi a { color: var(--encre); }
+.etat-branche { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--rayon-petit); background: #eaf7ef; color: #1f7a44; font-weight: 650; margin-bottom: 10px; }
+@media (prefers-color-scheme: dark) { .etat-branche { background: rgba(52, 211, 153, .12); color: #6ee7a8; } }
+#section-envoi .lien { display: block; margin: 10px auto 0; }
+.champ select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236b6b70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}

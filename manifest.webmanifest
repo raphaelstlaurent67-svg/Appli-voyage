@@ -1,6 +1,6 @@
 {
-  "name": "Mes endroits de voyage",
-  "short_name": "Voyage",
+  "name": "Appli de voyage",
+  "short_name": "Appli de voyage",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
