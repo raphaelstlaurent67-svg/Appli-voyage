@@ -6,6 +6,7 @@ import { TAXONOMIE, TAUX_PAR_DEFAUT } from './taxonomie.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 import * as sync from './sync.js';
+import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -257,6 +258,7 @@ function rendreSide() {
     <nav class="sideNav">
       ${lienNav('#/', 'layout-grid', "Vue d'ensemble")}
       ${lienNav('#/a-valider', 'inbox', 'À valider', n ? `<span class="pastille-n">${n}</span>` : '')}
+      ${lienNav('#/demandes', 'send', 'Fiche client')}
       ${lienNav('#/ventes', 'banknote', 'Ventes')}
       ${lienNav('#/contributeurs', 'users', 'Contributeurs')}
       ${lienNav('#/donnees', 'folder-open', 'Mes données')}
@@ -328,6 +330,8 @@ async function router() {
   if (page === 'client') { location.hash = `#/voyage/${id}/client`; return undefined; }
   if (page === 'contributeurs') return id === 'soumissions' ? (location.hash = '#/a-valider') : pageContributeurs(id || 'apercu');
   if (page === 'a-valider') return pageAValider();
+  if (page === 'demande') return pageDemande(id);
+  if (page === 'demandes') return pageDemandes();
   if (page === 'ventes') return pageVentes(id || '30j');
   if (page === 'donnees') return pageDonnees();
   return pageAccueil();
@@ -336,6 +340,160 @@ async function router() {
 const entete = (titre, sousTitre, actions = '') => `
   <div class="head"><h1>${titre}</h1><div class="head-actions">${actions}</div></div>
   <p class="crumb">${sousTitre}</p>`;
+
+// ---------- Fiche client : la demande remplie par le client ----------
+const NOM_STYLE = { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' };
+const jolieDate = (s, opts = { day: 'numeric', month: 'short' }) => (s ? new Date(`${s}T12:00:00`).toLocaleDateString('fr-CA', opts) : '');
+const lienFiche = (courriel) => {
+  const u = new URL('../demande.html', location.href);
+  if (courriel) u.searchParams.set('pour', courriel);
+  return u.href;
+};
+const voyageDeDemande = (d) => etat.voyages.find((v) => v.demande && v.demande.envoyeLe === d.envoyeLe && v.demande.nom === d.nom);
+
+// Combien d'endroits de chaque genre sont déjà prévus dans le voyage.
+function prevusParCategorie(v) {
+  const n = {};
+  for (const j of v.jours) for (const it of j.items) { const e = endroit(it.endroitId); if (e) n[e.categorie] = (n[e.categorie] || 0) + 1; }
+  return n;
+}
+
+function htmlEnvies(d, prevus) {
+  const lignes = ENVIES.filter(([k]) => d.envies?.[k]);
+  if (!lignes.length) return '<p class="aide">Aucune envie précise cochée.</p>';
+  return `<ul class="envies-studio">${lignes.map(([k, nom, ico]) => {
+    const voulu = d.envies[k];
+    const suivi = prevus && TAXONOMIE[k];
+    const fait = suivi ? prevus[k] || 0 : 0;
+    return `<li class="${suivi && fait >= voulu ? 'ok' : ''}">${icone(ico, { taille: 15 })}<span>${esc(nom)}</span>
+      <b>${suivi ? `${fait} / ${voulu}` : `× ${voulu}`}</b>${suivi ? barre(fait / voulu, fait >= voulu ? 'ok' : '') : ''}</li>`;
+  }).join('')}</ul>`;
+}
+
+function htmlContact(d) {
+  return [
+    d.courriel ? `<a href="mailto:${esc(d.courriel)}">${icone('mail', { taille: 14 })} ${esc(d.courriel)}</a>` : '',
+    d.telephone ? `<a href="tel:${esc(d.telephone.replace(/[^\d+]/g, ''))}">${icone('phone', { taille: 14 })} ${esc(d.telephone)}</a>` : '',
+  ].filter(Boolean).join('');
+}
+
+const htmlIncontournables = (d) => {
+  const inc = d.pays.filter((p) => p.incontournable?.trim());
+  return inc.length ? `<ul class="liste-simple">${inc.map((p) => `<li><b>${esc(p.nom)} :</b> ${esc(p.incontournable)}</li>`).join('')}</ul>` : '<p class="aide">Rien de précis.</p>';
+};
+
+function htmlDemandeVoyage(v) {
+  const d = v.demande;
+  return `
+    <summary>${icone('inbox', { taille: 16 })}<b>Ce que veut le client</b><span class="aide">${esc(d.nom)} · ${pluriel(d.voyageurs || 1, 'voyageur')} · ${esc(NOM_STYLE[d.style] || '')} · demande du ${esc(dateCourte(d.envoyeLe))}</span>${icone('chevron-down', { taille: 16, classe: 'chevron' })}</summary>
+    <div class="demande-grille">
+      <div><p class="mini-titre">Envies <small>prévu / voulu</small></p>${htmlEnvies(d, prevusParCategorie(v))}</div>
+      <div><p class="mini-titre">À voir absolument</p>${htmlIncontournables(d)}
+        ${d.message ? `<p class="mini-titre">Son message</p><p class="message-client">${esc(d.message)}</p>` : ''}</div>
+      <div><p class="mini-titre">Ses dates</p><ul class="liste-simple">${d.pays.map((p) => `<li><b>${esc(p.nom)}</b> · ${esc(jolieDate(p.debut))} → ${esc(jolieDate(p.fin))} · ${pluriel(nuits(p.debut, p.fin), 'nuit')}</li>`).join('')}</ul>
+        <p class="mini-titre">Le joindre</p><div class="contact-client">${htmlContact(d) || '<span class="aide">—</span>'}</div></div>
+    </div>`;
+}
+
+async function creerDepuisDemande(d) {
+  const v = nouveauVoyage();
+  v.titre = `${d.pays.map((p) => p.nom).join(', ')} · ${d.nom}`.slice(0, 90);
+  v.client = d.nom;
+  v.dateDebut = d.pays.map((p) => p.debut).filter(Boolean).sort()[0] || '';
+  v.voyageurs = d.voyageurs || 2;
+  v.style = NOM_STYLE[d.style] ? d.style : 'moyen';
+  v.etapes = d.pays.map((p) => ({ id: db.nouvelId(), pays: p.nom, ville: '', jours: Math.max(1, nuits(p.debut, p.fin)) }));
+  v.notesPrivees = [
+    `Demande reçue le ${dateCourte(d.envoyeLe)}.`,
+    d.courriel ? `Courriel : ${d.courriel}` : '',
+    d.telephone ? `Téléphone : ${d.telephone}` : '',
+    d.message ? `Message : ${d.message}` : '',
+  ].filter(Boolean).join('\n');
+  v.demande = d;
+  synchroniserJours(v);
+  await sauver('voyages', v);
+  return v;
+}
+
+async function pageDemande(code) {
+  app.innerHTML = entete('Demande de voyage', 'Ouverture…');
+  let d;
+  try { d = await decoder(code); } catch (_) {
+    app.innerHTML = `${entete('Demande de voyage', '')}
+      <div class="panel vide-bloc">${icone('triangle-alert', { taille: 26, epaisseur: 1.6 })}<b>Ce lien ne fonctionne pas</b><span>Il est peut-être coupé. Demande au client de te renvoyer son message en entier, ou colle-le dans « Fiche client ».</span><a class="btn" href="#/demandes">Aller à Fiche client</a></div>`;
+    return;
+  }
+  const existe = voyageDeDemande(d);
+  const total = d.pays.reduce((n, p) => n + nuits(p.debut, p.fin), 0);
+  app.innerHTML = `
+    ${entete(`Demande de ${esc(d.nom)}`, `${esc(d.pays.map((p) => p.nom).join(' → '))} · ${pluriel(total, 'nuit')} · ${pluriel(d.voyageurs || 1, 'voyageur')} · ${esc(NOM_STYLE[d.style] || '')}`,
+      existe ? `<a class="btn" href="#/voyage/${esc(existe.id)}">${icone('route', { taille: 15 })} Ouvrir le voyage</a>` : `<button class="btn" id="creer">${icone('plus', { taille: 15 })} Créer le voyage</button>`)}
+    ${existe ? `<div class="encart"><span class="rond-ico">${icone('check', { taille: 18 })}</span><div><b>Le voyage existe déjà</b><p>Tu as déjà créé « ${esc(existe.titre)} » à partir de cette demande.</p></div><a class="btn" href="#/voyage/${esc(existe.id)}">Ouvrir</a></div>`
+      : `<div class="encart"><span class="rond-ico">${icone('inbox', { taille: 18 })}</span><div><b>Nouvelle demande</b><p>Clique sur « Créer le voyage » : les pays, les jours et les envies du client y seront déjà. Tu n'auras qu'à choisir les villes et les endroits.</p></div><button class="btn" id="creer2">Créer le voyage</button></div>`}
+    <div class="grille-2">
+      <section class="panel">
+        <div class="panel-tete"><h3>Ses dates</h3></div>
+        <ul class="dates-demande">${d.pays.map((p) => `<li><b>${esc(p.nom)}</b><span>${esc(jolieDate(p.debut, { weekday: 'short', day: 'numeric', month: 'short' }))} → ${esc(jolieDate(p.fin, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</span><small>${pluriel(nuits(p.debut, p.fin), 'nuit')}</small></li>`).join('')}</ul>
+        <p class="mini-titre">Le joindre</p><div class="contact-client">${htmlContact(d) || '<span class="aide">—</span>'}</div>
+      </section>
+      <section class="panel">
+        <div class="panel-tete"><h3>Ses envies</h3><span class="aide">nombre de fois pendant le voyage</span></div>
+        ${htmlEnvies(d, null)}
+        <p class="mini-titre">À voir absolument</p>${htmlIncontournables(d)}
+        ${d.message ? `<p class="mini-titre">Son message</p><p class="message-client">${esc(d.message)}</p>` : ''}
+      </section>
+    </div>`;
+  const creer = async () => {
+    const deja = voyageDeDemande(d);
+    const v = deja || await creerDepuisDemande(d);
+    toast(deja ? 'Ce voyage existe déjà' : 'Voyage créé à partir de la demande');
+    history.replaceState(null, '', `#/voyage/${v.id}`);
+    router();
+  };
+  app.querySelectorAll('#creer, #creer2').forEach((b) => { b.onclick = creer; });
+}
+
+async function pageDemandes() {
+  const courriel = await db.lireReglage('courrielFiche', '');
+  const recues = etat.voyages.filter((v) => v.demande).sort((a, b) => (b.demande.envoyeLe || '').localeCompare(a.demande.envoyeLe || ''));
+  app.innerHTML = `
+    ${entete('Fiche client', 'Le questionnaire que tu envoies à un client : ses pays, ses dates, ses envies. Sa réponse crée le voyage ici.')}
+    <div class="grille-2">
+      <section class="panel">
+        <div class="etape-titre"><span class="gros-num">1</span><div><h3>Envoie la fiche au client</h3><p>Copie ce lien et envoie-le par Messenger, texto ou courriel.</p></div></div>
+        <label class="champ"><span>Ton courriel <small>optionnel : le client pourra te répondre en un clic</small></span><input id="courriel" type="email" value="${esc(courriel)}" placeholder="toi@exemple.com"></label>
+        <div class="lien-fiche"><code id="lien">${esc(lienFiche(courriel))}</code></div>
+        <div class="rangee-btn">
+          <button class="btn" id="copier">${icone('copy', { taille: 15 })} Copier le lien</button>
+          <a class="btn ghost" id="voir" href="${esc(lienFiche(courriel))}" target="_blank" rel="noopener">${icone('eye', { taille: 15 })} Voir la fiche</a>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="etape-titre"><span class="gros-num">2</span><div><h3>Tu as reçu une réponse ?</h3><p>Clique sur le lien dans le message du client. Ou colle tout son message ici.</p></div></div>
+        <label class="champ"><span>Message du client</span><textarea id="colle" rows="4" placeholder="Colle ici le courriel ou le message reçu"></textarea></label>
+        <div class="rangee-btn"><button class="btn" id="ouvrir">${icone('inbox', { taille: 15 })} Ouvrir la demande</button></div>
+      </section>
+    </div>
+    <h2 class="titre-section">Demandes reçues <small>${pluriel(recues.length, 'voyage créé', 'voyages créés')} à partir d'une fiche</small></h2>
+    ${recues.length ? `<section class="panel"><table class="tableau"><thead><tr><th>Client</th><th>Pays</th><th>Départ</th><th>Reçue le</th><th class="num">Endroits</th></tr></thead><tbody>
+      ${recues.map((v) => `<tr class="cliquable" data-ouvrir="${esc(v.id)}"><td><b>${esc(v.client || v.demande.nom)}</b></td><td>${esc(v.demande.pays.map((p) => p.nom).join(', '))}</td><td>${esc(dateCourte(v.dateDebut))}</td><td>${esc(dateCourte(v.demande.envoyeLe))}</td><td class="num">${nbEndroits(v)}</td></tr>`).join('')}
+      </tbody></table></section>` : '<p class="vide-ligne">Aucune demande pour l\'instant.</p>'}`;
+  const champ = app.querySelector('#courriel');
+  const maj = () => { const l = lienFiche(champ.value.trim()); app.querySelector('#lien').textContent = l; app.querySelector('#voir').href = l; };
+  champ.oninput = maj;
+  champ.onchange = () => db.ecrireReglage('courrielFiche', champ.value.trim());
+  app.querySelector('#copier').onclick = async () => {
+    const l = lienFiche(champ.value.trim());
+    db.ecrireReglage('courrielFiche', champ.value.trim());
+    try { await navigator.clipboard.writeText(l); toast('Lien copié'); } catch (_) { prompt('Copie ce lien :', l); }
+  };
+  app.querySelector('#ouvrir').onclick = () => {
+    const c = extraireCode(app.querySelector('#colle').value);
+    if (!c) { toast('Aucune demande trouvée dans ce texte'); return; }
+    location.hash = `#/demande/${c}`;
+  };
+  app.querySelectorAll('[data-ouvrir]').forEach((tr) => { tr.onclick = () => { location.hash = `#/voyage/${tr.dataset.ouvrir}`; }; });
+}
 
 // ---------- Vue d'ensemble ----------
 function tuileVoyage(v) {
@@ -405,6 +563,7 @@ function pageVoyage(id, onglet) {
   const enregistrer = () => {
     clearTimeout(minuterie);
     minuterie = setTimeout(async () => { await sauver('voyages', v); rendreSide(); }, 300);
+    majDemande();
   };
   const etiquette = () => (v.vendu ? '<span class="etiq ok">Vendu</span>' : v.modele ? '<span class="etiq">Modèle</span>' : '');
   const onglets = [['itineraire', 'route', 'Itinéraire'], ['infos', 'file-text', 'Infos et vente'], ['client', 'eye', 'Page client']];
@@ -419,6 +578,7 @@ function pageVoyage(id, onglet) {
       </div>
     </div>
     <p class="crumb" id="crumb">${crumb()}</p>
+    ${v.demande ? '<details class="panel demande-voyage" id="demande-voyage"></details>' : ''}
     <nav class="tabs">${onglets.map(([k, ico, nom]) => `<a class="tab ${k === onglet ? 'on' : ''}" href="#/voyage/${esc(v.id)}/${k}">${icone(ico, { taille: 15 })}${nom}</a>`).join('')}</nav>
     <div id="contenu"></div>`;
 
@@ -438,6 +598,19 @@ function pageVoyage(id, onglet) {
     await effacerEt('voyages', v.id);
     location.hash = '#/';
   }, { ok: 'Supprimer', danger: true });
+
+  const boiteDemande = app.querySelector('#demande-voyage');
+  let ouvert = true;
+  try { ouvert = localStorage.getItem('demandeOuverte') !== '0'; } catch (_) { /* pas grave */ }
+  function majDemande() {
+    if (!boiteDemande) return;
+    boiteDemande.open = ouvert;
+    boiteDemande.innerHTML = htmlDemandeVoyage(v);
+  }
+  if (boiteDemande) {
+    majDemande();
+    boiteDemande.addEventListener('toggle', () => { ouvert = boiteDemande.open; try { localStorage.setItem('demandeOuverte', ouvert ? '1' : '0'); } catch (_) { /* pas grave */ } });
+  }
 
   const zone = app.querySelector('#contenu');
   const majEtiquette = () => { app.querySelector('#etiq').innerHTML = etiquette(); };

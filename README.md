@@ -32,6 +32,15 @@ Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages 
   - Accepter ou refuser (avec une raison), un par un ou « ceux à 80 % ou plus ». Seuls les endroits acceptés servent dans les voyages.
   - Noter chaque paiement fait (le Studio ne fait pas le virement). Les règles (1 $ par endroit, bonus de ville, pourcentage…) se changent dans l'onglet « Règles ».
 
+## Fiche client (`demande.html`)
+
+Le questionnaire que Raph envoie à un client (Studio > Fiche client > Copier le lien).
+Le client choisit ses pays, ses dates sur un calendrier, ses envies (combien de fois),
+puis ses coordonnées. Ses réponses sont rangées dans un lien (rien n'est envoyé sur
+internet) qu'il renvoie par courriel ou message. En cliquant sur ce lien, le Studio
+montre la demande et crée le voyage : un pays par étape, avec le bon nombre de jours,
+et un encadré « Ce que veut le client » qui compare ses envies à ce qui est prévu.
+
 ## Modifier les listes
 
 - Catégories, types et sous-types : `js/taxonomie.js`
@@ -54,6 +63,8 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/taxonomie.js` : les catégories, monnaies et façons de joindre un endroit
 - `js/lieux.js` : les pays d'Asie et leurs villes
 - `js/monde.js` : les pays du monde par continent, et des villes hors Asie
+- `demande.html`, `js/demande.js`, `css/demande.css` : la fiche client
+- `js/code-demande.js` : met la demande dans un lien, et l'inverse
 - `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet
