@@ -415,7 +415,7 @@ async function pageListe() {
         ${icone('search', { taille: 18, epaisseur: 2.4 })}
         <div class="pilule-textes">
           <input type="search" id="recherche" placeholder="Chercher un endroit" value="${esc(f.recherche)}" autocomplete="off" aria-label="Chercher un endroit">
-          <small>${nb ? `${nb} endroit${nb > 1 ? 's' : ''} · ${nbPays} pays` : 'Nom, ville, type, notes…'}</small>
+          <small>${nb ? `${nb} endroit${nb > 1 ? 's' : ''}, ${nbPays} pays` : 'Nom, ville, type, notes…'}</small>
         </div>
         <button class="pilule-filtres ${nbFiltres ? 'actif' : ''}" id="btn-filtres" aria-label="Filtres">${icone('sliders-horizontal', { taille: 18 })}${nbFiltres ? `<i>${nbFiltres}</i>` : ''}</button>
       </div>
@@ -550,7 +550,7 @@ async function pageFiche(id) {
       ${photos.length > 1 ? `<span class="galerie-compte" id="galerie-compte">1 / ${photos.length}</span>` : ''}
     </div>
     <article class="fiche" style="--c:${cat.couleur}">
-      <p class="chemin">${iconeCat(e.categorie, { taille: 15 })}<span>${esc([cat.nom, e.type, e.sousType].filter(Boolean).join(' · '))}</span></p>
+      <p class="chemin">${iconeCat(e.categorie, { taille: 15 })}<span>${esc([cat.nom, e.type, e.sousType].filter(Boolean).join(', '))}</span></p>
       <h1>${esc(e.nom)}</h1>
       <p class="lieu">${esc(e.categorie === 'trajets' && (e.depart || e.arrivee) ? `${e.depart || '?'} → ${e.arrivee || '?'}` : [e.ville, e.pays].filter(Boolean).join(', '))}</p>
 
@@ -690,7 +690,7 @@ async function pageFormulaire(id) {
         <p class="aide" id="conversion"></p>
         <p class="sous-titre">Luxe / confort <small>(séparé du prix)</small></p>
         <div class="segments" id="confort">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="segment" data-confort="${n}">${n}★</button>`).join('')}</div>
-        <p class="aide">1 = simple · 5 = haut de gamme</p>
+        <p class="aide">1 = simple, 5 = haut de gamme</p>
       </section>
 
       <section class="section">
@@ -776,7 +776,7 @@ async function pageFormulaire(id) {
   function choisirVille(depuisPays) {
     if (!f.pays) { choisirPays(true); return; }
     choisirDansListe({
-      titre: `Ville · ${f.pays}`,
+      titre: `Ville (${f.pays})`,
       valeurs: listeVilles(f.pays),
       choisie: f.ville,
       ajout: true,
@@ -842,7 +842,7 @@ async function pageFormulaire(id) {
       titre: 'Monnaie',
       valeurs: [...favorites, ...autres],
       choisie: f.devise,
-      etiquette: (d) => `${d} · ${NOMS_DEVISES[d] || d}`,
+      etiquette: (d) => `${d}, ${NOMS_DEVISES[d] || d}`,
       placeholder: 'Chercher (ex. : baht, yen…)',
       quandChoisi: (d) => { f.devise = d; majDevises(); },
     });
@@ -868,7 +868,7 @@ async function pageFormulaire(id) {
     const texte = app.querySelector('#texte-position');
     if (!f.lat) { texte.textContent = ''; return; }
     const url = `https://www.google.com/maps/search/?api=1&query=${f.lat},${f.lng}`;
-    texte.innerHTML = `${icone('locate-fixed', { taille: 15 })} Position ${f.positionAuto ? 'prise automatiquement' : 'enregistrée'}${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a> · <button type="button" class="lien" id="retirer-position">Retirer</button>`;
+    texte.innerHTML = `${icone('locate-fixed', { taille: 15 })} Position ${f.positionAuto ? 'prise automatiquement' : 'enregistrée'}${f.precision ? ` (précision ± ${f.precision} m)` : ''}, <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a>, <button type="button" class="lien" id="retirer-position">Retirer</button>`;
     texte.querySelector('#retirer-position').onclick = () => {
       delete f.lat; delete f.lng; delete f.precision; delete f.positionAuto;
       afficherPosition();
