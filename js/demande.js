@@ -31,7 +31,7 @@ const TXT = {
     introPays: "Un ou plusieurs, dans l'ordre du voyage.", chercher: 'Chercher un pays',
     resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Votre trajet',
     plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisissez au moins un pays',
-    combien: 'Nombre de jours', plusDe: '14+', autreDuree: 'Combien de jours ?', parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
+    combien: 'Nombre de jours', plusDe: '14+', autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[14, '2 semaines'], [21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Départ', optionnel: 'optionnel', touchDepart: 'Touchez votre jour de départ',
     pasSur: 'Pas encore sûr ? Laissez vide.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
@@ -66,7 +66,7 @@ const TXT = {
     introPays: 'One or more, in travel order.', chercher: 'Search a country',
     resultats: 'Results', populaires: 'Popular', aucunPays: 'No country found.', trajet: 'Your route',
     plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove', choisisPays: 'Pick at least one country',
-        combien: 'Number of days', plusDe: '14+', autreDuree: 'How many days?', parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
+        combien: 'Number of days', plusDe: '14+', autreDuree: 'How many days?', autre: 'Other', longs: [[14, '2 weeks'], [21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
     quandPars: 'Departure', optionnel: 'optional', touchDepart: 'Tap your departure day',
     pasSur: 'Not sure yet? Leave it empty.', depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
@@ -179,17 +179,24 @@ function montrerPhoto(id) {
   if (!decor || !id || id === decorActuel) return;
   decorActuel = id;
   const img = new Image();
-  img.onload = () => {
-    const calques = decor.querySelectorAll('.decor-img');
-    const visible = [...calques].find((c) => c.classList.contains('visible'));
-    const suivant = [...calques].find((c) => c !== visible) || calques[0];
+  const afficher = () => {
+    if (decorActuel !== id) return; // une autre photo a été demandée entre-temps
+    // Fondu enchaîné : la nouvelle photo apparaît par-dessus l'ancienne, qui reste en place
+    // (et continue son zoom) jusqu'à la fin du fondu. Rien ne saute, pas de trou entre les deux.
+    const calques = [...decor.querySelectorAll('.decor-img')];
+    const visible = calques.find((c) => c.classList.contains('visible'));
+    const suivant = calques.find((c) => c !== visible) || calques[0];
+    clearTimeout(montrerPhoto.fin);
+    suivant.classList.remove('visible', 'sortie');
     suivant.style.backgroundImage = `url("${img.src}")`;
-    suivant.classList.remove('visible');
     void suivant.offsetWidth; // relance l'animation de zoom lent
-    suivant.classList.add('visible');
-    if (visible) visible.classList.remove('visible');
+    if (visible) { visible.classList.add('sortie'); visible.classList.remove('visible'); }
+    requestAnimationFrame(() => suivant.classList.add('visible'));
+    montrerPhoto.fin = setTimeout(() => { if (visible) visible.classList.remove('sortie'); }, 2200);
   };
   img.src = photo(id, 1800);
+  // decode() : l'image est prête à peindre avant le fondu, donc pas d'accroc pendant l'animation
+  (img.decode ? img.decode() : new Promise((ok) => { img.onload = ok; })).then(afficher, () => {});
 }
 function majDecor() {
   if (!decor || matchMedia('(max-width: 899px)').matches) return;
@@ -360,7 +367,7 @@ function etapeDates(zone) {
   };
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
-    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); } }
+    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)} · ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
   };
   zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
 }
@@ -371,15 +378,17 @@ function datesTotal(zone, choixMode) {
   const n = d.duree;
   const s = Math.floor(n / 7);
   const fin = finVoyage();
-  const long = n > 14 || dureeLibre;
+  const long = n >= 14 || dureeLibre;
+  const rapide = t().longs.some(([j]) => j === n);
   zone.innerHTML = `
     <p class="petit-titre premier">${t().combien}</p>
-    <div class="grille-duree">${Array.from({ length: 14 }, (_, i) => i + 1).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}">${j}</button>`).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
+    <div class="grille-duree">${Array.from({ length: 13 }, (_, i) => i + 1).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}">${j}</button>`).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
     ${long ? `
-    <div class="duree-boite">
-      <span class="compteur grand"><button data-duree="-1" ${n > 15 ? '' : 'disabled'} aria-label="${t().moins}">−</button><input id="duree-libre" type="number" inputmode="numeric" min="15" max="365" value="${n || 15}" aria-label="${t().autreDuree}"><button data-duree="1" aria-label="${t().plus}">+</button></span>
-      <span class="duree-txt"><b>${t().joursMot(2)}</b>${s ? `<small>${t().semaines(s, n % 7)}</small>` : ''}</span>
-    </div>` : ''}
+    <div class="durees-longues">
+      ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}" data-long>${nom}</button>`).join('')}
+      <label class="autre-duree ${rapide ? '' : 'choisi'}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="14" max="365" value="${rapide ? '' : n}" placeholder="${n}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
+    </div>
+    ${s && !rapide ? `<p class="doux duree-resume">${t().jours(n)} · ${t().semaines(s, n % 7)}</p>` : ''}` : ''}
     ${choixMode}
     <p class="petit-titre">${t().quandPars} <small>${t().optionnel}</small></p>
     <div class="choix-dates une" style="--c:${coul(0)}">
@@ -395,8 +404,8 @@ function datesTotal(zone, choixMode) {
 let dureeLibre = false; // « 14+ » touché : on montre le champ pour écrire le nombre de jours
 function clicTotal(b) {
   if (b.dataset.duree) d.duree = Math.max(15, Math.min(365, (d.duree || 14) + +b.dataset.duree));
-  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; dureeLibre = false; }
-  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 15) d.duree = 15; }
+  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; dureeLibre = b.dataset.long != null; }
+  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 14) d.duree = 14; }
   else if (b.dataset.effacer != null) d.depart = '';
   else if (b.dataset.jour) d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour;
 }

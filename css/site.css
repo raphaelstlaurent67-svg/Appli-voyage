@@ -71,10 +71,17 @@ section[id] { scroll-margin-top: 72px; }
 }
 .fond-couverture { position: absolute; inset: 0; z-index: -1; }
 .fond-couverture::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, rgba(15, 10, 8, .62), rgba(15, 10, 8, .25) 70%), linear-gradient(180deg, transparent 60%, rgba(15, 10, 8, .35)); }
-.fond-img { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transition: opacity 1.6s ease; }
-.fond-img.visible { opacity: 1; animation: zoom-lent 14s ease-out forwards; }
-@keyframes zoom-lent { from { transform: scale(1.02); } to { transform: scale(1.12); } }
-@media (prefers-reduced-motion: reduce) { .fond-img.visible { animation: none; } }
+.fond-img {
+  position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0;
+  transition: opacity 2s cubic-bezier(.4, 0, .2, 1); will-change: opacity, transform; backface-visibility: hidden;
+}
+/* La photo qui part reste en dessous (et continue son zoom) pendant que la nouvelle apparaît : aucun saut. */
+.fond-img.visible, .fond-img.sortie { animation: zoom-lent 9s linear forwards; }
+.fond-img.visible { opacity: 1; z-index: 1; }
+.fond-img.sortie { opacity: 1; z-index: 0; transition: none; }
+.fond-couverture::after { z-index: 2; }
+@keyframes zoom-lent { from { transform: scale(1.02); } to { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .fond-img.visible, .fond-img.sortie { animation: none; } }
 .couv-int { padding: clamp(72px, 12vw, 140px) 0 clamp(64px, 10vw, 120px); max-width: 760px; margin-left: max(16px, (100% - 1120px) / 2); }
 .surtitre { font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
 .couverture .surtitre { color: rgba(255, 255, 255, .85); }
