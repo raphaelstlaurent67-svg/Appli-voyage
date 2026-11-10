@@ -304,20 +304,27 @@ button:disabled { cursor: default; }
 
 /* Durée : 1 à 14 jours en un clic, « 14+ » pour écrire un nombre */
 .petit-titre.premier { margin-top: 0; }
-.grille-duree { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 460px; }
-.grille-duree button {
-  height: 52px; border-radius: 14px; border: 1px solid var(--ligne); background: var(--carte);
-  font-size: 18px; font-weight: 700; transition: background .15s, border-color .15s;
+.grille-duree { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 420px; }
+.grille-duree button, .durees-longues button {
+  height: 40px; border-radius: 11px; border: 1px solid var(--ligne); background: var(--carte);
+  font-size: 15px; font-weight: 700; transition: background .15s, border-color .15s, color .15s;
 }
-.grille-duree button:hover { border-color: var(--encre); }
-.grille-duree button.choisi { background: var(--encre); border-color: var(--encre); color: #fff; }
-.grille-duree .plus { font-size: 16px; }
-.grille-duree + .duree-boite { margin-top: 10px; max-width: 460px; }
-.duree-boite input {
-  width: 64px; height: 42px; text-align: center; font-size: 19px; font-weight: 700; border: 1px solid var(--ligne);
-  border-radius: 10px; background: var(--fond); -moz-appearance: textfield;
+.grille-duree button:hover, .durees-longues button:hover { border-color: var(--encre); }
+.grille-duree button.choisi, .durees-longues button.choisi { background: var(--encre); border-color: var(--encre); color: #fff; }
+.grille-duree .plus { font-size: 14px; }
+.durees-longues { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 420px; margin-top: 10px; }
+.durees-longues button { font-size: 14px; font-weight: 600; padding: 0 6px; }
+.autre-duree {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px;
+  border: 1px solid var(--ligne); border-radius: 11px; background: var(--carte); font-size: 14px; font-weight: 600; color: var(--doux);
 }
-.duree-boite input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.autre-duree.choisi { border-color: var(--encre); color: var(--encre); }
+.autre-duree input {
+  width: 72px; height: 32px; text-align: center; font: inherit; font-size: 16px; font-weight: 700; color: var(--encre);
+  border: 1px solid var(--ligne); border-radius: 8px; background: var(--fond); -moz-appearance: textfield;
+}
+.autre-duree input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.duree-resume { margin-top: 8px; font-size: 14px; }
 .lien-mode {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; padding: 6px 0; border: 0; background: none;
   color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px;
@@ -330,14 +337,16 @@ button:disabled { cursor: default; }
   .decor { display: block; position: fixed; inset: 0; z-index: 0; overflow: hidden; background: linear-gradient(130deg, #f0532f, #b83280); }
   .decor-img {
     position: absolute; inset: -4%; background: center / cover no-repeat; opacity: 0;
-    transition: opacity 1.4s ease;
+    transition: opacity 2s cubic-bezier(.4, 0, .2, 1); will-change: opacity, transform; backface-visibility: hidden;
   }
-  .decor-img.visible { opacity: 1; animation: zoom-lent 24s ease-out forwards; }
-  .decor::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, .25), rgba(0, 0, 0, .05) 50%, rgba(0, 0, 0, .25)); }
+  .decor-img.visible, .decor-img.sortie { animation: zoom-lent 24s linear forwards; }
+  .decor-img.visible { opacity: 1; z-index: 1; }
+  .decor-img.sortie { opacity: 1; z-index: 0; transition: none; }
+  .decor::after { z-index: 2; content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, .25), rgba(0, 0, 0, .05) 50%, rgba(0, 0, 0, .25)); }
   .fiche { position: relative; z-index: 1; background: var(--fond); box-shadow: 0 0 60px rgba(0, 0, 0, .25); }
   #toast { z-index: 20; }
 }
 @keyframes zoom-lent { from { transform: scale(1); } to { transform: scale(1.08) translateX(-1%); } }
-@media (prefers-reduced-motion: reduce) { .decor-img.visible { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .decor-img.visible, .decor-img.sortie { animation: none; } }
 .boutons-envoi .lien { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .merci h1 { font-size: 28px; }

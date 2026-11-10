@@ -104,20 +104,28 @@ afficher();
 // Couverture : quelques photos de voyage qui se suivent, avec un zoom lent.
 const fond = document.getElementById('fond-couverture');
 if (fond) {
-  const calques = PHOTOS_FOND.map((id, i) => {
-    const c = document.createElement('div');
-    c.className = 'fond-img';
-    c.style.backgroundImage = `url("${photo(id, 2000)}")`;
-    if (!i) c.classList.add('visible');
-    fond.append(c);
-    return c;
-  });
+  // Deux calques seulement : la photo suivante est chargée et décodée AVANT le fondu,
+  // puis elle apparaît par-dessus l'ancienne. Le fondu reste donc fluide.
+  const calques = [0, 1].map(() => { const c = document.createElement('div'); c.className = 'fond-img'; fond.append(c); return c; });
   let i = 0;
+  let visible = null;
+  const montrer = (n) => {
+    const img = new Image();
+    img.src = photo(PHOTOS_FOND[n], 2000);
+    (img.decode ? img.decode() : new Promise((ok) => { img.onload = ok; })).then(() => {
+      const suivant = calques.find((c) => c !== visible);
+      suivant.classList.remove('visible', 'sortie');
+      suivant.style.backgroundImage = `url("${img.src}")`;
+      void suivant.offsetWidth;
+      const ancien = visible;
+      if (ancien) { ancien.classList.add('sortie'); ancien.classList.remove('visible'); }
+      requestAnimationFrame(() => suivant.classList.add('visible'));
+      setTimeout(() => ancien && ancien.classList.remove('sortie'), 2200);
+      visible = suivant;
+    }, () => {});
+  };
+  montrer(0);
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    setInterval(() => {
-      calques[i].classList.remove('visible');
-      i = (i + 1) % calques.length;
-      calques[i].classList.add('visible');
-    }, 6500);
+    setInterval(() => { i = (i + 1) % PHOTOS_FOND.length; montrer(i); }, 7000);
   }
 }
