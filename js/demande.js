@@ -6,93 +6,92 @@ import { paysDuContinent } from './monde.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
 import * as pwa from './installer.js';
+import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
 const params = new URLSearchParams(location.search);
 // Courriel de Raph, ajouté au lien par le Studio (gardé si la fiche est installée sur son ordi).
 let POUR = params.get('pour') || '';
 try { if (POUR) localStorage.setItem('pourDemande', POUR); else POUR = localStorage.getItem('pourDemande') || ''; } catch (_) { /* rien */ }
+// Numéro de cell de Raph (optionnel) : le client lui envoie sa demande par texto en un clic.
+let TEL = (params.get('tel') || '').replace(/[^\d+]/g, '');
+try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.getItem('telDemande') || ''; } catch (_) { /* rien */ }
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
-const POPULAIRES = ['Japon', 'Thaïlande', 'Vietnam', 'Corée du Sud', 'Indonésie', 'Philippines', 'Cambodge', 'Malaisie', 'Laos', 'Népal', 'Sri Lanka', 'Inde'];
+// Les destinations les plus demandées (du monde entier) ; les autres se trouvent avec la recherche.
+const POPULAIRES = ['Japon', 'Thaïlande', 'France', 'Italie', 'Espagne', 'Portugal', 'Grèce', 'Mexique', 'Cuba', 'République dominicaine', 'États-Unis', 'Costa Rica', 'Vietnam', 'Indonésie', 'Maroc', 'Pérou'];
 const TOUS_PAYS = paysDuContinent('');
 const COULEURS = ['#f0532f', '#2f80ed', '#16a34a', '#a855f7', '#e8a20c', '#0ea5a4', '#db2777', '#64748b'];
 
 // ---------- Textes (français / anglais) ----------
 const TXT = {
   fr: {
-    sur: 'Voyage sur mesure', etapes: ['Pays', 'Dates', 'Envies', 'Toi'],
-    titres: ['Où veux-tu aller ?', 'Combien de temps ?', "Qu'est-ce qui te fait envie ?", 'Comment te joindre ?'],
-    retour: 'Retour', continuer: 'Continuer', envoyerDemande: 'Envoyer ma demande', installer: 'Installer sur mon ordi',
-    introPays: "Choisis un ou plusieurs pays, dans l'ordre où tu veux les visiter.", chercher: 'Chercher un pays',
-    resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Ton trajet',
-    plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisis au moins un pays',
-    modeTotal: 'Mon voyage au complet', modeTotalAide: 'Juste la durée, je répartis pour toi',
-    modePays: 'Pays par pays', modePaysAide: 'Tes dates pour chaque pays',
-    combien: 'Combien de temps pars-tu ?', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
+    sur: 'Voyage sur mesure', etapes: ['Pays', 'Dates', 'Envies', 'Vous'],
+    titres: ['Pays', 'Durée du voyage', "Qu'est-ce qui vous fait envie ?", 'Coordonnées'],
+    retour: 'Retour', continuer: 'Continuer', envoyerDemande: 'Terminer', installer: 'Installer sur mon ordi',
+    introPays: "Un ou plusieurs, dans l'ordre du voyage.", chercher: 'Chercher un pays',
+    resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Votre trajet',
+    plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisissez au moins un pays',
+    combien: 'Nombre de jours', plusDe: '14+', autreDuree: 'Combien de jours ?', parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
-    raccourcis: [[7, '1 semaine'], [10, '10 jours'], [14, '2 semaines'], [21, '3 semaines'], [30, '1 mois']],
-    quandPars: 'Quand pars-tu ?', optionnel: 'optionnel', touchDepart: 'Touche ton jour de départ',
-    pasSur: 'Pas encore sûr ? Laisse vide, on en parlera.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
-    repartition: 'Une préférence pour répartir ton temps ?', repartitionEx: 'Ex. : plus de temps au Japon, je te laisse décider pour le reste',
-    introPays2: "Pour chaque pays, touche ton jour d'arrivée, puis ton jour de départ.",
-    arrivee: 'Arrivée', choisisJour: 'Choisis un jour', choisisDepart: 'Choisis le départ', aChoisir: 'À choisir',
-    tonVoyage: 'Ton voyage', au: 'au', astuce: "Astuce : le départ d'un pays peut être le même jour que l'arrivée dans le suivant.",
+    quandPars: 'Départ', optionnel: 'optionnel', touchDepart: 'Touchez votre jour de départ',
+    pasSur: 'Pas encore sûr ? Laissez vide.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
+    repartition: 'Une préférence pour répartir votre temps ?', repartitionEx: 'Ex. : plus de temps au Japon, le reste à votre choix',
+    introPays2: "Touchez l'arrivée, puis le départ.",
+    arrivee: 'Arrivée', choisisJour: 'Choisissez un jour', choisisDepart: 'Choisissez le départ', aChoisir: 'À choisir',
+    tonVoyage: 'Votre voyage', au: 'au', astuce: "Astuce : le départ d'un pays peut être le même jour que l'arrivée dans le suivant.",
     moisPrec: 'Mois précédent', moisSuiv: 'Mois suivant', semaineJours: ['L', 'M', 'M', 'J', 'V', 'S', 'D'], sem: 'S',
-    nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`, choisisDuree: 'Choisis la durée de ton voyage', datesPour: (p) => `Choisis tes dates pour : ${p}`,
-    introEnvies: (n) => `Combien de fois veux-tu faire chaque chose pendant ton voyage de ${n} jour${n > 1 ? 's' : ''} ? Laisse à 0 ce qui ne t'intéresse pas.`,
-    moins: 'Moins', plus: 'Plus', aVoir: 'Ce que tu veux absolument voir', aVoirEx: 'Ex. : le Mont Fuji, un ryokan avec onsen, un match de sumo…',
+    nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`, choisisDuree: 'Choisissez la durée du voyage', datesPour: (p) => `Choisissez vos dates pour : ${p}`,
+    introEnvies: () => 'Combien de fois ? Laissez à 0 ce qui ne vous intéresse pas.',
+    moins: 'Moins', plus: 'Plus', aVoir: 'À voir absolument', aVoirEx: 'Ex. : le mont Fuji, un ryokan avec onsen, un match de sumo…',
     voyageurs: 'Voyageurs', style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
-    introToi: "Dernière étape ! Je te reviens avec une proposition d'itinéraire.",
-    nom: 'Ton nom', nomEx: 'Ex. : Julie Tremblay', courriel: 'Ton courriel', courrielEx: 'julie@exemple.com',
-    tel: 'Téléphone ou WhatsApp', message: 'Autre chose à me dire ?', messageEx: 'Allergies, occasion spéciale, budget…',
-    ecrisNom: 'Écris ton nom', ecrisCourriel: 'Écris ton courriel (ou ton téléphone)',
-    monVoyage: 'Mon voyage sur mesure', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'), joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
-    dureeTotale: 'Durée totale', departLe: (x) => `Départ le ${x}`, datesAVoir: 'Dates à préciser', jeTeLaisse: 'Je te laisse répartir le temps entre les pays',
-    mesEnvies: 'Mes envies', aVoirCourt: 'À voir absolument',
-    presque: 'Presque fini !', presqueTxt: "Envoie-moi ta demande avec un des boutons ci-dessous. Je te reviens avec une proposition d'itinéraire.",
-    parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message (WhatsApp, Messenger…)', copier: 'Copier ma demande',
+    introToi: '',
+    nom: 'Nom', nomEx: 'Ex. : Julie Tremblay', courriel: 'Courriel', courrielEx: 'julie@exemple.com',
+    tel: 'Téléphone', message: 'Autre chose à nous dire ?', messageEx: 'Allergies, occasion spéciale, budget…',
+    ecrisNom: 'Écrivez votre nom', ecrisCourriel: 'Écrivez votre courriel (ou votre téléphone)',
+    monVoyage: 'Voyage sur mesure', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'), joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
+    dureeTotale: 'Durée totale', departLe: (x) => `Départ le ${x}`, datesAVoir: 'Dates à préciser', jeTeLaisse: 'Répartition du temps entre les pays : à votre choix',
+    mesEnvies: 'Envies', aVoirCourt: 'À voir absolument',
+    presque: 'Votre demande est prête', presqueTxt: 'Envoyez-la-nous : notre équipe vous répond avec une proposition d’itinéraire.',
+    parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message', copier: 'Copier la demande',
     image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses',
-    merci: 'Merci ! Demande envoyée', copie: 'Copié ! Colle-le dans un courriel ou un message', copieCeTexte: 'Copie ce texte :',
+    merci: 'Merci ! Demande envoyée', copie: 'Copié ! Collez-le dans un courriel ou un message', copieCeTexte: 'Copiez ce texte :',
     sujet: (p, n) => `Demande de voyage : ${p} (${n})`,
-    corps: (lignes, v, lien, n) => `Bonjour ! Voici ma demande de voyage sur mesure.\n\n${lignes}\n- ${v} voyageur(s)\n\nToutes mes réponses (pays, dates, envies) sont dans ce lien :\n${lien}\n\n${n}`,
+    corps: (lignes, v, lien, n) => `Bonjour,\n\nVoici ma demande de voyage sur mesure.\n\n${lignes}\n- ${v} voyageur(s)\n\nToutes mes réponses (pays, dates, envies) sont dans ce lien :\n${lien}\n\n${n}`,
     imagePrete: 'Image enregistrée',
   },
   en: {
     sur: 'Custom trip', etapes: ['Countries', 'Dates', 'Interests', 'You'],
-    titres: ['Where do you want to go?', 'How long?', 'What are you into?', 'How can I reach you?'],
-    retour: 'Back', continuer: 'Continue', envoyerDemande: 'Send my request', installer: 'Install on my computer',
-    introPays: 'Pick one or more countries, in the order you want to visit them.', chercher: 'Search a country',
+    titres: ['Countries', 'Trip length', 'What are you into?', 'Your details'],
+    retour: 'Back', continuer: 'Continue', envoyerDemande: 'Finish', installer: 'Install on my computer',
+    introPays: 'One or more, in travel order.', chercher: 'Search a country',
     resultats: 'Results', populaires: 'Popular', aucunPays: 'No country found.', trajet: 'Your route',
     plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove', choisisPays: 'Pick at least one country',
-    modeTotal: 'My whole trip', modeTotalAide: 'Just the length, I plan the split',
-    modePays: 'Country by country', modePaysAide: 'Your dates for each country',
-    combien: 'How long is your trip?', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
+        combien: 'Number of days', plusDe: '14+', autreDuree: 'How many days?', parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
-    raccourcis: [[7, '1 week'], [10, '10 days'], [14, '2 weeks'], [21, '3 weeks'], [30, '1 month']],
-    quandPars: 'When do you leave?', optionnel: 'optional', touchDepart: 'Tap your departure day',
-    pasSur: "Not sure yet? Leave it empty, we'll talk about it.", depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
-    repartition: 'Any preference on how to split your time?', repartitionEx: "E.g. more time in Japan, I'll let you decide the rest",
-    introPays2: 'For each country, tap your arrival day, then your departure day.',
+    quandPars: 'Departure', optionnel: 'optional', touchDepart: 'Tap your departure day',
+    pasSur: 'Not sure yet? Leave it empty.', depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
+    repartition: 'Any preference on how to split your time?', repartitionEx: 'E.g. more time in Japan, the rest is up to you',
+    introPays2: 'Tap arrival, then departure.',
     arrivee: 'Arrival', choisisJour: 'Pick a day', choisisDepart: 'Pick departure', aChoisir: 'To pick',
     tonVoyage: 'Your trip', au: 'to', astuce: 'Tip: leaving a country can be the same day you arrive in the next one.',
     moisPrec: 'Previous month', moisSuiv: 'Next month', semaineJours: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], sem: 'W',
     nuitsTxt: (n) => `${n} night${n > 1 ? 's' : ''}`, choisisDuree: 'Pick the length of your trip', datesPour: (p) => `Pick your dates for: ${p}`,
-    introEnvies: (n) => `How many times do you want to do each thing during your ${n}-day trip? Leave 0 for what you don't care about.`,
-    moins: 'Less', plus: 'More', aVoir: 'What you absolutely want to see', aVoirEx: 'E.g. Mount Fuji, a ryokan with an onsen, a sumo match…',
+    introEnvies: () => "How many times? Leave 0 if it's not for you.",
+    moins: 'Less', plus: 'More', aVoir: 'Must see', aVoirEx: 'E.g. Mount Fuji, a ryokan with an onsen, a sumo match…',
     voyageurs: 'Travellers', style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
-    introToi: "Last step! I'll get back to you with an itinerary proposal.",
+    introToi: '',
     nom: 'Your name', nomEx: 'E.g. Julie Smith', courriel: 'Your email', courrielEx: 'julie@example.com',
-    tel: 'Phone or WhatsApp', message: 'Anything else to tell me?', messageEx: 'Allergies, special occasion, budget…',
+    tel: 'Phone', message: 'Anything else we should know?', messageEx: 'Allergies, special occasion, budget…',
     ecrisNom: 'Enter your name', ecrisCourriel: 'Enter your email (or phone)',
-    monVoyage: 'My custom trip', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'), joursMot: (n) => (n > 1 ? 'days' : 'day'),
-    dureeTotale: 'Total length', departLe: (x) => `Leaving ${x}`, datesAVoir: 'Dates to confirm', jeTeLaisse: 'I let you split the time between countries',
-    mesEnvies: 'My interests', aVoirCourt: 'Must see',
-    presque: 'Almost done!', presqueTxt: "Send me your request with one of the buttons below. I'll get back to you with an itinerary proposal.",
-    parCourriel: 'Send by email', parMessage: 'Send by message (WhatsApp, Messenger…)', copier: 'Copy my request',
+    monVoyage: 'Custom trip', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'), joursMot: (n) => (n > 1 ? 'days' : 'day'),
+    dureeTotale: 'Total length', departLe: (x) => `Leaving ${x}`, datesAVoir: 'Dates to confirm', jeTeLaisse: 'Time split between countries: up to you',
+    mesEnvies: 'Interests', aVoirCourt: 'Must see',
+    presque: 'Your request is ready', presqueTxt: 'Send it to us: our team will reply with an itinerary proposal.',
+    parCourriel: 'Send by email', parMessage: 'Send by message', copier: 'Copy the request',
     image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers',
     merci: 'Thanks! Request sent', copie: 'Copied! Paste it in an email or a message', copieCeTexte: 'Copy this text:',
     sujet: (p, n) => `Trip request: ${p} (${n})`,
-    corps: (lignes, v, lien, n) => `Hi! Here is my custom trip request.\n\n${lignes}\n- ${v} traveller(s)\n\nAll my answers (countries, dates, interests) are in this link:\n${lien}\n\n${n}`,
+    corps: (lignes, v, lien, n) => `Hello,\n\nHere is my custom trip request.\n\n${lignes}\n- ${v} traveller(s)\n\nAll my answers (countries, dates, interests) are in this link:\n${lien}\n\n${n}`,
     imagePrete: 'Image saved',
   },
 };
@@ -170,6 +169,39 @@ const totalJours = () => (d.mode === 'total' ? d.duree : d.pays.reduce((n, x) =>
 const debutVoyage = () => (d.mode === 'total' ? d.depart : d.pays.map((x) => x.debut).filter(Boolean).sort()[0] || '');
 const finVoyage = () => (d.mode === 'total' ? (d.depart && d.duree ? ajouterJours(d.depart, d.duree) : '') : d.pays.map((x) => x.fin).filter(Boolean).sort().pop() || '');
 
+// ---------- Photo en fond, sur les côtés de la fiche (grands écrans) ----------
+// La photo du pays choisi (ou du pays dont on choisit les dates) ; sinon, des photos de voyage qui défilent.
+const decor = document.getElementById('decor');
+let decorActuel = '';
+let decorIndex = 0;
+let decorMinuterie = null;
+function montrerPhoto(id) {
+  if (!decor || !id || id === decorActuel) return;
+  decorActuel = id;
+  const img = new Image();
+  img.onload = () => {
+    const calques = decor.querySelectorAll('.decor-img');
+    const visible = [...calques].find((c) => c.classList.contains('visible'));
+    const suivant = [...calques].find((c) => c !== visible) || calques[0];
+    suivant.style.backgroundImage = `url("${img.src}")`;
+    suivant.classList.remove('visible');
+    void suivant.offsetWidth; // relance l'animation de zoom lent
+    suivant.classList.add('visible');
+    if (visible) visible.classList.remove('visible');
+  };
+  img.src = photo(id, 1800);
+}
+function majDecor() {
+  if (!decor || matchMedia('(max-width: 899px)').matches) return;
+  const actif = etape === 1 && d.mode === 'pays' ? d.pays[paysActif] : null;
+  const choisi = actif && photoPays(actif.nom) ? actif.nom : [...d.pays].reverse().map((p) => p.nom).find(photoPays);
+  clearInterval(decorMinuterie);
+  if (choisi) { montrerPhoto(photoPays(choisi)); return; }
+  montrerPhoto(PHOTOS_FOND[decorIndex % PHOTOS_FOND.length]);
+  decorMinuterie = setInterval(() => { decorIndex++; montrerPhoto(PHOTOS_FOND[decorIndex % PHOTOS_FOND.length]); }, 8000);
+}
+window.addEventListener('resize', () => { clearTimeout(majDecor.r); majDecor.r = setTimeout(majDecor, 300); });
+
 function toast(m) {
   const el = document.getElementById('toast');
   el.textContent = m; el.classList.add('visible');
@@ -211,6 +243,7 @@ function rendre() {
   fiche.querySelector('#suivant').onclick = suivant;
   const r = fiche.querySelector('#retour');
   if (r) r.onclick = () => { etape--; rendre(); window.scrollTo(0, 0); };
+  majDecor();
 }
 
 function suivant() {
@@ -270,6 +303,7 @@ function etapePays(zone) {
       else return;
       garder();
       dessiner();
+      majDecor();
     };
   };
   dessiner();
@@ -309,10 +343,10 @@ function calendrier(plages, actif) {
 }
 
 function etapeDates(zone) {
-  const choixMode = `
-    <div class="choix-mode">${[['total', 'calendar', t().modeTotal, t().modeTotalAide], ['pays', 'route', t().modePays, t().modePaysAide]].map(([k, ico, nom, aide]) => `
-      <button class="${d.mode === k ? 'choisi' : ''}" data-mode="${k}">${icone(ico, { taille: 20 })}<span><b>${nom}</b><small>${aide}</small></span></button>`).join('')}
-    </div>`;
+  // Le choix « pays par pays » reste discret : un simple lien sous la durée.
+  const choixMode = d.mode === 'total'
+    ? (d.pays.length > 1 ? `<button class="lien-mode" data-mode="pays">${icone('route', { taille: 16 })} ${t().parPays}</button>` : '')
+    : `<button class="lien-mode" data-mode="total">${icone('chevron-left', { taille: 16 })} ${t().retourTotal}</button>`;
   if (d.mode === 'total') datesTotal(zone, choixMode); else datesPays(zone, choixMode);
   zone.onclick = (ev) => {
     const b = ev.target.closest('button');
@@ -322,8 +356,13 @@ function etapeDates(zone) {
     if (d.mode === 'total') clicTotal(b); else clicPays(b);
     garder();
     etapeDates(zone);
+    majDecor();
   };
-  zone.oninput = (ev) => { if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); } };
+  zone.oninput = (ev) => {
+    if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
+    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); garder(); } }
+  };
+  zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
 }
 
 // Le voyage au complet : juste la durée, et la date de départ si on la connaît.
@@ -332,14 +371,16 @@ function datesTotal(zone, choixMode) {
   const n = d.duree;
   const s = Math.floor(n / 7);
   const fin = finVoyage();
+  const long = n > 14 || dureeLibre;
   zone.innerHTML = `
-    ${choixMode}
-    <p class="petit-titre">${t().combien}</p>
+    <p class="petit-titre premier">${t().combien}</p>
+    <div class="grille-duree">${Array.from({ length: 14 }, (_, i) => i + 1).map((j) => `<button class="${n === j && !long ? 'choisi' : ''}" data-fixe="${j}">${j}</button>`).join('')}<button class="plus ${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
+    ${long ? `
     <div class="duree-boite">
-      <span class="compteur grand"><button data-duree="-1" ${n > 1 ? '' : 'disabled'} aria-label="${t().moins}">−</button><b>${n || '—'}</b><button data-duree="1" aria-label="${t().plus}">+</button></span>
-      <span class="duree-txt"><b>${n ? t().joursMot(n) : t().choisisDuree}</b>${n && s ? `<small>${t().semaines(s, n % 7)}</small>` : ''}</span>
-    </div>
-    <div class="puces raccourcis">${t().raccourcis.map(([j, l]) => `<button class="puce ${n === j ? 'choisie' : ''}" data-fixe="${j}">${l}</button>`).join('')}</div>
+      <span class="compteur grand"><button data-duree="-1" ${n > 15 ? '' : 'disabled'} aria-label="${t().moins}">−</button><input id="duree-libre" type="number" inputmode="numeric" min="15" max="365" value="${n || 15}" aria-label="${t().autreDuree}"><button data-duree="1" aria-label="${t().plus}">+</button></span>
+      <span class="duree-txt"><b>${t().joursMot(2)}</b>${s ? `<small>${t().semaines(s, n % 7)}</small>` : ''}</span>
+    </div>` : ''}
+    ${choixMode}
     <p class="petit-titre">${t().quandPars} <small>${t().optionnel}</small></p>
     <div class="choix-dates une" style="--c:${coul(0)}">
       <div class="case-date ${d.depart ? '' : 'attend'}"><small>${t().depart}</small><b>${d.depart ? jolie(d.depart) : t().touchDepart}</b></div>
@@ -351,9 +392,11 @@ function datesTotal(zone, choixMode) {
     ${d.pays.length > 1 ? `<label class="champ marge-haut"><span>${t().repartition} <small>${t().optionnel}</small></span><textarea id="repartition" rows="2" placeholder="${esc(t().repartitionEx)}">${esc(d.repartition)}</textarea></label>` : ''}`;
 }
 
+let dureeLibre = false; // « 14+ » touché : on montre le champ pour écrire le nombre de jours
 function clicTotal(b) {
-  if (b.dataset.duree) d.duree = Math.max(1, Math.min(365, (d.duree || 0) + +b.dataset.duree));
-  else if (b.dataset.fixe) d.duree = +b.dataset.fixe;
+  if (b.dataset.duree) d.duree = Math.max(15, Math.min(365, (d.duree || 14) + +b.dataset.duree));
+  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; dureeLibre = false; }
+  else if (b.dataset.plusLong != null) { dureeLibre = true; if (d.duree < 15) d.duree = 15; }
   else if (b.dataset.effacer != null) d.depart = '';
   else if (b.dataset.jour) d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour;
 }
@@ -453,7 +496,6 @@ function etapeEnvies(zone) {
 // ---------- 4. Coordonnées ----------
 function etapeToi(zone) {
   zone.innerHTML = `
-    <p class="intro">${t().introToi}</p>
     <label class="champ"><span>${t().nom}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
     <label class="champ"><span>${t().courriel}</span><input data-champ="courriel" type="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
     <label class="champ"><span>${t().tel} <small>${t().optionnel}</small></span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
@@ -491,7 +533,7 @@ function carteResume() {
         <div class="cr-stats">
           <div><b>${d.voyageurs}</b><span>${t().voyageursN(d.voyageurs)}</span></div>
           <div><b>${total || '—'}</b><span>${t().joursMot(total)}</span></div>
-          <div><b>${esc(t().styles[d.style])}</b><span>style</span></div>
+          <div><b class="mot">${esc(t().styles[d.style])}</b><span>style</span></div>
         </div>
       </div>
       <ol class="cr-pays">${lignesPays().map((x) => `
@@ -667,13 +709,14 @@ async function envoyer() {
     fiche.innerHTML = `
       <header class="haut">${enTete(null)}</header>
       <section class="merci">
-        <span class="merci-ico">${icone('send', { taille: 30 })}</span>
+        <span class="merci-ico">${icone('check', { taille: 30, epaisseur: 2.6 })}</span>
         <h1>${t().presque}</h1>
         <p>${t().presqueTxt}</p>
         <div class="boutons-envoi">
           ${POUR ? `<a class="bouton" href="mailto:${encodeURIComponent(POUR)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(texte)}">${icone('mail', { taille: 18 })} ${t().parCourriel}</a>` : ''}
-          ${navigator.share ? `<button class="bouton ${POUR ? 'secondaire' : ''}" id="partager">${icone('send', { taille: 18 })} ${t().parMessage}</button>` : ''}
-          <button class="bouton secondaire" id="copier">${icone('copy', { taille: 18 })} ${t().copier}</button>
+          ${TEL ? `<a class="bouton ${POUR ? 'secondaire' : ''}" href="sms:${TEL}?&body=${encodeURIComponent(texte)}">${icone('message-circle', { taille: 18 })} ${t().parMessage}</a>`
+            : navigator.share ? `<button class="bouton ${POUR ? 'secondaire' : ''}" id="partager">${icone('message-circle', { taille: 18 })} ${t().parMessage}</button>` : ''}
+          ${POUR || TEL || navigator.share ? `<button class="lien" id="copier">${icone('copy', { taille: 16 })} ${t().copier}</button>` : `<button class="bouton" id="copier">${icone('copy', { taille: 18 })} ${t().copier}</button>`}
         </div>
         ${carteResume()}
         <button class="bouton secondaire" id="image">${icone('image', { taille: 18 })} ${t().image}</button>

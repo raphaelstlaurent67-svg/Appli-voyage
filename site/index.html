@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#faf8f5">
+  <title>Voyage sur mesure</title>
+  <meta name="description" content="Des itinéraires de voyage sur mesure, préparés à la main, jour par jour, par notre équipe.">
+  <link rel="icon" href="../icons/demande.svg" type="image/svg+xml">
+  <link rel="preload" href="../fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="enveloppe nav-int">
+      <a class="marque" href="#haut"><span class="marque-ico" data-ico="compass"></span><span data-marque></span></a>
+      <nav class="nav-liens">
+        <a href="#comment" data-t="navComment"></a>
+        <a href="#recois" data-t="navRecois"></a>
+        <a href="#faq" data-t="navFaq"></a>
+      </nav>
+      <div class="nav-droite">
+        <div class="langue" role="group" aria-label="Langue / Language"><button data-langue="fr">FR</button><button data-langue="en">EN</button></div>
+        <a class="bouton petit" data-demande><span class="long" data-t="cta"></span><span class="court" data-t="ctaCourt"></span></a>
+      </div>
+    </div>
+  </header>
+
+  <main id="haut">
+    <!-- Couverture : les photos qui défilent sont dans js/photos.js (PHOTOS_FOND). -->
+    <section class="couverture">
+      <div class="fond-couverture" id="fond-couverture" aria-hidden="true"></div>
+      <div class="enveloppe couv-int">
+        <p class="surtitre" data-t="surtitre"></p>
+        <h1 data-t="titre"></h1>
+        <p class="sous-titre" data-t="sousTitre"></p>
+        <div class="boutons">
+          <a class="bouton grand" data-demande><span data-t="cta"></span><span data-ico="arrow-right"></span></a>
+          <a class="bouton grand clair" href="#comment" data-t="voirComment"></a>
+        </div>
+        <ul class="rassure">
+          <li><span data-ico="check"></span><span data-t="rassure1"></span></li>
+          <li><span data-ico="check"></span><span data-t="rassure2"></span></li>
+          <li><span data-ico="check"></span><span data-t="rassure3"></span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="comment">
+      <div class="enveloppe">
+        <p class="surtitre" data-t="commentSur"></p>
+        <h2 data-t="commentTitre"></h2>
+        <ol class="etapes">
+          <li><span class="num">1</span><span data-ico="send"></span><h3 data-t="e1t"></h3><p data-t="e1p"></p></li>
+          <li><span class="num">2</span><span data-ico="route"></span><h3 data-t="e2t"></h3><p data-t="e2p"></p></li>
+          <li><span class="num">3</span><span data-ico="plane"></span><h3 data-t="e3t"></h3><p data-t="e3p"></p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section douce" id="recois">
+      <div class="enveloppe deux-col">
+        <div>
+          <p class="surtitre" data-t="recoisSur"></p>
+          <h2 data-t="recoisTitre"></h2>
+          <p class="texte" data-t="recoisTexte"></p>
+          <a class="bouton" data-demande data-t="cta"></a>
+        </div>
+        <ul class="liste-recois">
+          <li><span data-ico="calendar-days"></span><div><b data-t="r1t"></b><p data-t="r1p"></p></div></li>
+          <li><span data-ico="bed-double"></span><div><b data-t="r2t"></b><p data-t="r2p"></p></div></li>
+          <li><span data-ico="utensils"></span><div><b data-t="r3t"></b><p data-t="r3p"></p></div></li>
+          <li><span data-ico="map"></span><div><b data-t="r4t"></b><p data-t="r4p"></p></div></li>
+          <li><span data-ico="wallet"></span><div><b data-t="r5t"></b><p data-t="r5p"></p></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="destinations">
+      <div class="enveloppe">
+        <p class="surtitre" data-t="destSur"></p>
+        <h2 data-t="destTitre"></h2>
+        <div class="destinations" id="destinations-liste"></div>
+      </div>
+    </section>
+
+    <!-- Plus tard : un espace pour une publicité ou un partenaire pourrait aller ici. -->
+
+    <section class="section douce" id="faq">
+      <div class="enveloppe etroit">
+        <p class="surtitre" data-t="faqSur"></p>
+        <h2 data-t="faqTitre"></h2>
+        <div class="faq" id="faq-liste"></div>
+      </div>
+    </section>
+
+    <section class="appel">
+      <div class="enveloppe appel-int">
+        <h2 data-t="appelTitre"></h2>
+        <p data-t="appelTexte"></p>
+        <a class="bouton grand blanc" data-demande><span data-t="cta"></span><span data-ico="arrow-right"></span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pied">
+    <div class="enveloppe pied-int">
+      <span class="marque"><span class="marque-ico" data-ico="compass"></span><span data-marque></span></span>
+      <span><span data-t="pied"></span> · <a href="https://unsplash.com" target="_blank" rel="noopener" data-t="credits"></a></span>
+    </div>
+  </footer>
+  <script type="module" src="../js/site.js"></script>
+</body>
+</html>

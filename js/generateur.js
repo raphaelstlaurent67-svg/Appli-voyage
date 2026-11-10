@@ -354,9 +354,10 @@ async function installerAppli(nom) {
 // ---------- Fiche client : la demande remplie par le client ----------
 const NOM_STYLE = { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' };
 const jolieDate = (s, opts = { day: 'numeric', month: 'short' }) => (s ? new Date(`${s}T12:00:00`).toLocaleDateString('fr-CA', opts) : '');
-const lienFiche = (courriel, langue = '') => {
+const lienFiche = (courriel, langue = '', tel = '') => {
   const u = new URL('../demande.html', location.href);
   if (courriel) u.searchParams.set('pour', courriel);
+  if (tel) u.searchParams.set('tel', tel.replace(/[^\d+]/g, ''));
   if (langue) u.searchParams.set('lang', langue);
   return u.href;
 };
@@ -487,6 +488,7 @@ async function pageDemande(code) {
 
 async function pageDemandes() {
   const courriel = await db.lireReglage('courrielFiche', '');
+  const telFiche = await db.lireReglage('telFiche', '');
   const recues = etat.voyages.filter((v) => v.demande).sort((a, b) => (b.demande.envoyeLe || '').localeCompare(a.demande.envoyeLe || ''));
   app.innerHTML = `
     ${entete('Fiche client', 'Le questionnaire que tu envoies à un client : ses pays, ses dates, ses envies. Sa réponse crée le voyage ici.')}
@@ -494,13 +496,14 @@ async function pageDemandes() {
       <section class="panel">
         <div class="etape-titre"><span class="gros-num">1</span><div><h3>Envoie la fiche au client</h3><p>Copie ce lien et envoie-le par Messenger, texto ou courriel.</p></div></div>
         <label class="champ"><span>Ton courriel <small>optionnel : le client pourra te répondre en un clic</small></span><input id="courriel" type="email" value="${esc(courriel)}" placeholder="toi@exemple.com"></label>
+        <label class="champ"><span>Ton numéro de cell <small>optionnel : le client pourra te l'envoyer par texto en un clic</small></span><input id="tel-fiche" type="tel" value="${esc(telFiche)}" placeholder="514 555-1234"></label>
         <label class="champ"><span>Langue de la fiche <small>le client peut aussi changer en haut de la fiche</small></span><select id="langue-fiche">
           <option value="">Selon son téléphone (français ou anglais)</option><option value="fr">Français</option><option value="en">English</option>
         </select></label>
-        <div class="lien-fiche"><code id="lien">${esc(lienFiche(courriel))}</code></div>
+        <div class="lien-fiche"><code id="lien">${esc(lienFiche(courriel, '', telFiche))}</code></div>
         <div class="rangee-btn">
           <button class="btn" id="copier">${icone('copy', { taille: 15 })} Copier le lien</button>
-          <a class="btn ghost" id="voir" href="${esc(lienFiche(courriel))}" target="_blank" rel="noopener">${icone('eye', { taille: 15 })} Voir la fiche</a>
+          <a class="btn ghost" id="voir" href="${esc(lienFiche(courriel, '', telFiche))}" target="_blank" rel="noopener">${icone('eye', { taille: 15 })} Voir la fiche</a>
           <a class="btn ghost" href="${esc(lienFiche(courriel).replace('demande.html', 'demande.html?installer=1').replace('html?installer=1?', 'html?installer=1&'))}" target="_blank" rel="noopener">${icone('download', { taille: 15 })} Mettre la fiche sur mon ordi</a>
         </div>
       </section>
@@ -516,7 +519,10 @@ async function pageDemandes() {
       </tbody></table></section>` : '<p class="vide-ligne">Aucune demande pour l\'instant.</p>'}`;
   const champ = app.querySelector('#courriel');
   const langue = app.querySelector('#langue-fiche');
-  const lienActuel = () => lienFiche(champ.value.trim(), langue.value);
+  const champTel = app.querySelector('#tel-fiche');
+  const lienActuel = () => lienFiche(champ.value.trim(), langue.value, champTel.value.trim());
+  champTel.oninput = () => maj();
+  champTel.onchange = () => db.ecrireReglage('telFiche', champTel.value.trim());
   const maj = () => { const l = lienActuel(); app.querySelector('#lien').textContent = l; app.querySelector('#voir').href = l; };
   champ.oninput = maj;
   langue.onchange = maj;
@@ -524,6 +530,7 @@ async function pageDemandes() {
   app.querySelector('#copier').onclick = async () => {
     const l = lienActuel();
     db.ecrireReglage('courrielFiche', champ.value.trim());
+    db.ecrireReglage('telFiche', champTel.value.trim());
     try { await navigator.clipboard.writeText(l); toast('Lien copié'); } catch (_) { prompt('Copie ce lien :', l); }
   };
   app.querySelector('#ouvrir').onclick = () => {
