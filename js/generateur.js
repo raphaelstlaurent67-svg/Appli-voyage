@@ -1246,6 +1246,8 @@ function pageDonnees() {
 }
 
 // ---------- Démarrage ----------
+// Permet d'installer le Studio comme une appli sur l'ordinateur (et de l'ouvrir sans internet).
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 window.addEventListener('hashchange', router);
 app.addEventListener('dragstart', (ev) => {
   const e = ev.target.closest?.('[data-endroit]');
