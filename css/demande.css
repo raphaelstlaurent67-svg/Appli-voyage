@@ -311,7 +311,8 @@ button:disabled { cursor: default; }
 }
 .grille-duree button:hover, .durees-longues button:hover { border-color: var(--encre); }
 .grille-duree button.choisi, .durees-longues button.choisi { background: var(--encre); border-color: var(--encre); color: #fff; }
-.grille-duree .plus { font-size: 14px; }
+.grille-duree .plus { font-size: 14px; grid-column: 1 / -1; }
+.vide-duree { grid-column: span 3; }
 .durees-longues { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 420px; margin-top: 10px; }
 .durees-longues button { font-size: 14px; font-weight: 600; padding: 0 6px; }
 .autre-duree {
