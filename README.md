@@ -12,7 +12,24 @@ Appli pour noter rapidement, depuis le téléphone, les hébergements, restos, a
 - **Fonctionne sans internet** : les données sont gardées sur le téléphone.
 - **Copie de sauvegarde** : un fichier à garder dans Google Drive, iCloud ou ses courriels, et à restaurer au besoin.
 
+- **Position GPS automatique** : elle se prend toute seule quand on ajoute un nouvel endroit (on peut la retirer si on n'est pas sur place).
+
 La sauvegarde en ligne automatique viendra dans une prochaine version.
+
+## Générateur de voyages (`generateur.html`)
+
+Page séparée, faite pour l'ordinateur, pour assembler les endroits en voyages jour par jour. Seul Raph l'utilise.
+
+- **Mes données** : importer le fichier de sauvegarde fait sur le cellulaire (Réglages > Faire une copie de sauvegarde).
+- **Étapes** : pays, ville et nombre de jours, dans l'ordre. Les jours se créent tout seuls.
+- **Jours** : glisser des endroits de la liste de gauche vers un jour, ou cliquer sur « + ». Titre du jour et conseil pour le client.
+- **Carte** (OpenStreetMap, gratuite) et **résumé** : nombre de jours et d'endroits, coût estimé, prix de vente.
+- **Réutiliser** : dupliquer un voyage, ou le marquer « Modèle réutilisable ».
+- **Page client** : « Aperçu à vendre » (noms, adresses et liens cachés, photos floues, sauf le jour 1 donné en exemple) ou « Version complète ». Les notes privées ne sont jamais montrées. Imprimer en PDF ou télécharger un seul fichier .html à envoyer.
+- **Contributeurs** : la liste des personnes qui ajoutent des endroits, ce qu'elles ont gagné, payé et ce qui leur est dû, et à quel point elles sont proches de chaque récompense (ville complète, voyage à rabais, part des ventes).
+  - Importer leur fichier dans « Mes données » en choisissant leur nom : leurs endroits arrivent dans « À valider », triés du plus complet au moins complet.
+  - Accepter ou refuser (avec une raison), un par un ou « ceux à 80 % ou plus ». Seuls les endroits acceptés servent dans les voyages.
+  - Noter chaque paiement fait (le Studio ne fait pas le virement). Les règles (1 $ par endroit, bonus de ville, pourcentage…) se changent dans l'onglet « Règles ».
 
 ## Modifier les listes
 
@@ -21,15 +38,19 @@ La sauvegarde en ligne automatique viendra dans une prochaine version.
 
 ## Essayer l'appli sur l'ordinateur
 
-Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localhost:8000 dans le navigateur.
+Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localhost:8000 dans le navigateur (le générateur : http://localhost:8000/generateur.html).
 
 ## Organisation des fichiers
 
 - `index.html` : la page de l'appli
 - `css/style.css` : l'apparence
 - `js/app.js` : les écrans (liste, formulaire, fiche, villes, réglages)
+- `generateur.html`, `js/generateur.js`, `css/generateur.css` : le générateur de voyages (« Studio »)
+- `css/client.css` : l'apparence de la page envoyée au client (aussi copiée dans la page téléchargée)
+- `js/icones.js` : les icônes (Lucide, licence ISC dans `vendor/LUCIDE-LICENSE`)
+- `vendor/leaflet/` : la carte (Leaflet, licence BSD), incluse pour ne dépendre d'aucun autre site
 - `js/db.js` : l'enregistrement des données sur le téléphone et la copie de sauvegarde
 - `js/taxonomie.js` : les catégories, monnaies et façons de joindre un endroit
 - `js/lieux.js` : les pays d'Asie et leurs villes
-- `fonts/` : les polices Bricolage Grotesque et Figtree (licence SIL Open Font), incluses pour marcher sans internet
+- `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet

@@ -1,6 +1,7 @@
 import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES } from './taxonomie.js';
 import { VILLES, PAYS_ASIE, trierFr } from './lieux.js';
 import * as db from './db.js';
+import { icone, iconeCat } from './icones.js';
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -218,9 +219,9 @@ function filtrerFeuille(texte) {
 
 const enteteFeuille = (titre, retour) => `
   <div class="feuille-entete">
-    ${retour ? `<button type="button" class="rond" data-retour="${retour}" aria-label="Retour">‹</button>` : '<span class="rond vide-rond"></span>'}
+    ${retour ? `<button type="button" class="rond" data-retour="${retour}" aria-label="Retour">${icone('chevron-left')}</button>` : '<span class="rond vide-rond"></span>'}
     <h2>${titre}</h2>
-    <button type="button" class="rond" data-fermer aria-label="Fermer">✕</button>
+    <button type="button" class="rond" data-fermer aria-label="Fermer">${icone('x')}</button>
   </div>`;
 
 // Choix catégorie > type > sous-type, un écran à la fois.
@@ -233,7 +234,7 @@ function choisirCategorie(f, quandFini) {
     <div class="tuiles">
       ${Object.entries(TAXONOMIE).map(([k, c]) => `
         <button type="button" class="tuile ${k === f.categorie ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat="${k}">
-          <span class="tuile-icone">${c.icone}</span>
+          <span class="tuile-icone">${iconeCat(k, { taille: 24 })}</span>
           <span class="tuile-nom">${esc(c.nom)}</span>
           <span class="tuile-sous">${Object.keys(c.types).length ? `${Object.keys(c.types).length} types` : 'Pas sûr où le classer'}</span>
         </button>`).join('')}
@@ -242,7 +243,7 @@ function choisirCategorie(f, quandFini) {
   const etape2 = () => {
     const c = TAXONOMIE[cat];
     ouvrirFeuille(`
-      ${enteteFeuille(`${c.icone} ${esc(c.nom)}`, '1')}
+      ${enteteFeuille(esc(c.nom), '1')}
       <div class="tuiles" style="--c:${c.couleur}">
         ${Object.entries(c.types).map(([t, sous]) => `
           <button type="button" class="tuile ${cat === f.categorie && t === f.type ? 'choisie' : ''}" data-type="${esc(t)}">
@@ -256,13 +257,13 @@ function choisirCategorie(f, quandFini) {
     const c = TAXONOMIE[cat];
     const sous = c.types[type] || [];
     ouvrirFeuille(`
-      ${enteteFeuille(`${c.icone} ${esc(type)}`, '2')}
+      ${enteteFeuille(esc(type), '2')}
       <div class="tuiles tuiles-petites" style="--c:${c.couleur}">
         ${sous.map((s) => `
           <button type="button" class="tuile ${type === f.type && s === f.sousType ? 'choisie' : ''}" data-sous="${esc(s)}">
             <span class="tuile-nom">${esc(s)}</span>
           </button>`).join('')}
-        <button type="button" class="tuile tuile-autre" data-autre><span class="tuile-nom">+ Autre</span></button>
+        <button type="button" class="tuile tuile-autre" data-autre><span class="tuile-nom">${icone('plus', { taille: 16 })} Autre</span></button>
       </div>
       <div class="autre-saisie" hidden>
         <input id="autre-nom" placeholder="Nom du sous-type" autocomplete="off">
@@ -310,8 +311,8 @@ function choisirDansListe({ titre, valeurs, choisie, ajout, retour, quandChoisi,
     ${enteteFeuille(esc(titre), retour ? 'liste' : '')}
     <input class="feuille-recherche" type="search" placeholder="${esc(placeholder)}" autocomplete="off" autocapitalize="words" enterkeyhint="go">
     <ul class="liste-choix">
-      ${valeurs.map((v) => `<li data-nom="${esc(etiquette(v))}"><button type="button" class="ligne ${v === choisie ? 'choisie' : ''}" data-valeur="${esc(v)}">${esc(etiquette(v))}${v === choisie ? '<span>✓</span>' : ''}</button></li>`).join('')}
-      ${ajout ? '<li><button type="button" class="ligne ligne-ajout" data-ajouter="" hidden>+ Ajouter « <b></b> »</button></li>' : ''}
+      ${valeurs.map((v) => `<li data-nom="${esc(etiquette(v))}"><button type="button" class="ligne ${v === choisie ? 'choisie' : ''}" data-valeur="${esc(v)}">${esc(etiquette(v))}${v === choisie ? icone('check', { taille: 18 }) : ''}</button></li>`).join('')}
+      ${ajout ? `<li><button type="button" class="ligne ligne-ajout" data-ajouter="" hidden>${icone('plus', { taille: 18 })}<span>Ajouter « <b></b> »</span></button></li>` : ''}
     </ul>
     <p class="feuille-vide" hidden>Aucun résultat.</p>`, (ev) => {
     const b = ev.target.closest('button');
@@ -399,41 +400,48 @@ async function pageListe() {
   const jours = derniere ? Math.floor((Date.now() - new Date(derniere)) / 864e5) : null;
   const rappel = etat.endroits.length >= 5 && (jours === null || jours >= 7);
 
+  const nb = etat.endroits.length;
   app.innerHTML = `
-    <header class="hero">
-      <p class="hero-sur">Carnet de voyage · Asie</p>
-      <h1>Mes endroits</h1>
-      <p class="hero-stats">${etat.endroits.length} endroit${etat.endroits.length > 1 ? 's' : ''} · ${nbPays} pays</p>
-      <div class="hero-recherche">
-        <input type="search" id="recherche" placeholder="Chercher un nom, une ville…" value="${esc(f.recherche)}" autocomplete="off">
+    <header class="tete">
+      <div class="pilule-recherche">
+        ${icone('search', { taille: 18, epaisseur: 2.4 })}
+        <div class="pilule-textes">
+          <input type="search" id="recherche" placeholder="Chercher un endroit" value="${esc(f.recherche)}" autocomplete="off" aria-label="Chercher un endroit">
+          <small>${nb ? `${nb} endroit${nb > 1 ? 's' : ''} · ${nbPays} pays` : 'Nom, ville, type, notes…'}</small>
+        </div>
+        <button class="pilule-filtres ${nbFiltres ? 'actif' : ''}" id="btn-filtres" aria-label="Filtres">${icone('sliders-horizontal', { taille: 18 })}${nbFiltres ? `<i>${nbFiltres}</i>` : ''}</button>
       </div>
+      <nav class="onglets-cats" aria-label="Catégories">
+        <button class="onglet-cat ${!f.categorie ? 'choisie' : ''}" data-cat-filtre="">${icone('layout-grid', { taille: 22, epaisseur: 1.7 })}<span>Tout</span></button>
+        ${Object.entries(TAXONOMIE).map(([k, c]) => `<button class="onglet-cat ${f.categorie === k ? 'choisie' : ''}" data-cat-filtre="${k}" ${compteCat(k) ? '' : 'data-vide'}>${iconeCat(k, { taille: 22, epaisseur: 1.7 })}<span>${esc(c.nom)}</span></button>`).join('')}
+      </nav>
     </header>
-    ${rappel ? `<a class="alerte" href="#/reglages">💾 ${jours === null ? "Tu n'as jamais fait de copie de sauvegarde." : `Dernière copie de sauvegarde il y a ${jours} jours.`} Touche ici pour en faire une.</a>` : ''}
-    <div class="defile-cats" role="tablist">
-      <button class="cat-puce ${!f.categorie ? 'choisie' : ''}" data-cat-filtre="">Tout <span>${etat.endroits.length}</span></button>
-      ${Object.entries(TAXONOMIE).map(([k, c]) => `<button class="cat-puce ${f.categorie === k ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat-filtre="${k}">${c.icone} ${esc(c.nom)} <span>${compteCat(k)}</span></button>`).join('')}
-    </div>
-    <div class="barre-outils">
-      <button class="bouton-secondaire ${nbFiltres ? 'actif' : ''}" id="btn-filtres">⚙︎ Filtres${nbFiltres ? ` · ${nbFiltres}` : ''}</button>
-      <select id="tri" aria-label="Trier">
-        ${options([['recent', 'Plus récents'], ['prixCroissant', 'Moins cher'], ['prixDecroissant', 'Plus cher'], ['luxe', 'Plus luxueux'], ['coeur', 'Coups de cœur'], ['nom', 'Nom (A à Z)']], f.tri, 'Trier par…')}
-      </select>
-    </div>
     <div class="filtres ${nbFiltres ? 'ouvert' : ''}" id="filtres">
-      <select data-filtre="pays">${options(paysConnus, f.pays, 'Tous les pays')}</select>
-      <select data-filtre="ville">${options(villesConnues, f.ville, 'Toutes les villes')}</select>
-      <select data-filtre="prix">${options([['1', '$'], ['2', '$$'], ['3', '$$$'], ['4', '$$$$']], f.prix, 'Tous les budgets')}</select>
-      <select data-filtre="type" ${f.categorie ? '' : 'disabled'}>${options(typesConnus, f.type, f.categorie ? 'Tous les types' : 'Type : choisis une catégorie')}</select>
+      <div class="filtres-grille">
+        <label><span>Pays</span><select data-filtre="pays">${options(paysConnus, f.pays, 'Tous')}</select></label>
+        <label><span>Ville</span><select data-filtre="ville">${options(villesConnues, f.ville, 'Toutes')}</select></label>
+        <label><span>Budget</span><select data-filtre="prix">${options([['1', '$'], ['2', '$$'], ['3', '$$$'], ['4', '$$$$']], f.prix, 'Tous')}</select></label>
+        <label><span>Type</span><select data-filtre="type" ${f.categorie ? '' : 'disabled'}>${options(typesConnus, f.type, f.categorie ? 'Tous' : 'Choisis une catégorie')}</select></label>
+      </div>
       ${nbFiltres ? '<button class="lien" id="effacer-filtres">Effacer les filtres</button>' : ''}
+    </div>
+    ${rappel ? `<a class="alerte" href="#/reglages">${icone('save', { taille: 18 })}<span>${jours === null ? "Tu n'as jamais fait de copie de sauvegarde." : `Dernière copie il y a ${jours} jours.`} <b>Faire une copie</b></span>${icone('chevron-right', { taille: 18 })}</a>` : ''}
+    <div class="barre-liste" ${nb ? '' : 'hidden'}>
+      <span id="compte"></span>
+      <label class="tri">${icone('arrow-up-down', { taille: 15 })}<select id="tri" aria-label="Trier">
+        ${options([['recent', 'Plus récents'], ['prixCroissant', 'Moins cher'], ['prixDecroissant', 'Plus cher'], ['luxe', 'Plus luxueux'], ['coeur', 'Coups de cœur'], ['nom', 'Nom (A à Z)']], f.tri, 'Trier')}
+      </select></label>
     </div>
     <ul class="cartes" id="cartes"></ul>`;
 
   const remplir = () => {
     const l = endroitsFiltres();
     const ul = app.querySelector('#cartes');
-    ul.innerHTML = l.map(carte).join('') || `<li class="vide">${etat.endroits.length
-      ? 'Aucun endroit ne correspond à ta recherche.'
-      : '<span class="vide-icone">🧭</span><b>Ton carnet est vide.</b><br>Touche le bouton <b>+</b> pour ajouter ton premier endroit.'}</li>`;
+    const compte = app.querySelector('#compte');
+    if (compte) compte.textContent = `${l.length} endroit${l.length > 1 ? 's' : ''}`;
+    ul.innerHTML = l.map(carte).join('') || (etat.endroits.length
+      ? `<li class="vide"><span class="vide-icone">${icone('search', { taille: 28 })}</span><b>Aucun résultat</b><span>Essaie un autre mot ou enlève des filtres.</span></li>`
+      : `<li class="vide"><span class="vide-icone">${icone('map-pin', { taille: 30 })}</span><b>Ajoute ton premier endroit</b><span>Un hôtel, un resto, une activité : note-le en 30 secondes pendant que tu y es.</span><a class="bouton-principal bouton-vide" href="#/ajouter">${icone('plus', { taille: 18 })} Ajouter un endroit</a></li>`);
     afficherPhotos(ul);
   };
   remplir();
@@ -455,31 +463,45 @@ async function pageListe() {
   });
   const eff = app.querySelector('#effacer-filtres');
   if (eff) eff.onclick = () => { Object.assign(etat.filtres, { pays: '', ville: '', prix: '', type: '' }); rafraichir(); };
-  const choisie = app.querySelector('.cat-puce.choisie');
+  const choisie = app.querySelector('.onglet-cat.choisie');
   if (choisie && choisie.dataset.catFiltre) choisie.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
+// 28000 -> « 28 000 » (garde le texte tel quel si ce n'est pas un nombre).
+function fmtMontant(m) {
+  const n = parseFloat(String(m ?? '').replace(',', '.'));
+  return Number.isFinite(n) ? n.toLocaleString('fr-CA', { maximumFractionDigits: 2 }) : String(m ?? '');
+}
+
+function prixHtml(n) {
+  if (!n) return '';
+  return `<span class="dollars" aria-label="Budget ${n} sur 4"><b>${'$'.repeat(n)}</b>${'$'.repeat(4 - n)}</span>`;
+}
+
 function carte(e) {
-  const cat = TAXONOMIE[e.categorie] || { icone: '📍', couleur: '#64748b', nom: '' };
-  const sousTitre = [e.type, e.sousType].filter(Boolean).join(' · ');
+  const cat = TAXONOMIE[e.categorie] || TAXONOMIE.autre;
+  const sousTitre = [e.sousType || e.type, cat.nom].filter(Boolean)[0];
   const lieu = e.categorie === 'trajets' && (e.depart || e.arrivee)
     ? `${esc(e.depart || '?')} → ${esc(e.arrivee || '?')}`
     : esc([e.ville, e.pays].filter(Boolean).join(', '));
+  const n = e.photos?.length || 0;
   return `
     <li>
       <a class="carte" href="#/endroit/${esc(e.id)}" style="--c:${cat.couleur}">
-        <div class="carte-image ${e.photos?.length ? '' : 'sans-photo'}">
-          ${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : `<span class="carte-icone">${cat.icone}</span>`}
-          <span class="carte-cat">${cat.icone} ${esc(cat.nom)}</span>
-          ${e.coupDeCoeur ? '<span class="carte-coeur" aria-label="Coup de cœur">❤</span>' : ''}
+        <div class="carte-image ${n ? '' : 'sans-photo'}">
+          ${n ? `<img data-photo="${esc(e.photos[0])}" alt="" loading="lazy">` : `<span class="carte-icone">${iconeCat(e.categorie, { taille: 38, epaisseur: 1.4 })}</span>`}
+          ${e.coupDeCoeur ? '<span class="carte-badge">Coup de cœur</span>' : ''}
+          ${e.coupDeCoeur ? `<span class="carte-coeur" aria-label="Coup de cœur">${icone('heart', { taille: 22 })}</span>` : ''}
+          ${n > 1 ? `<span class="carte-nb">${icone('camera', { taille: 13 })} ${n}</span>` : ''}
         </div>
         <div class="carte-corps">
-          <div class="carte-nom">${esc(e.nom)}</div>
-          ${sousTitre ? `<div class="carte-sous">${esc(sousTitre)}</div>` : ''}
-          <div class="carte-bas">
-            <span class="carte-lieu">${lieu ? `📍 ${lieu}` : ''}</span>
-            <span class="carte-cotes">${e.prix ? `<b>${dollars(e.prix)}</b>` : ''}${e.confort ? `<span>${e.confort}★</span>` : ''}</span>
+          <div class="carte-ligne">
+            <span class="carte-nom">${esc(e.nom)}</span>
+            ${e.confort ? `<span class="carte-note">${icone('star', { taille: 13 })}${e.confort}</span>` : ''}
           </div>
+          <div class="carte-sous">${esc(sousTitre)}</div>
+          ${lieu ? `<div class="carte-sous">${lieu}</div>` : ''}
+          ${e.prix || e.montant ? `<div class="carte-prix">${prixHtml(e.prix)}${e.montant ? `<span>${esc(fmtMontant(e.montant))} ${esc(e.devise || '')}</span>` : ''}</div>` : ''}
         </div>
       </a>
     </li>`;
@@ -489,41 +511,45 @@ function carte(e) {
 async function pageFiche(id) {
   const e = etat.endroits.find((x) => x.id === id);
   if (!e) return aller('#/');
-  const cat = TAXONOMIE[e.categorie] || { icone: '📍', couleur: '#64748b', nom: '' };
+  const cat = TAXONOMIE[e.categorie] || TAXONOMIE.autre;
   const cad = enCAD(e.montant, e.devise);
   const carteUrl = lienCarte(e);
   const tel = e.telephone ? e.telephone.replace(/[^\d+]/g, '') : '';
   const contacts = CONTACTS.filter(([k]) => e.contacts?.[k]).map(([k, lib]) => {
     const lien = lienContact(k, e.contacts[k]);
-    return `<li><span class="etiquette">${esc(lib)}</span>${lien ? `<a href="${esc(lien)}" target="_blank" rel="noopener">${esc(e.contacts[k])}</a>` : `<span>${esc(e.contacts[k])}</span>`}</li>`;
+    return `<li>${icone(k === 'email' ? 'message-circle' : k === 'whatsapp' ? 'phone' : 'link', { taille: 20 })}<div><span class="etiquette">${esc(lib)}</span>${lien ? `<a href="${esc(lien)}" target="_blank" rel="noopener">${esc(e.contacts[k])}</a>` : `<span>${esc(e.contacts[k])}</span>`}</div></li>`;
   }).join('');
   const photos = e.photos || [];
 
+  const ligne = (ico, etiquette, contenu) => `<li>${icone(ico, { taille: 20 })}<div><span class="etiquette">${etiquette}</span>${contenu}</div></li>`;
   app.innerHTML = `
     <div class="fiche-haut" style="--c:${cat.couleur}">
-      ${photos.length ? `<div class="galerie">${photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : `<div class="fiche-icone">${cat.icone}</div>`}
+      ${photos.length ? `<div class="galerie" id="galerie">${photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : `<div class="fiche-icone">${iconeCat(e.categorie, { taille: 64, epaisseur: 1.2 })}</div>`}
       <div class="fiche-boutons">
-        <a class="rond rond-flottant" href="#/" aria-label="Retour">‹</a>
-        <a class="pilule-flottante" href="#/modifier/${esc(e.id)}">Modifier</a>
+        <a class="rond rond-flottant" href="#/" aria-label="Retour">${icone('chevron-left', { taille: 20, epaisseur: 2.4 })}</a>
+        <a class="rond rond-flottant" href="#/modifier/${esc(e.id)}" aria-label="Modifier">${icone('pencil', { taille: 18 })}</a>
       </div>
-      ${photos.length > 1 ? `<span class="galerie-compte">${photos.length} photos</span>` : ''}
+      ${photos.length > 1 ? `<span class="galerie-compte" id="galerie-compte">1 / ${photos.length}</span>` : ''}
     </div>
     <article class="fiche" style="--c:${cat.couleur}">
-      <div class="chemin"><span class="chemin-cat">${cat.icone} ${esc(cat.nom)}</span>${e.type ? ` › ${esc(e.type)}` : ''}${e.sousType ? ` › ${esc(e.sousType)}` : ''}</div>
-      <h1>${esc(e.nom)}${e.coupDeCoeur ? ' <span class="coeur">❤</span>' : ''}</h1>
-      <p class="lieu">${esc([e.ville, e.pays].filter(Boolean).join(', '))}</p>
+      <p class="chemin">${iconeCat(e.categorie, { taille: 15 })}<span>${esc([cat.nom, e.type, e.sousType].filter(Boolean).join(' · '))}</span></p>
+      <h1>${esc(e.nom)}</h1>
+      <p class="lieu">${esc(e.categorie === 'trajets' && (e.depart || e.arrivee) ? `${e.depart || '?'} → ${e.arrivee || '?'}` : [e.ville, e.pays].filter(Boolean).join(', '))}</p>
 
-      <div class="pastilles">
-        ${e.prix ? `<span class="pastille"><small>Prix</small>${dollars(e.prix)}</span>` : ''}
-        ${e.confort ? `<span class="pastille"><small>Confort</small>${e.confort}/5</span>` : ''}
-        ${e.montant ? `<span class="pastille"><small>Prix réel</small>${esc(e.montant)} ${esc(e.devise)}${cad != null && e.devise !== 'CAD' ? ` <em>≈ ${formatCAD(cad)}</em>` : ''}</span>` : ''}
-      </div>
+      ${e.coupDeCoeur || e.prix || e.confort ? `
+      <div class="bandeau-cotes">
+        ${e.coupDeCoeur ? `<div class="cote cote-coeur">${icone('heart', { taille: 22 })}<span>Coup de cœur</span></div>` : ''}
+        ${e.prix ? `<div class="cote"><b>${'$'.repeat(e.prix)}</b><span>Budget</span></div>` : ''}
+        ${e.confort ? `<div class="cote"><b>${e.confort}${icone('star', { taille: 14 })}</b><span>Confort</span></div>` : ''}
+      </div>` : ''}
+
+      ${e.montant ? `<p class="prix-reel"><b>${esc(fmtMontant(e.montant))} ${esc(e.devise)}</b>${cad != null && e.devise !== 'CAD' ? ` <span>≈ ${formatCAD(cad)}</span>` : ''}</p>` : ''}
 
       <div class="actions">
-        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>📞</span>Appeler</a>` : ''}
-        ${carteUrl ? `<a class="action" href="${esc(carteUrl)}" target="_blank" rel="noopener"><span>🗺️</span>Carte</a>` : ''}
-        ${e.contacts?.whatsapp ? `<a class="action" href="${esc(lienContact('whatsapp', e.contacts.whatsapp))}" target="_blank" rel="noopener"><span>💬</span>WhatsApp</a>` : ''}
-        ${e.contacts?.site ? `<a class="action" href="${esc(lienWeb(e.contacts.site))}" target="_blank" rel="noopener"><span>🌐</span>Site web</a>` : ''}
+        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a>` : ''}
+        ${carteUrl ? `<a class="action" href="${esc(carteUrl)}" target="_blank" rel="noopener"><span>${icone('map')}</span>Carte</a>` : ''}
+        ${e.contacts?.whatsapp ? `<a class="action" href="${esc(lienContact('whatsapp', e.contacts.whatsapp))}" target="_blank" rel="noopener"><span>${icone('message-circle')}</span>WhatsApp</a>` : ''}
+        ${e.contacts?.site ? `<a class="action" href="${esc(lienWeb(e.contacts.site))}" target="_blank" rel="noopener"><span>${icone('globe')}</span>Site web</a>` : ''}
       </div>
 
       ${e.categorie === 'trajets' && (e.depart || e.arrivee || e.duree) ? `
@@ -531,27 +557,28 @@ async function pageFiche(id) {
           <h2>Le trajet</h2>
           <div class="trajet">
             <div><span class="etiquette">Départ</span><b>${esc(e.depart || '—')}</b></div>
-            <div class="trajet-fleche">→<small>${esc(e.duree || '')}</small></div>
+            <div class="trajet-fleche">${icone('arrow-right', { taille: 22 })}<small>${esc(e.duree || '')}</small></div>
             <div><span class="etiquette">Arrivée</span><b>${esc(e.arrivee || '—')}</b></div>
           </div>
         </section>` : ''}
 
-      ${e.description ? `<section class="bloc-fiche"><h2>Ce que fait l'endroit</h2><p class="texte">${esc(e.description)}</p></section>` : ''}
+      ${e.description ? `<section class="bloc-fiche"><h2>À propos</h2><p class="texte">${esc(e.description)}</p></section>` : ''}
 
       <section class="bloc-fiche">
         <h2>Coordonnées</h2>
         <ul class="details">
-          ${e.adresse ? `<li><span class="etiquette">Adresse</span><span>${esc(e.adresse)}</span></li>` : ''}
-          ${e.telephone ? `<li><span class="etiquette">Téléphone</span><a href="tel:${esc(tel)}">${esc(e.telephone)}</a></li>` : ''}
-          ${carteUrl ? `<li><span class="etiquette">Google Maps</span><a href="${esc(carteUrl)}" target="_blank" rel="noopener">Ouvrir la carte</a></li>` : ''}
+          ${e.adresse ? ligne('map-pin', 'Adresse', `<span>${esc(e.adresse)}</span>`) : ''}
+          ${e.telephone ? ligne('phone', 'Téléphone', `<a href="tel:${esc(tel)}">${esc(e.telephone)}</a>`) : ''}
+          ${carteUrl ? ligne('map', 'Carte', `<a href="${esc(carteUrl)}" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>`) : ''}
+          ${e.lat ? ligne('locate-fixed', 'Position GPS', `<span>${e.lat}, ${e.lng}</span>`) : ''}
           ${contacts}
         </ul>
       </section>
 
-      ${e.notes ? `<section class="bloc-fiche"><h2>🔒 Mes notes privées</h2><p class="texte notes">${esc(e.notes)}</p></section>` : ''}
+      ${e.notes ? `<section class="bloc-fiche"><h2>${icone('lock', { taille: 17 })} Mes notes privées</h2><p class="texte notes">${esc(e.notes)}</p></section>` : ''}
 
-      <p class="petit">${e.verifieLe ? `✓ Vérifié le ${esc(e.verifieLe)}` : 'Pas de date de vérification'}</p>
-      <button class="bouton-danger" id="supprimer">Supprimer cet endroit</button>
+      <p class="verifie">${e.verifieLe ? `${icone('badge-check', { taille: 16 })} Vérifié le ${esc(new Date(`${e.verifieLe}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }))}` : 'Pas de date de vérification'}</p>
+      <button class="bouton-danger" id="supprimer">${icone('trash-2', { taille: 18 })} Supprimer cet endroit</button>
       <div class="confirmer" id="confirmer" hidden>
         <p>Supprimer « ${esc(e.nom)} » ? C'est définitif.</p>
         <button class="bouton-danger plein" id="oui-supprimer">Oui, supprimer</button>
@@ -559,6 +586,13 @@ async function pageFiche(id) {
       </div>
     </article>`;
 
+  const galerie = app.querySelector('#galerie');
+  if (galerie && photos.length > 1) {
+    galerie.addEventListener('scroll', () => {
+      const i = Math.round(galerie.scrollLeft / galerie.clientWidth) + 1;
+      app.querySelector('#galerie-compte').textContent = `${i} / ${photos.length}`;
+    }, { passive: true });
+  }
   afficherPhotos(app);
   const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
   app.querySelector('#supprimer').onclick = () => demander(true);
@@ -589,7 +623,7 @@ async function pageFormulaire(id) {
 
   app.innerHTML = `
     <header class="entete-form">
-      <a class="rond" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}" aria-label="Annuler">✕</a>
+      <a class="rond" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}" aria-label="Annuler">${icone('x')}</a>
       <h1>${existant ? 'Modifier' : 'Nouvel endroit'}</h1>
       <span class="rond vide-rond"></span>
     </header>
@@ -611,7 +645,7 @@ async function pageFormulaire(id) {
         <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier…"></label>
         <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
         <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Colle le lien partagé par Google Maps"></label>
-        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">📍 Enregistrer ma position actuelle</button>
+        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} Reprendre ma position actuelle</button>
         <p class="aide" id="texte-position"></p>
       </section>
 
@@ -633,7 +667,7 @@ async function pageFormulaire(id) {
 
       <section class="section">
         <label class="interrupteur">
-          <span><b>❤ Coup de cœur</b><small>Un endroit que tu recommandes à coup sûr</small></span>
+          <span><b>${icone('heart', { taille: 18 })} Coup de cœur</b><small>Un endroit que tu recommandes à coup sûr</small></span>
           <input type="checkbox" name="coupDeCoeur" ${f.coupDeCoeur ? 'checked' : ''}>
           <i aria-hidden="true"></i>
         </label>
@@ -642,13 +676,13 @@ async function pageFormulaire(id) {
       <section class="section">
         <h2 class="section-titre">Photos</h2>
         <div class="photos" id="photos"></div>
-        <label class="bouton-secondaire bouton-photo">📷 Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
+        <label class="bouton-secondaire bouton-photo">${icone('camera', { taille: 20 })} Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
       </section>
 
       <section class="section">
         <h2 class="section-titre">Notes</h2>
         <label class="champ"><span>Ce que fait l'endroit</span><textarea name="description" rows="3" placeholder="Visible par le client">${esc(f.description)}</textarea></label>
-        <label class="champ champ-prive"><span>🔒 Mes notes privées <small>jamais montrées au client</small></span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
+        <label class="champ champ-prive"><span>${icone('lock', { taille: 15 })} Mes notes privées <small>jamais montrées au client</small></span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
         <label class="champ"><span>Vérifié le</span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
       </section>
 
@@ -669,20 +703,20 @@ async function pageFormulaire(id) {
     const c = TAXONOMIE[f.categorie];
     const b = app.querySelector('#choix-categorie');
     if (!c) {
-      b.innerHTML = '<span class="selecteur-icone">＋</span><span class="selecteur-texte"><b>Choisir une catégorie</b><small>Hébergement, resto, activité, trajet…</small></span><span class="chevron">›</span>';
+      b.innerHTML = `<span class="selecteur-icone">${icone('plus', { taille: 22 })}</span><span class="selecteur-texte"><b>Choisir une catégorie</b><small>Hébergement, resto, activité, trajet…</small></span><span class="chevron">${icone('chevron-right', { taille: 18 })}</span>`;
       b.style.removeProperty('--c');
       b.classList.add('a-remplir');
     } else {
       b.style.setProperty('--c', c.couleur);
       b.classList.remove('a-remplir');
-      b.innerHTML = `<span class="selecteur-icone">${c.icone}</span><span class="selecteur-texte"><b>${esc([f.type, f.sousType].filter(Boolean).join(' › ') || c.nom)}</b><small>${f.type ? esc(c.nom) : 'Catégorie'}</small></span><span class="chevron">Changer</span>`;
+      b.innerHTML = `<span class="selecteur-icone">${iconeCat(f.categorie, { taille: 22 })}</span><span class="selecteur-texte"><b>${esc([f.type, f.sousType].filter(Boolean).join(' › ') || c.nom)}</b><small>${f.type ? esc(c.nom) : 'Catégorie'}</small></span><span class="chevron chevron-texte">Changer</span>`;
     }
     majTrajet();
   }
 
   function majLieu() {
-    app.querySelector('#choix-pays').innerHTML = `<span class="selecteur-texte"><small>Pays</small><b class="${f.pays ? '' : 'vide-txt'}">${esc(f.pays || 'Choisir')}</b></span><span class="chevron">›</span>`;
-    app.querySelector('#choix-ville').innerHTML = `<span class="selecteur-texte"><small>Ville</small><b class="${f.ville ? '' : 'vide-txt'}">${esc(f.ville || 'Choisir')}</b></span><span class="chevron">›</span>`;
+    app.querySelector('#choix-pays').innerHTML = `<span class="selecteur-texte"><small>Pays</small><b class="${f.pays ? '' : 'vide-txt'}">${esc(f.pays || 'Choisir')}</b></span><span class="chevron">${icone('chevron-down', { taille: 16 })}</span>`;
+    app.querySelector('#choix-ville').innerHTML = `<span class="selecteur-texte"><small>Ville</small><b class="${f.ville ? '' : 'vide-txt'}">${esc(f.ville || 'Choisir')}</b></span><span class="chevron">${icone('chevron-down', { taille: 16 })}</span>`;
   }
 
   function majTrajet() {
@@ -759,7 +793,7 @@ async function pageFormulaire(id) {
     const zone = app.querySelector('#photos');
     const existantes = await Promise.all(f.photos.map(async (p) => ({ cle: p, url: await urlPhoto(p) })));
     zone.innerHTML = [...existantes, ...f.nouvellesPhotos].map((p) => `
-      <div class="photo"><img src="${esc(p.url)}" alt=""><button type="button" data-retirer-photo="${esc(p.cle)}" aria-label="Retirer">✕</button></div>`).join('');
+      <div class="photo"><img src="${esc(p.url)}" alt=""><button type="button" data-retirer-photo="${esc(p.cle)}" aria-label="Retirer">${icone('x', { taille: 16, epaisseur: 2.6 })}</button></div>`).join('');
   }
 
   function majConversion() {
@@ -812,30 +846,41 @@ async function pageFormulaire(id) {
     const texte = app.querySelector('#texte-position');
     if (!f.lat) { texte.textContent = ''; return; }
     const url = `https://www.google.com/maps/search/?api=1&query=${f.lat},${f.lng}`;
-    texte.innerHTML = `✓ Position enregistrée${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a>`;
+    texte.innerHTML = `${icone('locate-fixed', { taille: 15 })} Position ${f.positionAuto ? 'prise automatiquement' : 'enregistrée'}${f.precision ? ` (précision ± ${f.precision} m)` : ''} · <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a> · <button type="button" class="lien" id="retirer-position">Retirer</button>`;
+    texte.querySelector('#retirer-position').onclick = () => {
+      delete f.lat; delete f.lng; delete f.precision; delete f.positionAuto;
+      afficherPosition();
+    };
   }
 
-  app.querySelector('#ma-position').addEventListener('click', () => {
+  // auto = true quand on ouvre un nouvel endroit : la position se prend toute seule,
+  // parce qu'on est normalement sur place. On peut la retirer si on n'y est pas.
+  function prendrePosition(auto = false) {
     const texte = app.querySelector('#texte-position');
     if (!navigator.geolocation) { texte.textContent = 'Position non disponible sur cet appareil.'; return; }
-    texte.textContent = 'Recherche de ta position…';
+    texte.textContent = auto ? 'Prise de ta position automatiquement…' : 'Recherche de ta position…';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!document.body.contains(texte)) return;
         f.lat = +pos.coords.latitude.toFixed(6);
         f.lng = +pos.coords.longitude.toFixed(6);
         f.precision = Math.round(pos.coords.accuracy);
+        f.positionAuto = auto;
         afficherPosition();
       },
       (err) => {
+        if (!document.body.contains(texte)) return;
         texte.textContent = err.code === 1
           ? "Ton téléphone a refusé l'accès à la position. Va dans Réglages > Confidentialité > Service de localisation et permets-le pour Safari (ou Chrome)."
           : err.code === 3
             ? 'La position prend trop de temps. Sors à découvert ou réessaie dans un instant.'
             : "Impossible d'obtenir ta position pour le moment. Réessaie dans un instant.";
       },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: auto ? 60000 : 0 },
     );
-  });
+  }
+
+  app.querySelector('#ma-position').addEventListener('click', () => prendrePosition(false));
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -872,6 +917,8 @@ async function pageFormulaire(id) {
   majPhotos();
   majDevises();
   afficherPosition();
+  // Nouvel endroit (sauf un trajet) : position GPS prise automatiquement.
+  if (!existant && !f.lat && f.categorie !== 'trajets') prendrePosition(true);
 }
 
 // ---------- Villes (jours recommandés) ----------
@@ -910,7 +957,7 @@ async function pageVilles() {
             </div>
             <textarea rows="2" placeholder="Notes sur la ville (privé)" data-champ="notes">${esc(info.notes)}</textarea>
           </div>`;
-      }).join('') || '<p class="vide"><span class="vide-icone">🏙️</span>Les villes apparaîtront ici dès que tu auras ajouté des endroits.</p>'}
+      }).join('') || `<p class="vide"><span class="vide-icone">${icone('building-2', { taille: 28 })}</span><b>Pas encore de villes</b><span>Elles apparaîtront ici dès que tu auras ajouté des endroits.</span></p>`}
     </div>`;
 
   app.querySelectorAll('[data-ville]').forEach((bloc) => {
@@ -940,7 +987,7 @@ async function pageReglages() {
     <header class="entete-page"><h1>Réglages</h1></header>
 
     <section class="section">
-      <h2 class="section-titre">💾 Copie de sauvegarde</h2>
+      <h2 class="section-titre">${icone('save', { taille: 20 })} Copie de sauvegarde</h2>
       <p>Pour l'instant, tes données sont gardées <b>sur ce téléphone seulement</b>. Fais une copie de sauvegarde régulièrement et garde-la dans ton Google Drive, iCloud ou tes courriels.</p>
       <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : 'Aucune copie faite pour le moment.'}</p>
       <button class="bouton-principal" id="exporter">Faire une copie de sauvegarde</button>
@@ -948,7 +995,13 @@ async function pageReglages() {
     </section>
 
     <section class="section">
-      <h2 class="section-titre">💱 Taux de change</h2>
+      <h2 class="section-titre">${icone('route', { taille: 20 })} Générateur de voyages</h2>
+      <p class="petit">Pour assembler tes endroits en voyages, jour par jour. Fait pour l'ordinateur, mais marche aussi ici.</p>
+      <a class="bouton-secondaire bouton-bloc" href="generateur.html">Ouvrir le générateur</a>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">${icone('coins', { taille: 20 })} Taux de change</h2>
       <p class="petit">Valeur approximative de 1 unité en dollars canadiens. Sert seulement à afficher l'équivalent en $ CA.</p>
       <div class="taux">
         ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
@@ -956,7 +1009,7 @@ async function pageReglages() {
     </section>
 
     <section class="section">
-      <h2 class="section-titre">📱 Installer sur l'écran d'accueil</h2>
+      <h2 class="section-titre">${icone('download', { taille: 20 })} Installer sur l'écran d'accueil</h2>
       <p class="petit">iPhone : dans Safari, touche le bouton Partager puis « Sur l'écran d'accueil ». Android : dans Chrome, menu ⋮ puis « Installer l'application ».</p>
     </section>`;
 
@@ -1006,6 +1059,7 @@ async function pageReglages() {
 }
 
 // ---------- Démarrage ----------
+document.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = icone(el.dataset.ico, { taille: +(el.dataset.taille || 24), epaisseur: 1.8 }); });
 window.addEventListener('hashchange', router);
 // Le bouton + ouvre d'abord le choix de catégorie par-dessus la page.
 // Si on le referme, on reste où on était ; sinon le formulaire s'ouvre.
