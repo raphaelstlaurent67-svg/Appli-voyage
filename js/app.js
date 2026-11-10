@@ -1,5 +1,7 @@
 import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES } from './taxonomie.js';
-import { VILLES, PAYS_ASIE, trierFr } from './lieux.js';
+import { trierFr } from './lieux.js';
+import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
+import * as sync from './sync.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 
@@ -8,6 +10,7 @@ const etat = {
   endroits: [],
   villes: [],
   taux: { ...TAUX_PAR_DEFAUT },
+  region: { continent: '', pays: '' }, // Réglages > Où je suis
   filtres: { recherche: '', pays: '', ville: '', prix: '', categorie: '', type: '', tri: 'recent' },
 };
 const urlsPhotos = new Map(); // id photo -> URL d'affichage
@@ -111,12 +114,14 @@ function compresserPhoto(fichier) {
   });
 }
 
-// Pays et villes connus : la liste de l'Asie plus ceux déjà utilisés.
+// Pays proposés : ceux du continent choisi dans Réglages (ou tous), plus ceux déjà utilisés là.
 function listePays() {
-  return trierFr(uniques([...PAYS_ASIE, ...etat.endroits.map((e) => e.pays)]));
+  const duContinent = paysDuContinent(etat.region.continent);
+  const utilises = etat.endroits.map((e) => e.pays).filter((p) => !etat.region.continent || duContinent.includes(p));
+  return trierFr(uniques([...duContinent, ...utilises]));
 }
 function listeVilles(pays) {
-  return trierFr(uniques([...(VILLES[pays] || []), ...etat.endroits.filter((e) => e.pays === pays).map((e) => e.ville)]));
+  return trierFr(uniques([...(VILLES_MONDE[pays] || []), ...etat.endroits.filter((e) => e.pays === pays).map((e) => e.ville)]));
 }
 
 // ---------- Feuille qui monte du bas (choix de catégorie, pays, ville) ----------
@@ -328,6 +333,7 @@ async function charger() {
   etat.endroits = (await db.tous('endroits')).map(migrer);
   etat.villes = await db.tous('villes');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
+  etat.region = { continent: '', pays: '', ...(await db.lireReglage('region', {})) };
   try {
     const f = JSON.parse(localStorage.getItem('filtres') || 'null');
     if (f) etat.filtres = { ...etat.filtres, ...f, recherche: '' };
@@ -398,7 +404,8 @@ async function pageListe() {
 
   const derniere = await db.lireReglage('derniereSauvegarde', null);
   const jours = derniere ? Math.floor((Date.now() - new Date(derniere)) / 864e5) : null;
-  const rappel = etat.endroits.length >= 5 && (jours === null || jours >= 7);
+  const envoi = await sync.etat();
+  const rappel = !envoi.branche && etat.endroits.length >= 5 && (jours === null || jours >= 7);
 
   const nb = etat.endroits.length;
   app.innerHTML = `
@@ -425,7 +432,8 @@ async function pageListe() {
       </div>
       ${nbFiltres ? '<button class="lien" id="effacer-filtres">Effacer les filtres</button>' : ''}
     </div>
-    ${rappel ? `<a class="alerte" href="#/reglages">${icone('save', { taille: 18 })}<span>${jours === null ? "Tu n'as jamais fait de copie de sauvegarde." : `Dernière copie il y a ${jours} jours.`} <b>Faire une copie</b></span>${icone('chevron-right', { taille: 18 })}</a>` : ''}
+    ${rappel ? `<a class="alerte" href="#/reglages">${icone('save', { taille: 18 })}<span>${jours === null ? "Tes endroits sont seulement sur ce téléphone." : `Dernière copie il y a ${jours} jours.`} <b>Brancher l'envoi automatique</b></span>${icone('chevron-right', { taille: 18 })}</a>` : ''}
+    ${envoi.branche ? `<p class="etat-envoi" id="etat-envoi">${texteEnvoi(envoi)}</p>` : ''}
     <div class="barre-liste" ${nb ? '' : 'hidden'}>
       <span id="compte"></span>
       <label class="tri">${icone('arrow-up-down', { taille: 15 })}<select id="tri" aria-label="Trier">
@@ -466,6 +474,15 @@ async function pageListe() {
   const choisie = app.querySelector('.onglet-cat.choisie');
   if (choisie && choisie.dataset.catFiltre) choisie.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
+
+// Petite ligne sous la recherche : tout est-il bien parti vers le Studio ?
+function texteEnvoi(e) {
+  if (e.enAttente && e.horsLigne) return `${icone('clock', { taille: 14 })} Pas d'internet : ${e.enAttente} élément${e.enAttente > 1 ? 's' : ''} partira${e.enAttente > 1 ? 'ont' : ''} au Studio dès que possible`;
+  if (e.enAttente && e.erreur) return `${icone('triangle-alert', { taille: 14 })} L'envoi au Studio bloque. <a href="#/reglages">Voir</a>`;
+  if (e.enAttente) return `${icone('refresh-cw', { taille: 14 })} Envoi au Studio… (${e.enAttente})`;
+  return `${icone('check', { taille: 14 })} Tout est envoyé au Studio`;
+}
+sync.surChangement((e) => { const p = document.getElementById('etat-envoi'); if (p) p.innerHTML = texteEnvoi(e); });
 
 // 28000 -> « 28 000 » (garde le texte tel quel si ce n'est pas un nombre).
 function fmtMontant(m) {
@@ -601,6 +618,7 @@ async function pageFiche(id) {
     for (const p of e.photos || []) await db.effacer('photos', p);
     await db.effacer('endroits', e.id);
     etat.endroits = etat.endroits.filter((x) => x.id !== e.id);
+    sync.marquer(sync.cheminEndroit(e), (e.photos || []).map(sync.cheminPhoto));
     toast('Endroit supprimé');
     aller('#/');
   };
@@ -611,9 +629,12 @@ async function pageFormulaire(id) {
   const existant = id ? etat.endroits.find((x) => x.id === id) : null;
   if (id && !existant) return aller('#/');
   const dernierLieu = await db.lireReglage('dernierLieu', {});
+  // Pays fixé dans Réglages > Où je suis : il est déjà rempli, et la dernière ville aussi si elle est dans ce pays.
+  const paysFixe = etat.region.pays;
+  const lieu = paysFixe ? { pays: paysFixe, ville: dernierLieu.pays === paysFixe ? dernierLieu.ville : '', devise: dernierLieu.pays === paysFixe ? dernierLieu.devise : '' } : dernierLieu;
   const f = existant
     ? structuredClone(existant)
-    : { id: db.nouvelId(), pays: dernierLieu.pays || '', ville: dernierLieu.ville || '', devise: dernierLieu.devise || DEVISE_DU_PAYS[dernierLieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
+    : { id: db.nouvelId(), pays: lieu.pays || '', ville: lieu.ville || '', devise: lieu.devise || DEVISE_DU_PAYS[lieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
   brouillon = null;
   f.contacts = f.contacts || {};
   f.photos = f.photos || [];
@@ -633,6 +654,12 @@ async function pageFormulaire(id) {
         <h2 class="section-titre">C'est quoi ?</h2>
         <button type="button" class="selecteur selecteur-cat" id="choix-categorie"></button>
         <label class="champ"><span>Nom</span><input name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Chez Mama Noi"></label>
+      </section>
+
+      <section class="section">
+        <h2 class="section-titre">Photos</h2>
+        <div class="photos" id="photos"></div>
+        <label class="bouton-secondaire bouton-photo">${icone('camera', { taille: 20 })} Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
       </section>
 
       <section class="section">
@@ -674,20 +701,14 @@ async function pageFormulaire(id) {
       </section>
 
       <section class="section">
-        <h2 class="section-titre">Photos</h2>
-        <div class="photos" id="photos"></div>
-        <label class="bouton-secondaire bouton-photo">${icone('camera', { taille: 20 })} Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
-      </section>
-
-      <section class="section">
         <h2 class="section-titre">Notes</h2>
         <label class="champ"><span>Ce que fait l'endroit</span><textarea name="description" rows="3" placeholder="Visible par le client">${esc(f.description)}</textarea></label>
         <label class="champ champ-prive"><span>${icone('lock', { taille: 15 })} Mes notes privées <small>jamais montrées au client</small></span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
-        <label class="champ"><span>Vérifié le</span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
       </section>
 
       <details class="section" ${nbAutresContacts ? 'open' : ''}>
-        <summary>Plus de détails <small>WhatsApp, Instagram, WeChat…</small></summary>
+        <summary>Plus de détails <small>WhatsApp, Instagram, date de visite…</small></summary>
+        <label class="champ"><span>Visité le <small>(rempli tout seul)</small></span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
         ${CONTACTS.map(([k, lib]) => `<label class="champ"><span>${esc(lib)}</span><input data-contact="${k}" value="${esc(f.contacts[k])}"></label>`).join('')}
       </details>
 
@@ -905,6 +926,8 @@ async function pageFormulaire(id) {
     endroit.modifieLe = maintenant;
     await db.ecrire('endroits', endroit);
     etat.endroits = etat.endroits.filter((x) => x.id !== endroit.id).concat(endroit);
+    // Part tout seul vers le Studio (ou dès que le téléphone retrouve internet).
+    sync.marquer(sync.cheminEndroit(endroit), nouvellesPhotos.map((p) => sync.cheminPhoto(p.cle)), photosRetirees.map(sync.cheminPhoto));
     await db.ecrireReglage('dernierLieu', { pays: endroit.pays, ville: endroit.ville, devise: endroit.devise });
     db.demanderStockagePersistant();
     toast(existant ? 'Modifications enregistrées' : 'Endroit ajouté ✓');
@@ -968,6 +991,7 @@ async function pageVilles() {
       v.modifieLe = new Date().toISOString();
       await db.ecrire('villes', v);
       etat.villes = etat.villes.filter((x) => x.id !== v.id).concat(v);
+      sync.marquer(sync.cheminVille(v.id));
       toast('Enregistré');
     };
     const jours = bloc.querySelector('[data-champ=joursRecommandes]');
@@ -983,21 +1007,52 @@ async function pageVilles() {
 async function pageReglages() {
   const derniere = await db.lireReglage('derniereSauvegarde', null);
   const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
+  const envoi = await sync.etat();
+  const cfg = await sync.lireConfig();
+  const r = etat.region;
+  const paysProposes = paysDuContinent(r.continent);
   app.innerHTML = `
     <header class="entete-page"><h1>Réglages</h1></header>
 
     <section class="section">
-      <h2 class="section-titre">${icone('save', { taille: 20 })} Copie de sauvegarde</h2>
-      <p>Pour l'instant, tes données sont gardées <b>sur ce téléphone seulement</b>. Fais une copie de sauvegarde régulièrement et garde-la dans ton Google Drive, iCloud ou tes courriels.</p>
-      <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : 'Aucune copie faite pour le moment.'}</p>
-      <button class="bouton-principal" id="exporter">Faire une copie de sauvegarde</button>
-      <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
+      <h2 class="section-titre">${icone('map-pin', { taille: 20 })} Où je suis</h2>
+      <p class="petit">Pour aller plus vite : l'appli te propose seulement les pays de ce continent, et remplit le pays toute seule.</p>
+      <label class="champ"><span>Continent</span><select id="continent">
+        <option value="">Tous les continents</option>
+        ${Object.keys(CONTINENTS).map((c) => `<option ${c === r.continent ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+      </select></label>
+      <label class="champ"><span>Pays où je suis en ce moment</span><select id="pays-actuel">
+        <option value="">Je change souvent de pays</option>
+        ${paysProposes.map((p) => `<option ${p === r.pays ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+      </select></label>
+    </section>
+
+    <section class="section" id="section-envoi">
+      <h2 class="section-titre">${icone('refresh-cw', { taille: 20 })} Envoi automatique au Studio</h2>
+      ${cfg ? `
+        <p class="etat-branche">${icone('check', { taille: 16 })}<span>Branché au dossier <b>${esc(cfg.depot)}</b></span></p>
+        <p class="petit">Chaque endroit part tout seul au Studio quand tu l'enregistres. Sans internet, il attend et part dès que possible.</p>
+        <p class="petit" id="detail-envoi">${esc(texteDetailEnvoi(envoi))}</p>
+        <button class="bouton-principal" id="envoyer-maintenant">Envoyer maintenant</button>
+        <button class="lien" id="debrancher">Débrancher</button>` : `
+        <p class="petit">Tes endroits et tes photos partent tout seuls vers ton dossier GitHub privé, et le Studio les reçoit. C'est aussi ta copie de sauvegarde.</p>
+        <label class="champ"><span>Nom du dossier GitHub privé</span><input id="depot" value="appli-voyage-donnees" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="champ"><span>Clé d'accès GitHub</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <p class="aide" id="message-envoi"></p>
+        <button class="bouton-principal" id="brancher">Brancher</button>`}
     </section>
 
     <section class="section">
-      <h2 class="section-titre">${icone('route', { taille: 20 })} Générateur de voyages</h2>
-      <p class="petit">Pour assembler tes endroits en voyages, jour par jour. Fait pour l'ordinateur, mais marche aussi ici.</p>
-      <a class="bouton-secondaire bouton-bloc" href="studio/">Ouvrir le générateur</a>
+      <h2 class="section-titre">${icone('route', { taille: 20 })} Studio (générateur de voyages)</h2>
+      <p class="petit">Pour assembler tes endroits en voyages. Fait pour l'ordinateur, mais marche aussi ici.</p>
+      <a class="bouton-secondaire bouton-bloc" href="studio/">Ouvrir le Studio</a>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">${icone('save', { taille: 20 })} Copie dans un fichier</h2>
+      <p class="petit">${cfg ? 'Pas nécessaire avec l\'envoi automatique, mais possible au besoin.' : 'Sans envoi automatique, tes données sont seulement sur ce téléphone : fais une copie de temps en temps.'} ${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : ''}</p>
+      <button class="bouton-secondaire bouton-bloc" id="exporter">Faire une copie</button>
+      <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
     </section>
 
     <section class="section">
@@ -1006,12 +1061,49 @@ async function pageReglages() {
       <div class="taux">
         ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
       </div>
-    </section>
-
-    <section class="section">
-      <h2 class="section-titre">${icone('download', { taille: 20 })} Installer sur l'écran d'accueil</h2>
-      <p class="petit">iPhone : dans Safari, touche le bouton Partager puis « Sur l'écran d'accueil ». Android : dans Chrome, menu ⋮ puis « Installer l'application ».</p>
     </section>`;
+
+  const sauverRegion = async () => { await db.ecrireReglage('region', etat.region); };
+  app.querySelector('#continent').onchange = async (ev) => {
+    etat.region.continent = ev.target.value;
+    if (etat.region.pays && !paysDuContinent(etat.region.continent).includes(etat.region.pays)) etat.region.pays = '';
+    await sauverRegion();
+    pageReglages();
+  };
+  app.querySelector('#pays-actuel').onchange = async (ev) => {
+    etat.region.pays = ev.target.value;
+    await sauverRegion();
+    toast(etat.region.pays ? `Pays : ${etat.region.pays}` : 'Pays libre');
+  };
+
+  if (cfg) {
+    const detail = app.querySelector('#detail-envoi');
+    const arret = sync.surChangement((e) => { if (document.body.contains(detail)) detail.textContent = texteDetailEnvoi(e); else arret(); });
+    app.querySelector('#envoyer-maintenant').onclick = async (ev) => {
+      ev.target.disabled = true;
+      await sync.toutMarquer();
+      const e = await sync.envoyer();
+      ev.target.disabled = false;
+      toast(e.erreur ? "L'envoi n'a pas marché, réessaie plus tard" : e.horsLigne ? 'Pas d\'internet : ça partira plus tard' : 'Tout est envoyé au Studio');
+    };
+    app.querySelector('#debrancher').onclick = async () => { await sync.oublierConfig(); toast('Envoi automatique débranché'); pageReglages(); };
+  } else {
+    app.querySelector('#brancher').onclick = async (ev) => {
+      const msg = app.querySelector('#message-envoi');
+      ev.target.disabled = true;
+      msg.textContent = 'Vérification…';
+      const t = await sync.tester(app.querySelector('#depot').value, app.querySelector('#jeton').value);
+      ev.target.disabled = false;
+      if (!t.ok) { msg.textContent = t.message; return; }
+      await sync.enregistrerConfig(t.depot, app.querySelector('#jeton').value);
+      msg.textContent = 'Branché ! Envoi de tes endroits…';
+      await sync.recevoir(['endroits', 'villes', 'photos']).catch(() => {});
+      await charger();
+      await sync.toutMarquer();
+      toast('Branché : tes endroits partent vers le Studio');
+      pageReglages();
+    };
+  }
 
   app.querySelector('#exporter').onclick = async () => {
     const donnees = await db.exporterTout();
@@ -1058,6 +1150,24 @@ async function pageReglages() {
   });
 }
 
+function texteDetailEnvoi(e) {
+  const quand = e.dernier ? `Dernier envoi : ${new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })}.` : '';
+  if (!e.enAttente) return `Tout est envoyé. ${quand}`;
+  if (e.horsLigne) return `${e.enAttente} élément(s) en attente d'internet. ${quand}`;
+  if (e.erreur) return `${e.enAttente} élément(s) en attente : GitHub ne répond pas (${e.erreur}). Ça réessaiera tout seul. ${quand}`;
+  return `Envoi en cours : ${e.enAttente} élément(s)… ${quand}`;
+}
+
+// Au démarrage : recevoir ce qui manque (ex. : nouveau téléphone), puis envoyer ce qui attend.
+async function demarrerEnvoi() {
+  if (!(await sync.lireConfig())) return;
+  try {
+    const { nouveaux } = await sync.recevoir(['endroits', 'villes', 'photos']);
+    if (nouveaux) { await charger(); if (!location.hash || location.hash === '#/') router(); }
+  } catch (_) { /* on réessaiera */ }
+  sync.envoyerBientot(300);
+}
+
 // ---------- Démarrage ----------
 document.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = icone(el.dataset.ico, { taille: +(el.dataset.taille || 24), epaisseur: 1.8 }); });
 window.addEventListener('hashchange', router);
@@ -1072,7 +1182,7 @@ document.querySelector('.bouton-ajouter').addEventListener('click', (ev) => {
   });
 });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !feuille.hidden) fermerFeuille(); });
-charger().then(router).catch((err) => {
+charger().then(router).then(demarrerEnvoi).catch((err) => {
   app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
 });
 

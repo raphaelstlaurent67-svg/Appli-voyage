@@ -1,7 +1,8 @@
 // Stockage des données directement sur le téléphone (IndexedDB).
-// Fonctionne sans internet. Une sauvegarde en ligne viendra s'ajouter plus tard.
+// Fonctionne sans internet. L'envoi automatique vers le Studio est dans sync.js.
 
 const NOM_BASE = 'appli-voyage';
+const CLES_SYNC = ['sync', 'syncShas', 'syncFile', 'syncDernier'];
 const VERSION = 3; // 2 : voyages (générateur) · 3 : contributeurs et paiements
 let basePromise;
 
@@ -92,7 +93,8 @@ export async function exporterTout() {
     voyages: await tous('voyages'),
     contributeurs: await tous('contributeurs'),
     paiements: await tous('paiements'),
-    reglages: await tous('reglages'),
+    // La clé GitHub et l'état de l'envoi automatique ne sortent jamais dans une copie.
+    reglages: (await tous('reglages')).filter((r) => !CLES_SYNC.includes(r.cle)),
     photos: photosTexte,
   };
 }
@@ -120,7 +122,7 @@ export async function importerTout(donnees) {
       if (!actuel || (x.modifieLe || '') > (actuel.modifieLe || '')) await ecrire(magasin, x);
     }
   }
-  for (const r of donnees.reglages || []) await ecrire('reglages', r);
+  for (const r of donnees.reglages || []) if (!CLES_SYNC.includes(r.cle)) await ecrire('reglages', r);
   for (const p of donnees.photos || []) {
     if (!(await lire('photos', p.id))) await ecrire('photos', { id: p.id, blob: await texteVersBlob(p.data) });
   }

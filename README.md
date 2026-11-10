@@ -1,4 +1,4 @@
-# Appli voyage : mes endroits
+# Appli de voyage
 
 Appli pour noter rapidement, depuis le téléphone, les hébergements, restos, activités et trajets visités pendant le voyage en Asie.
 
@@ -14,7 +14,8 @@ Appli pour noter rapidement, depuis le téléphone, les hébergements, restos, a
 
 - **Position GPS automatique** : elle se prend toute seule quand on ajoute un nouvel endroit (on peut la retirer si on n'est pas sur place).
 
-La sauvegarde en ligne automatique viendra dans une prochaine version.
+- **Envoi automatique au Studio** : chaque endroit (avec ses photos) part tout seul dans un dossier GitHub privé (`appli-voyage-donnees`) dès qu'il est enregistré, ou dès que le téléphone retrouve internet. Le Studio les reçoit à l'ouverture et toutes les 2 minutes. Il faut coller une clé d'accès GitHub (permission « Contents : Read and write » sur ce dossier seulement) dans Réglages, sur le cell et dans le Studio (Mes données). La clé ne sort jamais dans les copies de sauvegarde.
+- **Où je suis** (Réglages) : choisir un continent (seuls ses pays sont proposés) et le pays où l'on est (rempli tout seul).
 
 ## Générateur de voyages (`studio/`)
 
@@ -52,5 +53,7 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/db.js` : l'enregistrement des données sur le téléphone et la copie de sauvegarde
 - `js/taxonomie.js` : les catégories, monnaies et façons de joindre un endroit
 - `js/lieux.js` : les pays d'Asie et leurs villes
+- `js/monde.js` : les pays du monde par continent, et des villes hors Asie
+- `js/sync.js` : l'envoi automatique entre le cell et le Studio (dossier GitHub privé)
 - `fonts/` : la police Figtree (licence SIL Open Font), incluses pour marcher sans internet
 - `sw.js` : permet à l'appli de s'ouvrir sans internet

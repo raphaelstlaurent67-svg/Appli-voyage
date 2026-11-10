@@ -5,6 +5,7 @@
 import { TAXONOMIE, TAUX_PAR_DEFAUT } from './taxonomie.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
+import * as sync from './sync.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -18,7 +19,7 @@ const REGLES_DEFAUT = {
   bonusVille: 75,
   cibleParCategorie: 30,
   categoriesBonus: ['hebergement', 'restos', 'visites', 'nuit', 'sport', 'experiences'],
-  pourcentage: 10,
+  pourcentage: 1,
   seuilVoyage: 300,
   recompenseVoyage: 'Un voyage à rabais',
 };
@@ -51,6 +52,7 @@ function enCAD(montant, devise) {
 const formatCAD = (v) => `${Math.round(v || 0).toLocaleString('fr-CA')} $`;
 const formatArgent = (v) => `${(Math.round((v || 0) * 100) / 100).toLocaleString('fr-CA', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 })} $`;
 const dollars = (n) => (n ? '$'.repeat(n) : '');
+const pct = (n) => `${(+n || 0).toLocaleString('fr-CA', { maximumFractionDigits: 2 })} %`;
 
 function dateDuJour(v, index, options = { weekday: 'short', day: 'numeric', month: 'short' }) {
   if (!v.dateDebut) return '';
@@ -93,12 +95,26 @@ async function charger() {
   etat.paiements = await db.tous('paiements');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
+  // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
+  if (etat.regles.pourcentage === 10) etat.regles.pourcentage = 1;
 }
 
 async function sauver(magasin, objet) {
   objet.modifieLe = new Date().toISOString();
   await db.ecrire(magasin, objet);
   etat[magasin] = etat[magasin].filter((x) => x.id !== objet.id).concat(objet);
+  marquerEnvoi(magasin, objet);
+}
+
+// Envoi automatique vers le dossier GitHub privé (copie de sauvegarde du Studio).
+function marquerEnvoi(magasin, objet) {
+  if (magasin === 'endroits') sync.marquer(sync.cheminEndroit(objet));
+  else if (['voyages', 'contributeurs', 'paiements'].includes(magasin)) sync.marquer(sync.cheminStudio(magasin));
+}
+async function effacerEt(magasin, id) {
+  await db.effacer(magasin, id);
+  etat[magasin] = etat[magasin].filter((x) => x.id !== id);
+  marquerEnvoi(magasin, { id });
 }
 
 // Un endroit est utilisable dans les voyages s'il est à Raph, ou accepté.
@@ -240,7 +256,9 @@ function rendreSide() {
     </a>
     <nav class="sideNav">
       ${lienNav('#/', 'layout-grid', "Vue d'ensemble")}
-      ${lienNav('#/contributeurs', 'users', 'Contributeurs', n ? `<span class="pastille-n">${n}</span>` : '')}
+      ${lienNav('#/a-valider', 'inbox', 'À valider', n ? `<span class="pastille-n">${n}</span>` : '')}
+      ${lienNav('#/ventes', 'banknote', 'Ventes')}
+      ${lienNav('#/contributeurs', 'users', 'Contributeurs')}
       ${lienNav('#/donnees', 'folder-open', 'Mes données')}
     </nav>
     <div class="sideLab">Voyages</div>
@@ -259,10 +277,20 @@ function rendreSide() {
   side.querySelector('#side-nouveau').onclick = creerVoyage;
 }
 
-async function creerVoyage() {
-  const v = nouveauVoyage();
-  await sauver('voyages', v);
-  location.hash = `#/voyage/${v.id}`;
+// Nouveau voyage : on demande juste le nom (et le client si on le connaît).
+function creerVoyage() {
+  ouvrirModale('Nouveau voyage', `
+    <div class="form-grille">
+      <label class="champ large"><span>Nom du voyage</span><input name="titre" required placeholder="Ex. : Montréal en 3 jours"></label>
+      <label class="champ large"><span>Pour qui ? <small>optionnel</small></span><input name="client" placeholder="Ex. : Julie et Marc"></label>
+    </div>`, async (val) => {
+    const v = nouveauVoyage();
+    v.titre = val.titre.trim() || 'Nouveau voyage';
+    v.client = val.client.trim();
+    await sauver('voyages', v);
+    location.hash = `#/voyage/${v.id}`;
+    return true;
+  }, { ok: 'Créer le voyage' });
 }
 
 // ---------- Fenêtre (modale) ----------
@@ -298,7 +326,9 @@ async function router() {
   window.scrollTo(0, 0);
   if (page === 'voyage') return pageVoyage(id, sous || 'itineraire');
   if (page === 'client') { location.hash = `#/voyage/${id}/client`; return undefined; }
-  if (page === 'contributeurs') return pageContributeurs(id || 'apercu');
+  if (page === 'contributeurs') return id === 'soumissions' ? (location.hash = '#/a-valider') : pageContributeurs(id || 'apercu');
+  if (page === 'a-valider') return pageAValider();
+  if (page === 'ventes') return pageVentes(id || '30j');
   if (page === 'donnees') return pageDonnees();
   return pageAccueil();
 }
@@ -319,7 +349,7 @@ function tuileVoyage(v) {
       </div>
       <div class="tb">
         <div class="tn">${esc(v.titre)}</div>
-        <div class="troute">${esc(itineraire(v) || 'Aucune étape')}</div>
+        <div class="troute">${esc(itineraire(v) || 'Parcours à faire')}</div>
         <div class="stats">
           <div class="stat"><b>${v.jours.length}</b><span>jours</span></div>
           <div class="stat"><b>${nbEndroits(v)}</b><span>endroits</span></div>
@@ -344,8 +374,8 @@ function pageAccueil() {
     <div class="kpis">
       <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${utilisables.length}</b><small>${pluriel(villes.length, 'ville')} · ${pluriel(pays.length, 'pays', 'pays')}</small></div>
       <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
-      <div class="kpi"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></div>
-      <a class="kpi ${n ? 'hi' : ''}" href="#/contributeurs/soumissions"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits de contributeurs' : 'Rien en attente'}</small></a>
+      <a class="kpi" href="#/ventes"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')} · voir le graphique</small></a>
+      <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits de contributeurs' : 'Rien en attente'}</small></a>
     </div>
     ${etat.endroits.length ? '' : `
       <div class="encart">
@@ -370,7 +400,7 @@ function pageVoyage(id, onglet) {
   const v = structuredClone(trouve);
   synchroniserJours(v);
   let minuterie;
-  const crumb = () => [itineraire(v) || 'Aucune étape', pluriel(v.jours.length, 'jour'), pluriel(nbEndroits(v), 'endroit'), v.client].filter(Boolean).map(esc).join(' · ');
+  const crumb = () => [itineraire(v) || 'Parcours à faire', pluriel(v.jours.length, 'jour'), pluriel(nbEndroits(v), 'endroit'), v.client].filter(Boolean).map(esc).join(' · ');
   const majCrumb = () => { const c = app.querySelector('#crumb'); if (c) c.innerHTML = crumb(); };
   const enregistrer = () => {
     clearTimeout(minuterie);
@@ -405,8 +435,7 @@ function pageVoyage(id, onglet) {
   };
   app.querySelector('#supprimer').onclick = () => ouvrirModale('Supprimer ce voyage ?', `<p>« ${esc(v.titre)} » sera supprimé. Les endroits, eux, restent.</p>`, async () => {
     clearTimeout(minuterie);
-    await db.effacer('voyages', v.id);
-    etat.voyages = etat.voyages.filter((x) => x.id !== v.id);
+    await effacerEt('voyages', v.id);
     location.hash = '#/';
   }, { ok: 'Supprimer', danger: true });
 
@@ -439,7 +468,7 @@ function ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb) {
         <div class="form-grille">
           <label class="champ"><span>Prix de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 350"></label>
           <label class="champ"><span>Vendu le</span><input data-info="venduLe" type="date" value="${esc(v.venduLe)}" ${v.vendu ? '' : 'disabled'}></label>
-          <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Les contributeurs dont les endroits sont dans ce voyage reçoivent ${r.pourcentage} % du prix, selon leur part.</small></span></label>
+          <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Les contributeurs dont les endroits sont dans ce voyage reçoivent ${pct(r.pourcentage)} du prix, selon leur part.</small></span></label>
           <label class="interr large"><input type="checkbox" data-info="modele" ${v.modele ? 'checked' : ''}><i></i><span><b>Modèle réutilisable</b><small>Apparaît dans « Modèles » pour le dupliquer à chaque nouveau client.</small></span></label>
         </div>
       </section>
@@ -471,14 +500,29 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
   const paysConnus = () => trier(uniques([...sources.map((e) => e.pays), ...v.etapes.map((e) => e.pays)]));
   const villesConnues = (pays) => trier(uniques(sources.filter((e) => !pays || e.pays === pays).map((e) => e.ville)));
 
+  let carteVisible = false;
+  try { carteVisible = localStorage.getItem('carteVisible') === '1'; } catch (_) { /* pas grave */ }
   zone.innerHTML = `
     <section class="panel etapes-panel">
-      <div class="panel-tete"><h3>Étapes</h3><span class="aide">Pays, ville et nombre de jours, dans l'ordre. Les jours se créent tout seuls.</span></div>
+      <div class="etape-titre">
+        <span class="gros-num">1</span>
+        <div><h3>Le parcours</h3><p>Les villes où dort le client, dans l'ordre, et combien de jours dans chacune. Les journées se créent toutes seules en dessous.</p></div>
+      </div>
+      <div class="parcours" id="parcours"></div>
+      <div class="etapes-entete" id="etapes-entete"><span></span><span>Pays</span><span>Ville</span><span>Jours</span><span></span></div>
       <ol class="etapes" id="etapes"></ol>
-      <button class="btn ghost sm" id="ajout-etape">${icone('plus', { taille: 14 })} Ajouter une étape</button>
+      <button class="btn sm" id="ajout-etape">${icone('plus', { taille: 14 })} Ajouter une ville au parcours</button>
       <datalist id="liste-pays"></datalist>
     </section>
-    <div class="trois">
+    <div class="etape-titre etape-titre-2">
+      <span class="gros-num">2</span>
+      <div><h3>Les journées</h3><p>Glisse tes endroits de la liste de droite dans chaque journée, ou clique sur la journée puis sur + .</p></div>
+      <div class="chiffres-ligne" id="resume"></div>
+      <button class="btn ghost sm" id="bouton-carte">${icone('map', { taille: 14 })} <span>${carteVisible ? 'Cacher la carte' : 'Voir la carte'}</span></button>
+    </div>
+    <section class="panel panneau-carte" id="panneau-carte" ${carteVisible ? '' : 'hidden'}><div class="panel-tete"><h3>Carte</h3><span class="aide" id="aide-carte"></span></div><div id="carte" class="carte"></div></section>
+    <div class="deux-col">
+      <div class="jours" id="jours"></div>
       <aside class="panel biblio-panel">
         <div class="panel-tete"><h3>Mes endroits</h3><span class="aide" id="nb-biblio"></span></div>
         <div class="recherche">${icone('search', { taille: 15 })}<input type="search" id="recherche" placeholder="Chercher un endroit"></div>
@@ -492,19 +536,24 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
           <button class="puce" data-coeur title="Coups de cœur" aria-label="Coups de cœur">${icone('heart', { taille: 15 })}</button>
         </div>
         <ul class="biblio" id="biblio"></ul>
-        <p class="aide pied-biblio">Glisse un endroit dans un jour, ou clique sur + pour l'ajouter au jour choisi.</p>
-      </aside>
-      <div class="jours" id="jours"></div>
-      <aside class="colonne-droite">
-        <section class="panel"><div class="panel-tete"><h3>Carte</h3><span class="aide" id="aide-carte"></span></div><div id="carte" class="carte"></div></section>
-        <section class="panel" id="resume"></section>
+        <p class="aide pied-biblio">Glisse un endroit dans une journée, ou clique sur + pour l'ajouter à la journée choisie (en couleur).</p>
       </aside>
     </div>`;
   const $ = (s) => zone.querySelector(s);
+  $('#bouton-carte').onclick = () => {
+    carteVisible = !carteVisible;
+    try { localStorage.setItem('carteVisible', carteVisible ? '1' : '0'); } catch (_) { /* pas grave */ }
+    $('#panneau-carte').hidden = !carteVisible;
+    $('#bouton-carte span').textContent = carteVisible ? 'Cacher la carte' : 'Voir la carte';
+    majCarte();
+  };
 
   // --- Étapes ---
   function rendreEtapes() {
     $('#liste-pays').innerHTML = paysConnus().map((p) => `<option value="${esc(p)}">`).join('');
+    $('#etapes-entete').hidden = !v.etapes.length;
+    const remplies = v.etapes.filter((et) => et.ville || et.pays);
+    $('#parcours').innerHTML = remplies.length ? remplies.map((et, i) => `${i ? `<span class="fleche">${icone('arrow-right', { taille: 14 })}</span>` : ''}<span class="arret"><b>${esc(et.ville || et.pays)}</b><small>${pluriel(et.jours, 'jour')}</small></span>`).join('') : '';
     $('#etapes').innerHTML = v.etapes.map((et, i) => `
       <li class="etape" data-etape="${esc(et.id)}">
         <span class="etape-num">${i + 1}</span>
@@ -515,9 +564,9 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
         <span class="etape-boutons">
           <button class="ico-btn" data-bouger="-1" ${i === 0 ? 'disabled' : ''} aria-label="Monter">${icone('arrow-up', { taille: 15 })}</button>
           <button class="ico-btn" data-bouger="1" ${i === v.etapes.length - 1 ? 'disabled' : ''} aria-label="Descendre">${icone('arrow-down', { taille: 15 })}</button>
-          <button class="ico-btn rouge" data-retirer aria-label="Retirer l'étape">${icone('x', { taille: 15 })}</button>
+          <button class="ico-btn rouge" data-retirer aria-label="Retirer cette ville" title="Retirer cette ville">${icone('x', { taille: 15 })}</button>
         </span>
-      </li>`).join('') || '<li class="vide-ligne">Aucune étape. Ajoute la première : un pays, une ville et le nombre de jours.</li>';
+      </li>`).join('') || `<li class="etape-vide">${icone('map-pin', { taille: 20 })}<span><b>Par où commence le voyage ?</b>Clique sur « Ajouter une ville au parcours », puis écris le pays, la ville et le nombre de jours. Ex. : Canada, Montréal, 3 jours.</span></li>`;
   }
   $('#etapes').addEventListener('change', (ev) => {
     const li = ev.target.closest('[data-etape]');
@@ -546,7 +595,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     } else if ('retirer' in b.dataset) {
       const nb = v.jours.filter((j) => j.etapeId === v.etapes[i].id).reduce((n, j) => n + j.items.length, 0);
       if (!nb) { v.etapes.splice(i, 1); appliquer(); return; }
-      ouvrirModale("Retirer l'étape ?", `<p>Elle contient ${pluriel(nb, 'endroit')}, qui seront retirés du voyage.</p>`, () => { v.etapes.splice(i, 1); appliquer(); }, { ok: 'Retirer', danger: true });
+      ouvrirModale('Retirer cette ville ?', `<p>Elle contient ${pluriel(nb, 'endroit')}, qui seront retirés du voyage.</p>`, () => { v.etapes.splice(i, 1); appliquer(); }, { ok: 'Retirer', danger: true });
     }
   });
   $('#ajout-etape').onclick = () => {
@@ -613,7 +662,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     const b = ev.target.closest('[data-ajouter]');
     if (!b) return;
     const jour = v.jours.find((j) => j.id === jourChoisi);
-    if (!jour) { toast("Ajoute d'abord une étape pour avoir des jours"); return; }
+    if (!jour) { toast("Ajoute d'abord une ville au parcours (étape 1)"); return; }
     jour.items.push({ id: db.nouvelId(), endroitId: b.dataset.ajouter, noteClient: '' });
     apresChangement();
     toast(`Ajouté au jour ${v.jours.indexOf(jour) + 1}`);
@@ -648,7 +697,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
           </header>
           <ul class="items">${lignes || `<li class="depot">${icone('plus', { taille: 15 })} Glisse des endroits ici</li>`}</ul>
         </article>`;
-    }).join('') || `<div class="panel vide-bloc">${icone('route', { taille: 26, epaisseur: 1.6 })}<b>Pas encore de jours</b><span>Ajoute une étape en haut pour commencer.</span></div>`;
+    }).join('') || `<div class="panel vide-bloc">${icone('route', { taille: 26, epaisseur: 1.6 })}<b>Pas encore de journées</b><span>Ajoute une ville au parcours (étape 1) : ses journées apparaîtront ici.</span></div>`;
     afficherPhotos($('#jours'));
   }
   function choisirJour(id) {
@@ -716,24 +765,20 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     const prixVente = nombre(v.prixVente);
     const parJour = v.jours.length ? total / v.jours.length : 0;
     $('#resume').innerHTML = `
-      <div class="panel-tete"><h3>Résumé</h3><a class="lien-discret" href="#/voyage/${esc(v.id)}/infos">Prix de vente</a></div>
-      <dl class="chiffres">
-        <div><dt>Jours</dt><dd>${v.jours.length}</dd></div>
-        <div><dt>Endroits</dt><dd>${nbEndroits(v)}</dd></div>
-        <div><dt>Coût sur place</dt><dd>${formatCAD(total)}</dd></div>
-        <div><dt>Par jour</dt><dd>${formatCAD(parJour)}</dd></div>
-        <div class="large ${prixVente ? 'hi' : ''}"><dt>Prix de l'itinéraire</dt><dd>${prixVente ? formatCAD(prixVente) : '—'}</dd></div>
-      </dl>
-      <p class="aide">Estimation en $ CA à partir des prix notés${sansPrix ? ` (${pluriel(sansPrix, 'endroit')} sans prix)` : ''}.</p>`;
+      <span><b>${v.jours.length}</b> ${v.jours.length > 1 ? 'jours' : 'jour'}</span>
+      <span><b>${nbEndroits(v)}</b> ${nbEndroits(v) > 1 ? 'endroits' : 'endroit'}</span>
+      <span title="Estimation en $ CA à partir des prix notés${sansPrix ? ` (${pluriel(sansPrix, 'endroit')} sans prix)` : ''}"><b>${formatCAD(total)}</b> sur place${parJour ? ` · ${formatCAD(parJour)}/jour` : ''}</span>
+      <a href="#/voyage/${esc(v.id)}/infos" class="${prixVente ? 'hi' : ''}"><b>${prixVente ? formatCAD(prixVente) : 'Prix ?'}</b> prix de vente</a>`;
   }
 
   function majCarte() {
     const zoneCarte = $('#carte');
-    if (!zoneCarte) return;
+    if (!zoneCarte || !carteVisible) return;
     if (!window.L) { $('#aide-carte').textContent = 'Carte indisponible'; return; }
     if (!carte) {
       carte = L.map(zoneCarte, { scrollWheelZoom: false }).setView([25, 110], 3);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(carte);
+      // Fond de carte d'OpenStreetMap France : les noms des pays et des villes sont en français.
+      L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: '© OpenStreetMap France · © les contributeurs d\'OpenStreetMap' }).addTo(carte);
       carte.couche = L.layerGroup().addTo(carte);
     }
     carte.couche.clearLayers();
@@ -926,12 +971,12 @@ function pageContributeurs(onglet) {
   const bilans = etat.contributeurs.map((c) => ({ c, b: bilanContributeur(c) }));
   const du = bilans.reduce((s, x) => s + x.b.du, 0);
   const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
-  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['soumissions', 'inbox', 'À valider', n], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
+  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
   app.innerHTML = `
     ${entete('Contributeurs', "Les personnes qui ajoutent des endroits pour toi, ce qu'elles ont envoyé et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
     <div class="kpis">
       <div class="kpi"><span>${icone('users', { taille: 15 })} Contributeurs</span><b>${etat.contributeurs.length}</b><small>${pluriel(bilans.reduce((s, x) => s + x.b.acceptes, 0), 'endroit accepté', 'endroits acceptés')}</small></div>
-      <a class="kpi ${n ? 'hi' : ''}" href="#/contributeurs/soumissions"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
+      <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
       <div class="kpi ${du ? 'warn' : ''}"><span>${icone('wallet', { taille: 15 })} À payer</span><b>${formatArgent(du)}</b><small>Total dû maintenant</small></div>
       <div class="kpi"><span>${icone('circle-check-big', { taille: 15 })} Déjà payé</span><b>${formatArgent(paye)}</b><small>${pluriel(etat.paiements.length, 'paiement')}</small></div>
     </div>
@@ -939,10 +984,82 @@ function pageContributeurs(onglet) {
     <div id="contenu"></div>`;
   app.querySelector('#ajout-contrib').onclick = () => formulaireContributeur();
   const zone = app.querySelector('#contenu');
-  if (onglet === 'soumissions') ongletSoumissions(zone);
-  else if (onglet === 'paiements') ongletPaiements(zone, bilans);
+  if (onglet === 'paiements') ongletPaiements(zone, bilans);
   else if (onglet === 'regles') ongletRegles(zone);
   else ongletListeContrib(zone, bilans);
+}
+
+// ---------- À valider ----------
+function pageAValider() {
+  const n = aValider().length;
+  app.innerHTML = `
+    ${entete('À valider', n ? `${pluriel(n, 'endroit envoyé', 'endroits envoyés')} par tes contributeurs, les plus complets en premier. Accepte ce qui est bon : seuls les endroits acceptés servent dans tes voyages et sont payés.` : "Ici arrivent les endroits que tes contributeurs t'envoient.")}
+    <div id="contenu"></div>`;
+  ongletSoumissions(app.querySelector('#contenu'));
+}
+
+// ---------- Ventes ----------
+function pageVentes(periode) {
+  const vendus = etat.voyages.filter((v) => v.vendu && nombre(v.prixVente)).map((v) => ({ v, date: v.venduLe || (v.modifieLe || '').slice(0, 10), prix: nombre(v.prixVente) }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const total = vendus.reduce((s, x) => s + x.prix, 0);
+  const moisCourant = aujourdhui().slice(0, 7);
+  const ceMois = vendus.filter((x) => x.date.startsWith(moisCourant)).reduce((s, x) => s + x.prix, 0);
+  const moyenne = vendus.length ? total / vendus.length : 0;
+
+  // Barres : un jour par barre (30 derniers jours) ou un mois par barre (12 derniers mois).
+  const barres = [];
+  const d = new Date(`${aujourdhui()}T12:00:00`);
+  if (periode === '12m') {
+    d.setDate(1);
+    for (let i = 11; i >= 0; i--) {
+      const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+      const cle = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
+      barres.push({ cle, etiquette: m.toLocaleDateString('fr-CA', { month: 'short' }), titre: m.toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' }) });
+    }
+  } else {
+    for (let i = 29; i >= 0; i--) {
+      const j = new Date(d); j.setDate(d.getDate() - i);
+      const cle = j.toISOString().slice(0, 10);
+      barres.push({ cle, etiquette: String(j.getDate()), titre: j.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' }) });
+    }
+  }
+  for (const b of barres) {
+    const ventes = vendus.filter((x) => x.date.startsWith(b.cle));
+    b.montant = ventes.reduce((s, x) => s + x.prix, 0);
+    b.nb = ventes.length;
+  }
+  const max = Math.max(...barres.map((b) => b.montant), 1);
+  const periodeTotal = barres.reduce((s, b) => s + b.montant, 0);
+  const graduation = (() => { const brut = max / 4; const p = 10 ** Math.floor(Math.log10(brut)); return Math.ceil(brut / p) * p; })();
+  const haut = graduation * 4;
+
+  app.innerHTML = `
+    ${entete('Ventes', 'Les itinéraires marqués « vendu » dans l\'onglet « Infos et vente » de chaque voyage.')}
+    <div class="kpis kpis-3">
+      <div class="kpi"><span>${icone('banknote', { taille: 15 })} Total</span><b>${formatCAD(total)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></div>
+      <div class="kpi"><span>${icone('calendar', { taille: 15 })} Ce mois-ci</span><b>${formatCAD(ceMois)}</b><small>${new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' })}</small></div>
+      <div class="kpi"><span>${icone('target', { taille: 15 })} Prix moyen</span><b>${formatCAD(moyenne)}</b><small>par itinéraire</small></div>
+    </div>
+    <section class="panel graphique">
+      <div class="panel-tete"><h3>${periode === '12m' ? 'Par mois' : 'Par jour'}</h3><span class="aide">${formatCAD(periodeTotal)} sur ${periode === '12m' ? '12 mois' : '30 jours'}</span>
+        <div class="seg petit-seg"><a class="${periode === '12m' ? '' : 'on'}" href="#/ventes/30j">30 jours</a><a class="${periode === '12m' ? 'on' : ''}" href="#/ventes/12m">12 mois</a></div>
+      </div>
+      <div class="barres" style="--n:${barres.length}">
+        <div class="axe">${[4, 3, 2, 1, 0].map((k) => `<span>${formatCAD(graduation * k)}</span>`).join('')}</div>
+        <div class="zone-barres">
+          ${[4, 3, 2, 1].map((k) => `<i class="ligne-axe" style="bottom:${(k / 4) * 100}%"></i>`).join('')}
+          ${barres.map((b) => `<div class="barre ${b.montant ? '' : 'zero'}" title="${esc(b.titre)} : ${b.montant ? `${formatCAD(b.montant)} (${pluriel(b.nb, 'vente')})` : 'aucune vente'}"><i style="height:${(b.montant / haut) * 100}%"></i><span>${esc(b.etiquette)}</span></div>`).join('')}
+        </div>
+      </div>
+      ${vendus.length ? '' : '<p class="aide graphique-vide">Pas encore de vente. Quand tu vends un itinéraire, ouvre-le, va dans « Infos et vente » et coche « Itinéraire vendu ».</p>'}
+    </section>
+    <section class="panel">
+      <div class="panel-tete"><h3>Itinéraires vendus</h3></div>
+      ${vendus.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Voyage</th><th>Client</th><th class="num">Prix</th></tr></thead><tbody>
+        ${vendus.map((x) => `<tr><td>${esc(dateCourte(x.date))}</td><td><a class="lien-tableau" href="#/voyage/${esc(x.v.id)}/infos">${esc(x.v.titre)}</a></td><td class="doux">${esc(x.v.client || '')}</td><td class="num">${formatCAD(x.prix)}</td></tr>`).join('')}
+      </tbody></table>` : '<p class="vide-ligne">Aucun itinéraire vendu pour l\'instant.</p>'}
+    </section>`;
 }
 
 function formulaireContributeur(c = null) {
@@ -970,7 +1087,7 @@ function ongletListeContrib(zone, bilans) {
     <div class="grille-3 explique">
       <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Tu valides chaque endroit. Plus la fiche est complète, plus elle a de chances d'être acceptée.</p></div>
       <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${r.cibleParCategorie} endroits acceptés dans chacune des ${r.categoriesBonus.length} catégories choisies.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${r.pourcentage} % des ventes</b><p>Quand un itinéraire vendu utilise ses endroits, selon sa part du voyage. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${pct(r.pourcentage)} des ventes</b><p>Quand un itinéraire vendu utilise ses endroits, selon sa part du voyage. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits.</p></div>
     </div>`;
   if (!bilans.length) {
     zone.innerHTML = `
@@ -1018,7 +1135,7 @@ function ongletListeContrib(zone, bilans) {
               ${barre(b.progresVoyage, b.progresVoyage >= 1 ? 'ok' : '')}<p>${b.progresVoyage >= 1 ? 'Objectif atteint !' : `${b.acceptes} / ${r.seuilVoyage}, encore ${r.seuilVoyage - b.acceptes}`}</p>
             </div>
             <div class="recomp">
-              <div class="recomp-tete">${icone('percent', { taille: 15 })}<b>Part des ventes</b><span>${r.pourcentage} %</span></div>
+              <div class="recomp-tete">${icone('percent', { taille: 15 })}<b>Part des ventes</b><span>${pct(r.pourcentage)}</span></div>
               <p>${b.ventes.length ? b.ventes.map((x) => `${esc(x.titre)} : ${formatArgent(x.montant)}`).join(' · ') : 'Aucun itinéraire vendu avec ses endroits.'}</p>
             </div>
           </div>
@@ -1133,8 +1250,7 @@ function ongletPaiements(zone, bilans) {
   zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
   zone.querySelectorAll('[data-effacer-paiement]').forEach((b) => {
     b.onclick = () => ouvrirModale('Effacer ce paiement ?', '<p>Le montant redeviendra « à payer ».</p>', async () => {
-      await db.effacer('paiements', b.dataset.effacerPaiement);
-      etat.paiements = etat.paiements.filter((p) => p.id !== b.dataset.effacerPaiement);
+      await effacerEt('paiements', b.dataset.effacerPaiement);
       router();
     }, { ok: 'Effacer', danger: true });
   });
@@ -1147,7 +1263,7 @@ function ongletRegles(zone) {
       <p class="aide">Ces règles servent à calculer ce que tu dois à chaque contributeur. Tu pourras les ajuster après tes tests.</p>
       <div class="form-grille">
         <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
-        <label class="champ"><span>Pourcentage sur les ventes (%)</span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
+        <label class="champ"><span>Pourcentage sur les ventes (%) <small>ex. : 0,5 ou 1</small></span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
         <label class="champ"><span>Bonus ville complète ($ CA)</span><input name="bonusVille" inputmode="decimal" value="${r.bonusVille}"></label>
         <label class="champ"><span>Endroits par catégorie pour une ville complète</span><input name="cibleParCategorie" type="number" min="1" value="${r.cibleParCategorie}"></label>
         <fieldset class="champ large"><span>Catégories comptées pour le bonus</span>
@@ -1174,11 +1290,30 @@ function ongletRegles(zone) {
 }
 
 // ---------- Mes données ----------
-function pageDonnees() {
+async function pageDonnees() {
   const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
   const pays = uniques(etat.endroits.map((e) => e.pays));
+  const cfg = await sync.lireConfig();
+  const envoi = await sync.etat();
   app.innerHTML = `
-    ${entete('Mes données', "Tout est gardé dans ce navigateur, sur cet ordinateur. Rien n'est envoyé en ligne.")}
+    ${entete('Mes données', cfg ? 'Tes endroits arrivent tout seuls de ton cellulaire, par ton dossier GitHub privé.' : 'Branche ton cellulaire pour recevoir tes endroits tout seuls.')}
+    <section class="panel lien-cell">
+      <div class="panel-tete"><h3>${icone('refresh-cw', { taille: 16 })} Lien avec ton cellulaire</h3>${cfg ? `<span class="badge-ok">${icone('check', { taille: 13 })} Branché</span>` : ''}</div>
+      ${cfg ? `
+        <p class="doux">Dossier privé <b>${esc(cfg.depot)}</b>. Le Studio va chercher les nouveaux endroits à l'ouverture et toutes les 2 minutes. Tes voyages, contributeurs et paiements y sont aussi copiés.</p>
+        <p class="aide" id="etat-sync">${esc(texteSync(envoi))}</p>
+        <div class="head-actions gauche">
+          <button class="btn sm" id="sync-maintenant">${icone('refresh-cw', { taille: 14 })} Synchroniser maintenant</button>
+          <button class="btn ghost sm" id="sync-debrancher">Débrancher</button>
+        </div>` : `
+        <p class="doux">Colle ici la même clé que dans les Réglages de l'appli sur ton cell. Le Studio recevra alors chaque endroit que tu enregistres, avec ses photos.</p>
+        <div class="form-grille">
+          <label class="champ"><span>Dossier GitHub privé</span><input id="sync-depot" value="appli-voyage-donnees" spellcheck="false"></label>
+          <label class="champ"><span>Clé d'accès GitHub</span><input id="sync-jeton" type="password" placeholder="github_pat_…" spellcheck="false"></label>
+        </div>
+        <p class="aide" id="sync-message"></p>
+        <div class="head-actions gauche"><button class="btn sm" id="sync-brancher">${icone('link', { taille: 14 })} Brancher</button></div>`}
+    </section>
     <div class="kpis kpis-3">
       <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${etat.endroits.length}</b><small>${pluriel(pays.length, 'pays', 'pays')}</small></div>
       <div class="kpi"><span>${icone('image', { taille: 15 })} Photos</span><b>${nbPhotos}</b><small>incluses dans les copies</small></div>
@@ -1208,6 +1343,34 @@ function pageDonnees() {
         <p class="aide">Pour la remettre : choisis-la ci-contre avec « Moi ».</p>
       </section>
     </div>`;
+  if (cfg) {
+    const p = app.querySelector('#etat-sync');
+    const arret = sync.surChangement((e) => { if (document.body.contains(p)) p.textContent = texteSync(e); else arret(); });
+    app.querySelector('#sync-maintenant').onclick = async (ev) => {
+      ev.target.disabled = true;
+      const n = await synchroniser(true);
+      ev.target.disabled = false;
+      toast(n === null ? 'La synchronisation n\'a pas marché' : n ? pluriel(n, 'nouvel endroit reçu', 'nouveaux endroits reçus') : 'Tout est à jour');
+    };
+    app.querySelector('#sync-debrancher').onclick = async () => { await sync.oublierConfig(); toast('Débranché'); router(); };
+  } else {
+    app.querySelector('#sync-brancher').onclick = async (ev) => {
+      const msg = app.querySelector('#sync-message');
+      ev.target.disabled = true;
+      msg.textContent = 'Vérification…';
+      const t = await sync.tester(app.querySelector('#sync-depot').value, app.querySelector('#sync-jeton').value);
+      ev.target.disabled = false;
+      if (!t.ok) { msg.textContent = t.message; return; }
+      await sync.enregistrerConfig(t.depot, app.querySelector('#sync-jeton').value);
+      msg.textContent = 'Branché ! Réception de tes endroits…';
+      await synchroniser(true);
+      await sync.toutMarquer(['voyages', 'contributeurs', 'paiements']);
+      const contrib = etat.endroits.filter((e) => e.contributeurId);
+      sync.marquer(contrib.map(sync.cheminEndroit), contrib.flatMap((e) => (e.photos || []).map(sync.cheminPhoto)));
+      toast('Branché à ton cellulaire');
+      router();
+    };
+  }
   const source = app.querySelector('#source');
   source.onchange = () => {
     app.querySelector('#aide-source').textContent = source.value
@@ -1222,8 +1385,10 @@ function pageDonnees() {
       if (source.value) {
         const n = await db.importerContribution(donnees, source.value);
         await charger();
+        const siens = etat.endroits.filter((e) => e.contributeurId === source.value);
+        sync.marquer(siens.map(sync.cheminEndroit), siens.flatMap((e) => (e.photos || []).map(sync.cheminPhoto)));
         toast(`${pluriel(n, 'nouvel endroit', 'nouveaux endroits')} à valider`);
-        location.hash = '#/contributeurs/soumissions';
+        location.hash = '#/a-valider';
         return;
       }
       const n = await db.importerTout(donnees);
@@ -1245,6 +1410,40 @@ function pageDonnees() {
   };
 }
 
+// ---------- Lien avec le cellulaire ----------
+function texteSync(e) {
+  const quand = e.dernier ? `Dernière synchronisation : ${new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })}.` : '';
+  if (e.horsLigne) return `Pas d'internet en ce moment. ${quand}`;
+  if (e.enAttente && e.erreur) return `${e.enAttente} élément(s) à envoyer : GitHub ne répond pas (${e.erreur}). ${quand}`;
+  if (e.enAttente) return `Envoi de ${e.enAttente} élément(s)… ${quand}`;
+  return quand || 'Prêt.';
+}
+
+// Reçoit les nouveautés du cellulaire, puis envoie ce que le Studio a changé.
+// Retourne le nombre de nouveaux endroits (null si erreur).
+let derniereSync = 0;
+async function synchroniser(forcer = false) {
+  if (!(await sync.lireConfig())) return 0;
+  if (!forcer && Date.now() - derniereSync < 60000) return 0;
+  derniereSync = Date.now();
+  try {
+    const { nouveaux } = await sync.recevoir();
+    await charger();
+    if (nouveaux) {
+      toast(pluriel(nouveaux, 'nouvel endroit reçu du cellulaire', 'nouveaux endroits reçus du cellulaire'));
+      // Ne pas redessiner une page où l'on est en train d'écrire.
+      if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) && !document.activeElement?.isContentEditable && modale.hidden) router();
+      else rendreSide();
+    }
+    sync.envoyerBientot(200);
+    return nouveaux;
+  } catch (_) {
+    return null;
+  }
+}
+setInterval(() => synchroniser(), 120000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') synchroniser(); });
+
 // ---------- Démarrage ----------
 // Permet d'installer le Studio comme une appli sur l'ordinateur (et de l'ouvrir sans internet).
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
@@ -1257,6 +1456,6 @@ app.addEventListener('dragstart', (ev) => {
   else return;
   ev.dataTransfer.effectAllowed = 'move';
 });
-charger().then(() => { db.demanderStockagePersistant(); return router(); }).catch((err) => {
+charger().then(() => { db.demanderStockagePersistant(); return router(); }).then(() => synchroniser(true)).catch((err) => {
   app.innerHTML = `<p class="vide-ligne">Erreur au démarrage : ${esc(err.message)}</p>`;
 });
