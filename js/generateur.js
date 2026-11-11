@@ -20,12 +20,35 @@ const modale = document.getElementById('modale');
 const REGLES_DEFAUT = {
   parEndroit: 1,
   bonusVille: 75,
-  cibleParCategorie: 30,
-  categoriesBonus: ['hebergement', 'restos', 'visites', 'nuit', 'sport', 'experiences'],
+  // Une ville complète : 60 restos, 30 hébergements, 30 activités, 20 bars et 10 trajets (150).
+  // Les trajets en plus remplacent les bars qui manquent ; un trajet complexe compte pour 2.
+  cibles: { restos: 60, hebergement: 30, activites: 30, bars: 20, trajets: 10 },
   pourcentage: 1,
   seuilVoyage: 300,
   recompenseVoyage: 'Un voyage à rabais',
 };
+
+const GROUPES_VILLE = [
+  ['restos', 'Restos', ['restos']],
+  ['hebergement', 'Hébergement', ['hebergement']],
+  ['activites', 'Activités', ['visites', 'experiences', 'sport']],
+  ['bars', 'Bars', ['nuit']],
+  ['trajets', 'Trajets', ['trajets']],
+];
+const groupeDe = (cat) => GROUPES_VILLE.find(([, , cats]) => cats.includes(cat))?.[0] || '';
+// Progrès d'une ville à partir des endroits (acceptés) d'un contributeur.
+function progresVille(endroits, cibles) {
+  const n = { restos: 0, hebergement: 0, activites: 0, bars: 0, trajets: 0 };
+  for (const e of endroits) { const g = groupeDe(e.categorie); if (g) n[g] += g === 'trajets' && e.complexe ? 2 : 1; }
+  const remplace = Math.min(Math.max(0, cibles.bars - n.bars), Math.max(0, n.trajets - cibles.trajets));
+  const compte = { ...n, bars: n.bars + remplace, trajets: n.trajets - remplace };
+  const total = GROUPES_VILLE.reduce((t, [k]) => t + cibles[k], 0);
+  const fait = GROUPES_VILLE.reduce((t, [k]) => t + Math.min(compte[k], cibles[k]), 0);
+  return {
+    compte, remplace, progres: total ? fait / total : 0, complete: fait >= total,
+    manque: GROUPES_VILLE.filter(([k]) => compte[k] < cibles[k]).map(([k, nom]) => `${nom} ${compte[k]}/${cibles[k]}`),
+  };
+}
 
 // ---------- Petits outils ----------
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -100,6 +123,7 @@ async function charger() {
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
   if (etat.regles.pourcentage === 10) etat.regles.pourcentage = 1;
+  etat.regles.cibles = { ...REGLES_DEFAUT.cibles, ...(etat.regles.cibles || {}) };
 }
 
 async function sauver(magasin, objet) {
@@ -204,23 +228,14 @@ function bilanContributeur(c) {
   const enAttente = siens.filter((e) => e.statut === 'en_attente').length;
   const refuses = siens.filter((e) => e.statut === 'refuse').length;
 
-  // Bonus « ville complète » : X endroits acceptés dans chaque catégorie choisie.
+  // Bonus « ville complète » : voir progresVille.
   const parVille = new Map();
   for (const e of acceptes) {
     const cle = `${e.pays}|${e.ville}`;
-    if (!parVille.has(cle)) parVille.set(cle, { pays: e.pays, ville: e.ville, cats: {} });
-    const v = parVille.get(cle);
-    v.cats[e.categorie] = (v.cats[e.categorie] || 0) + 1;
+    if (!parVille.has(cle)) parVille.set(cle, { pays: e.pays, ville: e.ville, endroits: [] });
+    parVille.get(cle).endroits.push(e);
   }
-  const cats = r.categoriesBonus.length ? r.categoriesBonus : ['hebergement'];
-  const villes = [...parVille.values()].map((v) => {
-    const fait = cats.reduce((n, k) => n + Math.min(v.cats[k] || 0, r.cibleParCategorie), 0);
-    const total = cats.length * r.cibleParCategorie;
-    return {
-      ...v, progres: total ? fait / total : 0, complete: fait >= total,
-      manque: cats.filter((k) => (v.cats[k] || 0) < r.cibleParCategorie).map((k) => `${TAXONOMIE[k]?.nom || k} ${v.cats[k] || 0}/${r.cibleParCategorie}`),
-    };
-  }).sort((a, b) => b.progres - a.progres);
+  const villes = [...parVille.values()].map((v) => ({ pays: v.pays, ville: v.ville, ...progresVille(v.endroits, r.cibles) })).sort((a, b) => b.progres - a.progres);
   const bonus = villes.filter((v) => v.complete).length * r.bonusVille;
 
   // Pourcentage sur les itinéraires vendus, selon la part de ses endroits dans le voyage.
@@ -571,8 +586,8 @@ function tuileVoyage(v) {
 
 // Le projet expliqué en 30 secondes (pour Philippe, un client, un futur contributeur).
 const PITCH = {
-  fr: "Je bâtis une carte du monde faite uniquement d'endroits vérifiés par des locaux. Partout, des gens de la place photographient les meilleurs restos, hôtels et activités de leur ville dans mon appli, et sont payés pour chaque endroit accepté. À partir de cette carte, je vends des voyages sur mesure, et pour les clients haut de gamme, je vais moi-même sur le terrain. Personne ne combine encore les deux.",
-  en: "I'm building a world map made only of places verified by locals. People everywhere photograph the best restaurants, hotels and activities in their city with my app, and get paid for every place accepted. From that map, I sell custom trips, and for high-end clients, I go on the ground myself. Nobody combines the two yet.",
+  fr: "Planifier un voyage, c'est des dizaines d'heures à fouiller des avis qu'on ne peut pas vérifier. Nous vendons des voyages sur mesure bâtis à partir d'endroits repérés sur place par des locaux rémunérés, et chaque photo est vérifiée avant d'être publiée. Le client reçoit un itinéraire fiable, prêt à partir ; pour le haut de gamme, je me rends moi-même sur le terrain. Aucune entreprise ne combine encore une carte faite par des locaux et la vente de voyages sur mesure.",
+  en: "Planning a trip means dozens of hours digging through reviews you can't verify. We sell custom trips built from places scouted on the ground by paid locals, and every photo is checked before it goes live. Clients get a reliable, ready-to-go itinerary; for high-end trips, I go on the ground myself. No company yet combines a map built by locals with the sale of custom trips.",
 };
 function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
@@ -1754,7 +1769,7 @@ function ongletListeContrib(zone, bilans) {
   const explications = `
     <div class="grille-3 explique">
       <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Tu valides chaque endroit. Plus la fiche est complète, plus elle a de chances d'être acceptée.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${r.cibleParCategorie} endroits acceptés dans chacune des ${r.categoriesBonus.length} catégories choisies.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${GROUPES_VILLE.map(([k, nom]) => `${r.cibles[k]} ${nom.toLowerCase()}`).join(', ')}. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</p></div>
       <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${pct(r.pourcentage)} des ventes</b><p>Quand un itinéraire vendu utilise ses endroits, selon sa part du voyage. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits.</p></div>
     </div>`;
   if (!bilans.length) {
@@ -1947,7 +1962,7 @@ function ongletSoumissions(zone) {
           <article class="panel soum" style="--c:${cat.couleur}">
             <div class="soum-photo">${iconeCat(e.categorie, { taille: 26, epaisseur: 1.5 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}${e.photos?.length > 1 ? `<span class="soum-nb">${e.photos.length} photos</span>` : ''}</div>
             <div class="soum-corps">
-              <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type].filter(Boolean).join(', '))}</span>
+              <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type, e.complexe ? 'trajet complexe, compte double' : ''].filter(Boolean).join(', '))}</span>
               <b class="soum-nom">${esc(e.nom)}</b>
               <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))}. Par ${esc(c?.nom || 'inconnu')}, reçu le ${esc(dateCourte(e.recuLe))}</small>
               <div class="score">${barre(score / 100, score >= 80 ? 'ok' : score >= 50 ? '' : 'bad')}<span>${score} % complet</span></div>
@@ -2059,9 +2074,8 @@ function ongletRegles(zone) {
         <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
         <label class="champ"><span>Pourcentage sur les ventes (%) <small>ex. : 0,5 ou 1</small></span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
         <label class="champ"><span>Bonus ville complète ($ CA)</span><input name="bonusVille" inputmode="decimal" value="${r.bonusVille}"></label>
-        <label class="champ"><span>Endroits par catégorie pour une ville complète</span><input name="cibleParCategorie" type="number" min="1" value="${r.cibleParCategorie}"></label>
-        <fieldset class="champ large"><span>Catégories comptées pour le bonus</span>
-          <div class="cases">${Object.entries(TAXONOMIE).map(([k, c]) => `<label class="case"><input type="checkbox" name="cat" value="${k}" ${r.categoriesBonus.includes(k) ? 'checked' : ''}>${iconeCat(k, { taille: 14 })}${esc(c.nom)}</label>`).join('')}</div>
+        <fieldset class="champ large"><span>Une ville complète <small>Activités = Visites, Expériences et Sport. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</small></span>
+          <div class="cibles-ville">${GROUPES_VILLE.map(([k, nom]) => `<label class="champ"><span>${nom}</span><input name="cible-${k}" type="number" min="0" value="${r.cibles[k]}"></label>`).join('')}</div>
         </fieldset>
         <label class="champ"><span>Récompense des meilleurs</span><input name="recompenseVoyage" value="${esc(r.recompenseVoyage)}"></label>
         <label class="champ"><span>À partir de (endroits acceptés)</span><input name="seuilVoyage" type="number" min="1" value="${r.seuilVoyage}"></label>
@@ -2073,7 +2087,7 @@ function ongletRegles(zone) {
     const f = new FormData(ev.target);
     const nouvelles = {
       parEndroit: nombre(f.get('parEndroit')), pourcentage: nombre(f.get('pourcentage')), bonusVille: nombre(f.get('bonusVille')),
-      cibleParCategorie: Math.max(1, parseInt(f.get('cibleParCategorie'), 10) || 1), categoriesBonus: f.getAll('cat'),
+      cibles: Object.fromEntries(GROUPES_VILLE.map(([k]) => [k, Math.max(0, parseInt(f.get(`cible-${k}`), 10) || 0)])),
       recompenseVoyage: String(f.get('recompenseVoyage') || '').trim() || REGLES_DEFAUT.recompenseVoyage,
       seuilVoyage: Math.max(1, parseInt(f.get('seuilVoyage'), 10) || 1),
     };

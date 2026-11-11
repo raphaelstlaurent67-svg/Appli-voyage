@@ -36,6 +36,12 @@ const TXT = {
     rienAEnvoyer: 'Nothing new to send',
     cats: { hebergement: 'Stay', restos: 'Food', visites: 'Sights', experiences: 'Experiences', nuit: 'Nightlife', sport: 'Sport', trajets: 'Transport', autre: 'Other' },
     confirmeSuppr: 'Delete this place?',
+    complexe: 'Complex route', complexeTxt: 'Several steps, or a place outside the city. Counts double.',
+    trajetAide: 'Bus, metro, train, on foot? How long, how much, where to catch it.',
+    ville100: (v) => `Complete ${v || 'your city'}`,
+    villeTxt: 'A complete city earns a bonus. Extra routes can replace missing bars.',
+    groupes: { restos: 'Food', hebergement: 'Stays', activites: 'Activities', bars: 'Bars', trajets: 'Routes' },
+    r4: 'Every now and then, a route: the best way to get somewhere (bus, train, on foot).',
   },
   fr: {
     bienvenue: 'Cartographiez les endroits que seuls les gens d’ici connaissent.',
@@ -65,6 +71,12 @@ const TXT = {
     rienAEnvoyer: 'Rien de nouveau à envoyer',
     cats: { hebergement: 'Dormir', restos: 'Manger', visites: 'Visiter', experiences: 'Expériences', nuit: 'Sortir', sport: 'Sport', trajets: 'Transport', autre: 'Autre' },
     confirmeSuppr: 'Supprimer cet endroit ?',
+    complexe: 'Trajet complexe', complexeTxt: 'Plusieurs étapes, ou un endroit hors de la ville. Compte double.',
+    trajetAide: 'Bus, métro, train, à pied ? Combien de temps, combien ça coûte, où le prendre.',
+    ville100: (v) => `Compléter ${v || 'votre ville'}`,
+    villeTxt: 'Une ville complète donne un bonus. Les trajets en plus peuvent remplacer des bars manquants.',
+    groupes: { restos: 'Restos', hebergement: 'Hébergement', activites: 'Activités', bars: 'Bars', trajets: 'Trajets' },
+    r4: 'De temps en temps, un trajet : la meilleure façon de se rendre quelque part (bus, train, à pied).',
   },
 };
 
@@ -96,6 +108,16 @@ function toast(m) {
   const el = document.getElementById('toast');
   el.textContent = m; el.classList.add('visible');
   clearTimeout(toast.m); toast.m = setTimeout(() => el.classList.remove('visible'), 2600);
+}
+// Une ville complète (comme dans le Studio) : 60 restos, 30 hébergements, 30 activités, 20 bars, 10 trajets.
+const CIBLES = [['restos', ['restos'], 60], ['hebergement', ['hebergement'], 30], ['activites', ['visites', 'experiences', 'sport'], 30], ['bars', ['nuit'], 20], ['trajets', ['trajets'], 10]];
+function progresVille(endroits) {
+  const n = Object.fromEntries(CIBLES.map(([k]) => [k, 0]));
+  for (const e of endroits) { const g = CIBLES.find(([, cats]) => cats.includes(e.categorie)); if (g) n[g[0]] += g[0] === 'trajets' && e.complexe ? 2 : 1; }
+  const cible = Object.fromEntries(CIBLES.map(([k, , c]) => [k, c]));
+  const remplace = Math.min(Math.max(0, cible.bars - n.bars), Math.max(0, n.trajets - cible.trajets));
+  n.bars += remplace; n.trajets -= remplace;
+  return CIBLES.map(([k, , c]) => ({ k, n: n[k], c }));
 }
 const CATS = ['restos', 'visites', 'nuit', 'experiences', 'hebergement', 'sport', 'trajets', 'autre'];
 const urls = new Map();
@@ -184,6 +206,19 @@ function pageBienvenue() {
 }
 
 // ---------- Accueil ----------
+// La ville où il a le plus d'endroits, et ce qui manque pour la compléter.
+function villeAccueil(liste) {
+  const parVille = {};
+  for (const e of liste) (parVille[e.ville || ''] ||= []).push(e);
+  const ville = Object.keys(parVille).sort((a, b) => parVille[b].length - parVille[a].length)[0] ?? '';
+  const lignes = progresVille(parVille[ville] || []);
+  return `
+    <section class="ville-prog">
+      <h2>${esc(t().ville100(ville))}</h2>
+      <p class="aide">${t().villeTxt}</p>
+      ${lignes.map((l) => `<div class="vp-ligne"><span>${t().groupes[l.k]}</span><i><b style="width:${Math.round(Math.min(1, l.n / l.c) * 100)}%"></b></i><small>${Math.min(l.n, l.c)}/${l.c}</small></div>`).join('')}
+    </section>`;
+}
 async function pageAccueil() {
   const liste = (await tous('endroits')).sort((a, b) => (b.creeLe || '').localeCompare(a.creeLe || ''));
   const aEnvoyer = liste.filter((e) => !e.envoyeLe || e.modifieLe > e.envoyeLe);
@@ -202,9 +237,10 @@ async function pageAccueil() {
         <span class="texte"><b>${esc(e.nom)}</b><small>${esc(t().cats[e.categorie] || '')}${e.ville ? `, ${esc(e.ville)}` : ''}</small></span>
         <span class="etat ${aEnvoyer.includes(e) ? '' : 'ok'}">${aEnvoyer.includes(e) ? t().aEnvoyer : t().envoye}</span>
       </a></li>`).join('')}</ul>` : ''}
+    ${villeAccueil(liste)}
     <section class="regles">
       <h2>${t().regles}</h2>
-      <ol><li>${t().r1}</li><li>${t().r2}</li><li>${t().r3}</li></ol>
+      <ol><li>${t().r1}</li><li>${t().r2}</li><li>${t().r3}</li><li>${t().r4}</li></ol>
     </section>`;
   brancherLangue();
   for (const img of app.querySelectorAll('img[data-photo]')) img.src = await urlPhoto(img.dataset.photo);
@@ -267,6 +303,10 @@ async function pageFormulaire(id) {
       <section>
         <h2>${t().categorie}</h2>
         <div class="cats">${CATS.map((c) => `<button type="button" data-cat="${c}" class="${f.categorie === c ? 'choisi' : ''}">${iconeCat(c, { taille: 18 })}<span>${t().cats[c]}</span></button>`).join('')}</div>
+        <div class="trajet-plus" ${f.categorie === 'trajets' ? '' : 'hidden'}>
+          <p class="aide">${t().trajetAide}</p>
+          <label class="interrupteur"><input type="checkbox" name="complexe" ${f.complexe ? 'checked' : ''}><span><b>${t().complexe}</b><small>${t().complexeTxt}</small></span></label>
+        </div>
       </section>
       <label class="champ"><span>${t().nom}</span><input name="nom" value="${esc(f.nom)}" placeholder="${esc(t().nomEx)}"></label>
       <label class="champ"><span>${t().pourquoi}</span><textarea name="description" rows="3" placeholder="${esc(t().pourquoiEx)}">${esc(f.description)}</textarea></label>
@@ -334,7 +374,7 @@ async function pageFormulaire(id) {
   form.addEventListener('click', (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.cat) { f.categorie = b.dataset.cat; form.querySelectorAll('[data-cat]').forEach((x) => x.classList.toggle('choisi', x === b)); }
+    if (b.dataset.cat) { f.categorie = b.dataset.cat; form.querySelectorAll('[data-cat]').forEach((x) => x.classList.toggle('choisi', x === b)); form.querySelector('.trajet-plus').hidden = f.categorie !== 'trajets'; }
     if (b.dataset.prix) { const n = +b.dataset.prix; f.prix = f.prix === n ? 0 : n; form.querySelectorAll('[data-prix]').forEach((x) => x.classList.toggle('choisi', +x.dataset.prix === f.prix)); }
     if (b.dataset.retirer) {
       const pid = b.dataset.retirer;
@@ -357,6 +397,7 @@ async function pageFormulaire(id) {
     ev.preventDefault();
     const v = Object.fromEntries(new FormData(form));
     f.nom = v.nom.trim(); f.description = v.description.trim(); f.ville = v.ville.trim(); f.pays = v.pays.trim();
+    f.complexe = f.categorie === 'trajets' && v.complexe === 'on';
     if (!f.photos.length && !nouvelles.length) { toast(t().manquePhoto); return; }
     if (!f.categorie) { toast(t().manqueCat); return; }
     if (!f.nom) { toast(t().manqueNom); form.nom.focus(); return; }

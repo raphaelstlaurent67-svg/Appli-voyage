@@ -96,3 +96,18 @@ button { cursor: pointer; }
   transition: opacity .2s, transform .2s; pointer-events: none; z-index: 30;
 }
 #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Trajets et progrès de la ville */
+.trajet-plus { display: grid; gap: 8px; margin-top: 4px; }
+.trajet-plus[hidden] { display: none; }
+.interrupteur { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--ligne); background: var(--surface); }
+.interrupteur input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.interrupteur span { display: grid; gap: 2px; }
+.interrupteur small { color: var(--doux); font-size: 14px; }
+.ville-prog { border-top: 1px solid var(--ligne); padding-top: 22px; margin-bottom: 26px; display: grid; gap: 10px; }
+.ville-prog h2 { font-size: 15px; }
+.ville-prog .aide { margin-bottom: 4px; }
+.vp-ligne { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 10px; font-size: 14px; }
+.vp-ligne i { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.vp-ligne b { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.vp-ligne small { color: var(--doux); text-align: right; }
