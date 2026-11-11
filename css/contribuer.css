@@ -107,7 +107,7 @@ button { cursor: pointer; }
 .ville-prog { border-top: 1px solid var(--ligne); padding-top: 22px; margin-bottom: 26px; display: grid; gap: 10px; }
 .ville-prog h2 { font-size: 15px; }
 .ville-prog .aide { margin-bottom: 4px; }
-.vp-ligne { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 10px; font-size: 14px; }
+.vp-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 96px 48px; align-items: center; gap: 10px; font-size: 14px; }
 .vp-ligne i { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .vp-ligne b { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .vp-ligne small { color: var(--doux); text-align: right; }
