@@ -586,8 +586,8 @@ function tuileVoyage(v) {
 
 // Le projet expliqué en 30 secondes (pour Philippe, un client, un futur contributeur).
 const PITCH = {
-  fr: "Planifier un voyage, c'est des dizaines d'heures à fouiller des avis qu'on ne peut pas vérifier. Nous vendons des voyages sur mesure bâtis à partir d'endroits repérés sur place par des locaux rémunérés, et chaque photo est vérifiée avant d'être publiée. Le client reçoit un itinéraire fiable, prêt à partir ; pour le haut de gamme, je me rends moi-même sur le terrain. Aucune entreprise ne combine encore une carte faite par des locaux et la vente de voyages sur mesure.",
-  en: "Planning a trip means dozens of hours digging through reviews you can't verify. We sell custom trips built from places scouted on the ground by paid locals, and every photo is checked before it goes live. Clients get a reliable, ready-to-go itinerary; for high-end trips, I go on the ground myself. No company yet combines a map built by locals with the sale of custom trips.",
+  fr: "Planifier un voyage, c'est des dizaines d'heures à fouiller des avis qu'on ne peut pas vérifier. Nous vendons des voyages sur mesure bâtis à partir d'endroits repérés sur place par des locaux rémunérés, et chaque photo est vérifiée avant d'être publiée. Le client reçoit un itinéraire fiable, prêt à partir ; pour le haut de gamme, je me rends moi-même sur le terrain. Je n'ai trouvé personne qui paie des gens du coin, partout dans le monde, pour remplir une carte, puis vend des voyages sur mesure tirés de cette carte.",
+  en: "Planning a trip means dozens of hours digging through reviews you can't verify. We sell custom trips built from places scouted on the ground by paid locals, and every photo is checked before it goes live. Clients get a reliable, ready-to-go itinerary; for high-end trips, I go on the ground myself. I haven't found anyone who pays locals around the world to fill a map, then sells custom trips built from that map.",
 };
 function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
