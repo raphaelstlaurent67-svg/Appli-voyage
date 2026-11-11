@@ -203,24 +203,6 @@ function coutVoyage(v) {
 }
 
 // ---------- Contributeurs : calculs ----------
-// Plus une fiche est complète, plus elle a de chances d'être acceptée.
-const CRITERES = [
-  ['photo', (e) => e.photos?.length > 0],
-  ['position GPS', (e) => !!e.lat],
-  ['description', (e) => (e.description || '').length >= 20],
-  ['budget', (e) => !!e.prix],
-  ['prix réel', (e) => !!e.montant],
-  ['confort', (e) => !!e.confort],
-  ['adresse ou lien Maps', (e) => !!(e.adresse || e.lienMaps)],
-  ['type précis', (e) => !!(e.sousType || e.categorie === 'autre')],
-  ['contact', (e) => !!(e.telephone || Object.keys(e.contacts || {}).length)],
-  ['date de visite', (e) => !!e.verifieLe],
-];
-function completude(e) {
-  const manque = CRITERES.filter(([, ok]) => !ok(e)).map(([nom]) => nom);
-  return { score: Math.round(((CRITERES.length - manque.length) / CRITERES.length) * 100), manque };
-}
-
 function bilanContributeur(c) {
   const r = etat.regles;
   const siens = etat.endroits.filter((e) => e.contributeurId === c.id);
@@ -261,7 +243,7 @@ function bilanContributeur(c) {
 }
 
 // ---------- Barre latérale ----------
-// Le menu, dans l'ordre. L'accueil reprend la même liste avec une phrase pour chaque choix.
+// Le menu, dans l'ordre.
 const MENU = [
   ['#/', 'house', 'Accueil', ''],
   ['#/contributeurs', 'users', 'Contributeurs', 'Ajoute des contributeurs, envoie-leur leur lien, vois ce que tu leur dois.'],
@@ -596,16 +578,8 @@ function pageAccueil() {
   const villes = uniques(utilisables.map((e) => `${e.pays}|${e.ville}`));
   const vendus = etat.voyages.filter((v) => v.vendu);
   const ventes = vendus.reduce((n, v) => n + nombre(v.prixVente), 0);
-  const n = aValider().length;
   app.innerHTML = `
     ${entete('Accueil', '', `<button class="btn" id="nouveau">${icone('plus', { taille: 15 })} Nouveau voyage</button>`)}
-    <div class="choix-accueil">
-      ${MENU.slice(1).map(([href, ico, nom, phrase]) => `
-        <a class="panel choix ${href === '#/contributeurs' && n ? 'hi' : ''}" href="${href}">
-          <span class="rond-ico">${icone(ico, { taille: 18 })}</span>
-          <span><b>${nom}${href === '#/contributeurs' && n ? ` <span class="pastille-n">${n}</span>` : ''}</b><small>${phrase}</small></span>
-        </a>`).join('')}
-    </div>
     <div class="kpis kpis-3">
       <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${utilisables.length}</b><small>${pluriel(villes.length, 'ville')}, ${pluriel(pays.length, 'pays', 'pays')}</small></div>
       <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
@@ -624,8 +598,9 @@ function pageAccueil() {
       </div>`}
     <h2 class="titre-section">Voyages clients</h2>
     <div class="tiles">${clients.map(tuileVoyage).join('') || `<button class="tile tile-vide" id="nouveau2">${icone('plus', { taille: 22 })}<span>Créer ton premier voyage</span></button>`}</div>
-    <h2 class="titre-section">Modèles réutilisables <small>Un voyage type (ex. « Japon 14 jours ») à dupliquer pour chaque client</small></h2>
-    <div class="tiles">${modeles.map(tuileVoyage).join('') || '<p class="vide-ligne">Aucun modèle. Dans un voyage, onglet « Infos et vente », coche « Modèle réutilisable ».</p>'}</div>`;
+    ${modeles.length ? `
+      <h2 class="titre-section">Modèles réutilisables</h2>
+      <div class="tiles">${modeles.map(tuileVoyage).join('')}</div>` : ''}`;
   let languePitch = 'fr';
   app.querySelectorAll('[data-pitch]').forEach((b) => {
     b.onclick = () => {
@@ -733,7 +708,7 @@ function ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb) {
           <label class="champ"><span>Prix de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 350"></label>
           <label class="champ"><span>Vendu le</span><input data-info="venduLe" type="date" value="${esc(v.venduLe)}" ${v.vendu ? '' : 'disabled'}></label>
           <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Les contributeurs dont les endroits sont dans ce voyage reçoivent ${pct(r.pourcentage)} du prix, selon leur part.</small></span></label>
-          <label class="interr large"><input type="checkbox" data-info="modele" ${v.modele ? 'checked' : ''}><i></i><span><b>Modèle réutilisable</b><small>Apparaît dans « Modèles » pour le dupliquer à chaque nouveau client.</small></span></label>
+          <label class="interr large"><input type="checkbox" data-info="modele" ${v.modele ? 'checked' : ''}><i></i><span><b>Modèle réutilisable</b><small>Apparaît sur l'accueil, prêt à dupliquer pour un nouveau client.</small></span></label>
         </div>
       </section>
     </div>`;
@@ -770,7 +745,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     <section class="panel etapes-panel">
       <div class="etape-titre">
         <span class="gros-num">1</span>
-        <div><h3>Le parcours</h3><p>Les villes où dort le client, dans l'ordre, et combien de jours dans chacune. Les journées se créent toutes seules en dessous.</p></div>
+        <div><h3>Le parcours</h3><p>Les villes, dans l'ordre, et combien de jours dans chacune.</p></div>
       </div>
       <div class="parcours" id="parcours"></div>
       <div class="etapes-entete" id="etapes-entete"><span></span><span>Pays</span><span>Ville</span><span>Jours</span><span></span></div>
@@ -780,7 +755,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     </section>
     <div class="etape-titre etape-titre-2">
       <span class="gros-num">2</span>
-      <div><h3>Les journées</h3><p>Glisse tes endroits de la liste de droite dans chaque journée, ou clique sur la journée puis sur + .</p></div>
+      <div><h3>Les journées</h3><p>Glisse un endroit de la liste de droite, ou choisis la journée puis +.</p></div>
       <div class="chiffres-ligne" id="resume"></div>
       <button class="btn ghost sm" id="bouton-carte">${icone('map', { taille: 14 })} <span>${carteVisible ? 'Cacher la carte' : 'Voir la carte'}</span></button>
     </div>
@@ -800,7 +775,6 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
           <button class="puce" data-coeur title="Coups de cœur" aria-label="Coups de cœur">${icone('heart', { taille: 15 })}</button>
         </div>
         <ul class="biblio" id="biblio"></ul>
-        <p class="aide pied-biblio">Glisse un endroit dans une journée, ou clique sur + pour l'ajouter à la journée choisie (en couleur).</p>
       </aside>
     </div>`;
   const $ = (s) => zone.querySelector(s);
@@ -1448,7 +1422,7 @@ async function ongletSuivi(v, zone, enregistrer) {
     const nouvelles = [...s.nouvelles].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     zone.innerHTML = `
       <div class="barre-client">
-        <p class="aide-client">${icone('lock', { taille: 14 })}<span>Une page privée, juste pour ${esc(v.client || 'ce client')} : son voyage qui se remplit, tes nouvelles, ses choix à faire, et un bouton pour t'écrire en direct. Envoie le fichier par WhatsApp ou courriel, et renvoie-le à chaque nouvelle.</span></p>
+        <p class="aide-client">${icone('lock', { taille: 14 })}<span>Sa page privée pendant que tu es sur place. Envoie-la par WhatsApp ou courriel, et renvoie-la à chaque nouvelle.</span></p>
         <div class="head-actions">
           <button class="btn sm" id="telecharger-suivi">${icone('download', { taille: 14 })} Télécharger la page</button>
           ${navigator.canShare ? `<button class="btn ghost sm" id="partager-suivi">${icone('send', { taille: 14 })} Envoyer</button>` : ''}
@@ -1466,7 +1440,7 @@ async function ongletSuivi(v, zone, enregistrer) {
           </div>
         </section>
         <section class="panel">
-          <div class="panel-tete"><h3>Une nouvelle du terrain</h3><span class="aide">Tous les 2 ou 3 jours</span></div>
+          <div class="panel-tete"><h3>Une nouvelle du terrain</h3></div>
           <div class="form-grille">
             <label class="champ large"><span>Ton message</span><textarea id="n-texte" rows="3" placeholder="Ex. : Testé ce matin le petit marché derrière votre ryokan. Vous allez l'adorer."></textarea></label>
             <label class="champ"><span>Où <small>optionnel</small></span><input id="n-lieu" placeholder="Ex. : Kyoto"></label>
@@ -1481,7 +1455,7 @@ async function ongletSuivi(v, zone, enregistrer) {
       </div>
 
       <section class="panel marge-panel">
-        <div class="panel-tete"><h3>Un choix à lui faire faire</h3><span class="aide">Il touche ce qu'il préfère, puis t'envoie ses choix en un clic</span></div>
+        <div class="panel-tete"><h3>Un choix à lui faire faire</h3></div>
         <label class="champ"><span>La question</span><input id="c-question" placeholder="Ex. : Pour vos deux nuits à Kyoto ?"></label>
         <div class="options-suivi">${Array.from({ length: OPTIONS_PAR_CHOIX }, (_, i) => `
           <fieldset class="champ option-suivi">
@@ -1498,8 +1472,8 @@ async function ongletSuivi(v, zone, enregistrer) {
           <p class="aide">Quand il t'envoie sa réponse, clique sur l'option qu'il a choisie : elle sera cochée sur sa page.</p>` : ''}
       </section>
 
-      <section class="panel marge-panel">
-        <div class="panel-tete"><h3>Visiter un hôtel gratuitement</h3><span class="aide">Les hôtels font visiter aux gens qui leur envoient des clients</span></div>
+      <details class="panel marge-panel repli">
+        <summary class="panel-tete"><h3>Courriel pour visiter un hôtel</h3>${icone('chevron-down', { taille: 16 })}</summary>
         <div class="form-grille">
           <label class="champ"><span>Nom de l'hôtel</span><input id="v-hotel" placeholder="Ex. : Hoshinoya Kyoto"></label>
           <label class="champ"><span>Ville</span><input id="v-ville" value="${esc(v.etapes.find((et) => et.ville)?.ville || '')}"></label>
@@ -1507,7 +1481,7 @@ async function ongletSuivi(v, zone, enregistrer) {
         <div class="seg marge-seg"><button class="${langueVisite === 'fr' ? 'on' : ''}" data-langue-visite="fr">Français</button><button class="${langueVisite === 'en' ? 'on' : ''}" data-langue-visite="en">English</button></div>
         <textarea id="v-texte" class="texte-modele" rows="11" readonly></textarea>
         <div class="rangee-btn"><button class="btn ghost" id="copier-visite">${icone('copy', { taille: 15 })} Copier le courriel</button></div>
-      </section>
+      </details>
 
       <h2 class="titre-section">Ce que ${esc(v.client || 'le client')} voit <small>Touche une option pour essayer</small></h2>
       <div class="cadre-client" id="apercu-suivi"></div>`;
@@ -1641,9 +1615,8 @@ function pageContributeurs(onglet) {
   const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
   const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
   app.innerHTML = `
-    ${entete('Contributeurs', "Les personnes qui ajoutent des endroits pour toi, ce qu'elles ont envoyé et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
-    <div class="kpis">
-      <div class="kpi"><span>${icone('users', { taille: 15 })} Contributeurs</span><b>${etat.contributeurs.length}</b><small>${pluriel(bilans.reduce((s, x) => s + x.b.acceptes, 0), 'endroit accepté', 'endroits acceptés')}</small></div>
+    ${entete('Contributeurs', "Ce qu'ils t'envoient et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
+    <div class="kpis kpis-3">
       <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
       <div class="kpi ${du ? 'warn' : ''}"><span>${icone('wallet', { taille: 15 })} À payer</span><b>${formatArgent(du)}</b><small>Total dû maintenant</small></div>
       <div class="kpi"><span>${icone('circle-check-big', { taille: 15 })} Déjà payé</span><b>${formatArgent(paye)}</b><small>${pluriel(etat.paiements.length, 'paiement')}</small></div>
@@ -1661,7 +1634,7 @@ function pageContributeurs(onglet) {
 function pageAValider() {
   const n = aValider().length;
   app.innerHTML = `
-    ${entete('À valider', n ? `${pluriel(n, 'endroit envoyé', 'endroits envoyés')} par tes contributeurs, les plus complets en premier. Accepte ce qui est bon : seuls les endroits acceptés servent dans tes voyages et sont payés.` : "Ici arrivent les endroits que tes contributeurs t'envoient.")}
+    ${entete('À valider', n ? 'Seuls les endroits acceptés sont payés et servent dans tes voyages.' : "Ici arrivent les endroits que tes contributeurs t'envoient.")}
     <div id="contenu"></div>`;
   ongletSoumissions(app.querySelector('#contenu'));
 }
@@ -1799,32 +1772,17 @@ function ongletListeContrib(zone, bilans) {
               <button class="ico-btn" data-modifier="${esc(c.id)}" aria-label="Modifier">${icone('pencil', { taille: 15 })}</button>
             </div>
           </div>
-          <div class="contrib-chiffres">
+          <div class="contrib-simple">
             <div><b>${b.acceptes}</b><span>acceptés</span></div>
-            <div class="${b.enAttente ? 'hi' : ''}"><b>${b.enAttente}</b><span>à valider</span></div>
-            <div><b>${b.refuses}</b><span>refusés</span></div>
-            <div><b>${formatArgent(b.gagne)}</b><span>gagné</span></div>
-            <div><b>${formatArgent(b.paye)}</b><span>payé</span></div>
+            ${b.enAttente ? `<a class="hi" href="#/a-valider"><b>${b.enAttente}</b><span>à valider</span></a>` : `<div><b>0</b><span>à valider</span></div>`}
             <div class="${b.du ? 'warn' : ''}"><b>${formatArgent(b.du)}</b><span>à payer</span></div>
-          </div>
-          <div class="recompenses">
-            <div class="recomp">
-              <div class="recomp-tete">${icone('trophy', { taille: 15 })}<b>Ville complète</b><span>${nbBonus ? `${nbBonus} × ${formatArgent(r.bonusVille)}` : formatArgent(r.bonusVille)}</span></div>
-              ${villeProche ? `${barre(villeProche.progres)}<p>${esc(villeProche.ville || '?')} à ${Math.round(villeProche.progres * 100)} %. Manque : ${esc(villeProche.manque.slice(0, 2).join(', '))}${villeProche.manque.length > 2 ? '…' : ''}</p>` : `${barre(nbBonus ? 1 : 0, nbBonus ? 'ok' : '')}<p>${b.villes.length ? 'Toutes ses villes sont complètes.' : "Aucun endroit accepté pour l'instant."}</p>`}
-            </div>
-            <div class="recomp">
-              <div class="recomp-tete">${icone('gift', { taille: 15 })}<b>${esc(r.recompenseVoyage)}</b><span>${r.seuilVoyage} endroits</span></div>
-              ${barre(b.progresVoyage, b.progresVoyage >= 1 ? 'ok' : '')}<p>${b.progresVoyage >= 1 ? 'Objectif atteint !' : `${b.acceptes} / ${r.seuilVoyage}, encore ${r.seuilVoyage - b.acceptes}`}</p>
-            </div>
-            <div class="recomp">
-              <div class="recomp-tete">${icone('percent', { taille: 15 })}<b>Part des ventes</b><span>${pct(r.pourcentage)}</span></div>
-              <p>${b.ventes.length ? b.ventes.map((x) => `${esc(x.titre)} : ${formatArgent(x.montant)}`).join(', ') : 'Aucun itinéraire vendu avec ses endroits.'}</p>
+            <div class="contrib-ville">
+              ${villeProche ? `<span>${esc(villeProche.ville || '?')} : ville complète à ${Math.round(villeProche.progres * 100)} %</span>${barre(villeProche.progres)}` : `<span>${nbBonus ? pluriel(nbBonus, 'ville complète', 'villes complètes') : "Pas encore d'endroit accepté"}</span>${barre(nbBonus ? 1 : 0, nbBonus ? 'ok' : '')}`}
             </div>
           </div>
         </section>`;
       }).join('')}
-    </div>
-    ${explications}`;
+    </div>`;
   zone.querySelectorAll('[data-modifier]').forEach((b) => { b.onclick = () => formulaireContributeur(etat.contributeurs.find((c) => c.id === b.dataset.modifier)); });
   zone.querySelectorAll('[data-invitation]').forEach((b) => { b.onclick = () => montrerInvitation(etat.contributeurs.find((c) => c.id === b.dataset.invitation)); });
   zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
@@ -1942,28 +1900,26 @@ function chercherEnLigne(pid, moteur) {
 }
 
 function ongletSoumissions(zone) {
-  const liste = aValider().sort((a, b) => completude(b).score - completude(a).score);
+  const liste = aValider().sort((a, b) => (a.recuLe || '').localeCompare(b.recuLe || ''));
   if (!liste.length) {
     zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un contributeur (dans « Mes données »), ses nouveaux endroits arrivent ici.</span></div>`;
     return;
   }
   zone.innerHTML = `
-    <div class="barre-actions"><span>${pluriel(liste.length, 'endroit')} en attente, les plus complets en premier.</span>
+    <div class="barre-actions"><span>${pluriel(liste.length, 'endroit')} en attente. Fiche sûre = photos vérifiées, position et description. Regarde seulement les autres.</span>
       <button class="btn sm" id="accepter-verts" disabled>${icone('shield-check', { taille: 14 })} Accepter toutes les fiches sûres</button></div>
-    <p class="aide">Une fiche est sûre quand ses photos ont passé la vérification (appareil photo, date, position, aucune copie) et qu'elle a sa position et une vraie description. Regarde seulement les autres.</p>
     <div class="soumissions">
       ${liste.map((e) => {
         const cat = categorie(e);
         const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
-        const { score, manque } = completude(e);
+        const manque = [e.lat ? '' : 'position', (e.description || '').length >= 20 ? '' : 'description', e.photos?.length ? '' : 'photo'].filter(Boolean);
         return `
           <article class="panel soum" style="--c:${cat.couleur}">
             <div class="soum-photo">${iconeCat(e.categorie, { taille: 26, epaisseur: 1.5 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}${e.photos?.length > 1 ? `<span class="soum-nb">${e.photos.length} photos</span>` : ''}</div>
             <div class="soum-corps">
               <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type, e.complexe ? 'trajet complexe, compte double' : ''].filter(Boolean).join(', '))}</span>
               <b class="soum-nom">${esc(e.nom)}</b>
-              <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))}. Par ${esc(c?.nom || 'inconnu')}, reçu le ${esc(dateCourte(e.recuLe))}</small>
-              <div class="score">${barre(score / 100, score >= 80 ? 'ok' : score >= 50 ? '' : 'bad')}<span>${score} % complet</span></div>
+              <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))}. Par ${esc(c?.nom || 'inconnu')}${e.recuLe ? `, reçu le ${esc(dateCourte(e.recuLe))}` : ''}</small>
               ${manque.length ? `<p class="manque">Manque : ${esc(manque.join(', '))}</p>` : ''}
               <div class="verif" data-verif="${esc(e.id)}"><div class="verif-tete">${icone('shield-check', { taille: 15 })} Vérification des photos…</div></div>
               <details><summary>Voir la fiche</summary>
@@ -2065,14 +2021,21 @@ function ongletPaiements(zone, bilans) {
 
 function ongletRegles(zone) {
   const r = etat.regles;
+  const explications = `
+    <div class="grille-3 explique">
+      <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Payé seulement quand tu acceptes l'endroit.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${GROUPES_VILLE.map(([k, nom]) => `${r.cibles[k]} ${nom.toLowerCase()}`).join(', ')}. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${pct(r.pourcentage)} des ventes</b><p>Quand un voyage vendu utilise ses endroits. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits acceptés.</p></div>
+    </div>`;
   zone.innerHTML = `
-    <form class="panel regles" id="regles">
-      <p class="aide">Ces règles servent à calculer ce que tu dois à chaque contributeur. Tu pourras les ajuster après tes tests.</p>
+    ${explications}
+    <form class="panel regles marge-panel" id="regles">
+      <p class="aide">Change les montants ici : tout le reste du Studio se met à jour.</p>
       <div class="form-grille">
         <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
         <label class="champ"><span>Pourcentage sur les ventes (%) <small>ex. : 0,5 ou 1</small></span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
         <label class="champ"><span>Bonus ville complète ($ CA)</span><input name="bonusVille" inputmode="decimal" value="${r.bonusVille}"></label>
-        <fieldset class="champ large"><span>Une ville complète <small>Activités = Visites, Expériences et Sport. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</small></span>
+        <fieldset class="champ large"><span>Une ville complète <small>Activités = visites, expériences et sport.</small></span>
           <div class="cibles-ville">${GROUPES_VILLE.map(([k, nom]) => `<label class="champ"><span>${nom}</span><input name="cible-${k}" type="number" min="0" value="${r.cibles[k]}"></label>`).join('')}</div>
         </fieldset>
         <label class="champ"><span>Récompense des meilleurs</span><input name="recompenseVoyage" value="${esc(r.recompenseVoyage)}"></label>
@@ -2097,8 +2060,6 @@ function ongletRegles(zone) {
 
 // ---------- Mes données ----------
 async function pageDonnees() {
-  const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
-  const pays = uniques(etat.endroits.map((e) => e.pays));
   const cfg = await sync.lireConfig();
   const envoi = await sync.etat();
   app.innerHTML = `
@@ -2120,11 +2081,6 @@ async function pageDonnees() {
         <p class="aide" id="sync-message"></p>
         <div class="head-actions gauche"><button class="btn sm" id="sync-brancher">${icone('link', { taille: 14 })} Brancher</button></div>`}
     </section>
-    <div class="kpis kpis-3">
-      <div class="kpi"><span>${icone('map-pin', { taille: 15 })} Endroits</span><b>${etat.endroits.length}</b><small>${pluriel(pays.length, 'pays', 'pays')}</small></div>
-      <div class="kpi"><span>${icone('image', { taille: 15 })} Photos</span><b>${nbPhotos}</b><small>incluses dans les copies</small></div>
-      <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${etat.voyages.length}</b><small>et ${pluriel(etat.contributeurs.length, 'contributeur')}</small></div>
-    </div>
     <div class="grille-2">
       <section class="panel">
         <div class="panel-tete"><h3>Importer un fichier</h3></div>
