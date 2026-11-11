@@ -6,6 +6,7 @@ import { paysDuContinent } from './monde.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
 import * as pwa from './installer.js';
+import { CONTACT } from './contact.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
@@ -13,9 +14,11 @@ const params = new URLSearchParams(location.search);
 // Courriel de Raph, ajouté au lien par le Studio (gardé si la fiche est installée sur son ordi).
 let POUR = params.get('pour') || '';
 try { if (POUR) localStorage.setItem('pourDemande', POUR); else POUR = localStorage.getItem('pourDemande') || ''; } catch (_) { /* rien */ }
+if (!POUR) POUR = CONTACT.courriel.trim();
 // Numéro de cell de Raph (optionnel) : le client lui envoie sa demande par texto en un clic.
 let TEL = (params.get('tel') || '').replace(/[^\d+]/g, '');
 try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.getItem('telDemande') || ''; } catch (_) { /* rien */ }
+if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // Les destinations les plus demandées (du monde entier) ; les autres se trouvent avec la recherche.
 const POPULAIRES = ['Japon', 'Thaïlande', 'France', 'Italie', 'Espagne', 'Portugal', 'Grèce', 'Mexique', 'Cuba', 'République dominicaine', 'États-Unis', 'Costa Rica', 'Vietnam', 'Indonésie', 'Maroc', 'Pérou'];
@@ -52,6 +55,7 @@ const TXT = {
     dureeTotale: 'Durée totale', departLe: (x) => `Départ le ${x}`, datesAVoir: 'Dates à préciser', jeTeLaisse: 'Répartition du temps entre les pays : à votre choix',
     mesEnvies: 'Envies', aVoirCourt: 'À voir absolument',
     presque: 'Votre demande est prête', presqueTxt: 'Envoyez-la-nous : notre équipe vous répond avec une proposition d’itinéraire.',
+    envoiCours: 'Envoi de votre demande…', envoyee: 'Demande envoyée', envoyeeTxt: 'Merci ! Notre équipe vous répond sous 48 heures avec une proposition d’itinéraire.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
     parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message', copier: 'Copier la demande',
     image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses',
     merci: 'Merci ! Demande envoyée', copie: 'Copié ! Collez-le dans un courriel ou un message', copieCeTexte: 'Copiez ce texte :',
@@ -87,6 +91,7 @@ const TXT = {
     dureeTotale: 'Total length', departLe: (x) => `Leaving ${x}`, datesAVoir: 'Dates to confirm', jeTeLaisse: 'Time split between countries: up to you',
     mesEnvies: 'Interests', aVoirCourt: 'Must see',
     presque: 'Your request is ready', presqueTxt: 'Send it to us: our team will reply with an itinerary proposal.',
+    envoiCours: 'Sending your request…', envoyee: 'Request sent', envoyeeTxt: 'Thank you! Our team will reply within 48 hours with an itinerary proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
     parCourriel: 'Send by email', parMessage: 'Send by message', copier: 'Copy the request',
     image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers',
     merci: 'Thanks! Request sent', copie: 'Copied! Paste it in an email or a message', copieCeTexte: 'Copy this text:',
@@ -718,6 +723,25 @@ async function envoyer() {
   else { envoi.duree = totalJours(); envoi.depart = debutVoyage(); envoi.repartition = ''; }
   const code = await encoder(envoi);
   const lien = `${new URL('studio/', location.href).href}#/demande/${code}`;
+  // Envoi automatique : la demande part directement au courriel de Raph (FormSubmit, gratuit).
+  let etat = POUR ? 'envoi' : 'manuel';
+  const envoyerAuto = async () => {
+    try {
+      const rep = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(POUR)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _subject: `Nouvelle demande de voyage : ${d.pays.map((x) => x.nom).join(', ')} (${d.nom.trim()})`,
+          _template: 'box', _captcha: 'false',
+          Nom: d.nom.trim(), email: d.courriel.trim() || undefined, Téléphone: d.telephone.trim() || '—',
+          Demande: texteMessage(lien), 'Ouvrir dans le Studio': lien,
+        }),
+      });
+      const r = await rep.json().catch(() => ({}));
+      etat = rep.ok && String(r.success) !== 'false' ? 'ok' : 'manuel';
+    } catch (_) { etat = 'manuel'; }
+    dessiner();
+  };
   const dessiner = () => {
     document.documentElement.lang = d.langue;
     const sujet = t().sujet(d.pays.map((x) => nomPays(x.nom)).join(', '), d.nom);
@@ -726,14 +750,13 @@ async function envoyer() {
       <header class="haut">${enTete(null)}</header>
       <section class="merci">
         <span class="merci-ico">${icone('check', { taille: 30, epaisseur: 2.6 })}</span>
-        <h1>${t().presque}</h1>
-        <p>${t().presqueTxt}</p>
-        <div class="boutons-envoi">
+        ${etat === 'envoi' ? `<h1>${t().envoiCours}</h1>` : etat === 'ok' ? `<h1>${t().envoyee}</h1><p>${t().envoyeeTxt}</p>` : `<h1>${t().presque}</h1><p>${POUR ? t().echec : t().presqueTxt}</p>`}
+        ${etat === 'manuel' ? `        <div class="boutons-envoi">
           ${POUR ? `<a class="bouton" href="mailto:${encodeURIComponent(POUR)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(texte)}">${icone('mail', { taille: 18 })} ${t().parCourriel}</a>` : ''}
           ${TEL ? `<a class="bouton ${POUR ? 'secondaire' : ''}" href="sms:${TEL}?&body=${encodeURIComponent(texte)}">${icone('message-circle', { taille: 18 })} ${t().parMessage}</a>`
             : navigator.share ? `<button class="bouton ${POUR ? 'secondaire' : ''}" id="partager">${icone('message-circle', { taille: 18 })} ${t().parMessage}</button>` : ''}
           ${POUR || TEL || navigator.share ? `<button class="lien" id="copier">${icone('copy', { taille: 16 })} ${t().copier}</button>` : `<button class="bouton" id="copier">${icone('copy', { taille: 18 })} ${t().copier}</button>`}
-        </div>
+        </div>` : ''}
         ${carteResume()}
         <button class="bouton secondaire" id="image">${icone('image', { taille: 18 })} ${t().image}</button>
         <p class="doux">${t().imageAide}</p>
@@ -742,7 +765,8 @@ async function envoyer() {
     brancherEnTete(dessiner);
     const p = fiche.querySelector('#partager');
     if (p) p.onclick = async () => { try { await navigator.share({ title: sujet, text: texte }); toast(t().merci); } catch (_) { /* annulé */ } };
-    fiche.querySelector('#copier').onclick = async () => {
+    const c = fiche.querySelector('#copier');
+    if (c) c.onclick = async () => {
       try { await navigator.clipboard.writeText(texte); toast(t().copie); } catch (_) { prompt(t().copieCeTexte, texte); }
     };
     fiche.querySelector('#image').onclick = partagerImage;
@@ -750,6 +774,7 @@ async function envoyer() {
   };
   dessiner();
   window.scrollTo(0, 0);
+  if (etat === 'envoi') envoyerAuto();
   return undefined;
 }
 
