@@ -142,3 +142,48 @@ export const NOMS_DEVISES = {
 
 // Monnaies des pays où tu vas le plus, montrées en premier.
 export const DEVISES_FAVORITES = ['JPY', 'THB', 'KRW', 'NPR', 'PHP', 'VND'];
+
+// Spécialités culinaires selon le pays : remplacent la liste générale « Spécialité » des restos.
+export const SPECIALITES_PAYS = {
+  'Japon': ['Ramen', 'Sushi', 'Izakaya', 'Yakitori', 'Tempura', 'Okonomiyaki', 'Udon / soba', 'Wagyu', 'Kaiseki'],
+  'Corée du Sud': ['BBQ coréen', 'Bibimbap', 'Poulet frit', 'Tteokbokki', 'Naengmyeon', 'Kimchi jjigae', 'Fruits de mer'],
+  'Chine': ['Dim sum', 'Hot pot', 'Canard laqué', 'Nouilles tirées', 'Raviolis (jiaozi)', 'Cuisine du Sichuan'],
+  'Taïwan': ['Soupe de nouilles au bœuf', 'Xiaolongbao', 'Bubble tea', 'Marché de nuit', 'Hot pot'],
+  'Thaïlande': ['Pad thaï', 'Curry vert', 'Som tam', 'Tom yum', 'Khao soi', 'Mango sticky rice', 'Fruits de mer'],
+  'Vietnam': ['Pho', 'Banh mi', 'Bun cha', 'Bun bo Hue', 'Cao lau', 'Café vietnamien', 'Fruits de mer'],
+  'Cambodge': ['Amok', 'Lok lak', 'Nom banh chok', 'Kampot (poivre, crabe)'],
+  'Laos': ['Laap', 'Khao piak sen', 'Sticky rice', 'Mok pa'],
+  'Indonésie': ['Nasi goreng', 'Satay', 'Rendang', 'Babi guling', 'Gado-gado', 'Warung local'],
+  'Malaisie': ['Nasi lemak', 'Laksa', 'Char kway teow', 'Roti canai', 'Satay'],
+  'Singapour': ['Hawker centre', 'Chili crab', 'Hainanese chicken rice', 'Laksa'],
+  'Philippines': ['Adobo', 'Lechon', 'Sinigang', 'Halo-halo', 'Fruits de mer'],
+  'Inde': ['Curry', 'Thali', 'Biryani', 'Dosa', 'Street food (chaat)', 'Tandoori'],
+  'Népal': ['Dal bhat', 'Momos', 'Thukpa', 'Newari'],
+  'Sri Lanka': ['Rice & curry', 'Hoppers', 'Kottu roti', 'Fruits de mer'],
+  'Canada': ['Poutine', 'Smoked meat', 'Bagels', 'Cabane à sucre', 'Fruits de mer', 'Brasserie', 'Cuisine du marché'],
+  'États-Unis': ['Burger', 'BBQ', 'Pizza', 'Diner', 'Steakhouse', 'Brunch', 'Fruits de mer'],
+  'Mexique': ['Tacos', 'Mole', 'Cochinita pibil', 'Ceviche', 'Tamales', 'Mezcalería'],
+  'Cuba': ['Ropa vieja', 'Paladar', 'Sandwich cubain', 'Fruits de mer', 'Mojito'],
+  'République dominicaine': ['La bandera', 'Mofongo', 'Sancocho', 'Fruits de mer', 'Comedor local'],
+  'Costa Rica': ['Casado', 'Gallo pinto', 'Soda (resto local)', 'Ceviche', 'Café'],
+  'Pérou': ['Ceviche', 'Lomo saltado', 'Nikkei', 'Anticuchos', 'Pisco sour', 'Cuisine andine'],
+  'Argentine': ['Asado', 'Empanadas', 'Parrilla', 'Milanesa', 'Bar à vin (malbec)'],
+  'Brésil': ['Churrascaria', 'Feijoada', 'Moqueca', 'Açaí', 'Pão de queijo'],
+  'Colombie': ['Bandeja paisa', 'Arepas', 'Ajiaco', 'Café', 'Fruits tropicaux'],
+  'France': ['Bistrot', 'Brasserie', 'Boulangerie', 'Fromagerie', 'Crêperie', 'Bouchon lyonnais', 'Bar à vin', 'Gastronomique'],
+  'Italie': ['Pizza', 'Pâtes fraîches', 'Trattoria', 'Gelato', 'Osteria', 'Aperitivo', 'Fruits de mer'],
+  'Espagne': ['Tapas', 'Paella', 'Pintxos', 'Jamón', 'Churros', 'Fruits de mer'],
+  'Portugal': ['Pastel de nata', 'Bacalhau', 'Francesinha', 'Sardines grillées', 'Tasca', 'Fruits de mer'],
+  'Grèce': ['Taverne', 'Gyros / souvlaki', 'Mezze', 'Poisson grillé', 'Moussaka'],
+  'Royaume-Uni': ['Pub', 'Fish and chips', 'Sunday roast', 'Afternoon tea', 'Curry'],
+  'Allemagne': ['Brasserie (Biergarten)', 'Currywurst', 'Schnitzel', 'Bretzel', 'Döner'],
+  'Maroc': ['Tajine', 'Couscous', 'Pastilla', 'Thé à la menthe', 'Street food (médina)'],
+  'Turquie': ['Kebab', 'Meze', 'Baklava', 'Pide', 'Petit-déjeuner turc'],
+};
+const SPECIALITES_MONDE = ['Cuisine locale', 'Plat typique', 'Fruits de mer', 'Grillades', 'Pizza', 'Burger', 'Brunch', 'Dessert'];
+
+// Les sous-types d'un type : pour les spécialités des restos, ceux du pays choisi.
+export function sousTypes(categorie, type, pays) {
+  if (categorie === 'restos' && type === 'Spécialité') return SPECIALITES_PAYS[pays] || SPECIALITES_MONDE;
+  return TAXONOMIE[categorie]?.types?.[type] || [];
+}

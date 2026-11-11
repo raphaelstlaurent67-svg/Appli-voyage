@@ -1,4 +1,4 @@
-import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES } from './taxonomie.js';
+import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
 import * as sync from './sync.js';
@@ -251,7 +251,7 @@ function choisirCategorie(f, quandFini) {
     ouvrirFeuille(`
       ${enteteFeuille(esc(c.nom), '1')}
       <div class="tuiles" style="--c:${c.couleur}">
-        ${Object.entries(c.types).map(([t, sous]) => `
+        ${Object.keys(c.types).map((t) => [t, sousTypes(cat, t, f.pays)]).map(([t, sous]) => `
           <button type="button" class="tuile ${cat === f.categorie && t === f.type ? 'choisie' : ''}" data-type="${esc(t)}">
             <span class="tuile-nom">${esc(t)}</span>
             <span class="tuile-sous">${esc(sous.slice(0, 3).join(', '))}${sous.length > 3 ? '…' : ''}</span>
@@ -261,7 +261,7 @@ function choisirCategorie(f, quandFini) {
 
   const etape3 = () => {
     const c = TAXONOMIE[cat];
-    const sous = c.types[type] || [];
+    const sous = sousTypes(cat, type, f.pays);
     ouvrirFeuille(`
       ${enteteFeuille(esc(type), '2')}
       <div class="tuiles tuiles-petites" style="--c:${c.couleur}">
