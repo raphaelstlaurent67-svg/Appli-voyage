@@ -265,8 +265,6 @@ function bilanContributeur(c) {
 const MENU = [
   ['#/', 'house', 'Accueil', ''],
   ['#/contributeurs', 'users', 'Contributeurs', 'Ajoute des contributeurs, envoie-leur leur lien, vois ce que tu leur dois.'],
-  ['#/a-valider', 'inbox', 'À valider', 'Les endroits reçus. Les photos sont vérifiées pour toi.'],
-  ['#/demandes', 'send', 'Fiche client', 'Le lien à envoyer à un client pour sa demande de voyage.'],
   ['#/ventes', 'banknote', 'Ventes', 'Ce que tes itinéraires ont rapporté.'],
   ['#/donnees', 'folder-open', 'Mes données', 'Importer un fichier de contributeur, garder une copie.'],
 ];
@@ -282,7 +280,7 @@ function rendreSide() {
       <span><b>Studio</b></span>
     </a>
     <nav class="sideNav">
-      ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/a-valider' && n ? `<span class="pastille-n">${n}</span>` : '')).join('')}
+      ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/contributeurs' && n ? `<span class="pastille-n">${n}</span>` : '')).join('')}
     </nav>
     <div class="sideLab">Voyages</div>
     <div class="sideVoyages">
@@ -603,9 +601,9 @@ function pageAccueil() {
     ${entete('Accueil', '', `<button class="btn" id="nouveau">${icone('plus', { taille: 15 })} Nouveau voyage</button>`)}
     <div class="choix-accueil">
       ${MENU.slice(1).map(([href, ico, nom, phrase]) => `
-        <a class="panel choix ${href === '#/a-valider' && n ? 'hi' : ''}" href="${href}">
+        <a class="panel choix ${href === '#/contributeurs' && n ? 'hi' : ''}" href="${href}">
           <span class="rond-ico">${icone(ico, { taille: 18 })}</span>
-          <span><b>${nom}${href === '#/a-valider' && n ? ` <span class="pastille-n">${n}</span>` : ''}</b><small>${phrase}</small></span>
+          <span><b>${nom}${href === '#/contributeurs' && n ? ` <span class="pastille-n">${n}</span>` : ''}</b><small>${phrase}</small></span>
         </a>`).join('')}
     </div>
     <div class="kpis kpis-3">
