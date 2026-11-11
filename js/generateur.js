@@ -586,8 +586,8 @@ function tuileVoyage(v) {
 
 // Le projet expliqué en 30 secondes (pour Philippe, un client, un futur contributeur).
 const PITCH = {
-  fr: "Planifier un voyage, c'est des dizaines d'heures à fouiller des avis qu'on ne peut pas vérifier. Nous vendons des voyages sur mesure bâtis à partir d'endroits repérés sur place par des locaux rémunérés, et chaque photo est vérifiée avant d'être publiée. Le client reçoit un itinéraire fiable, prêt à partir ; pour le haut de gamme, je me rends moi-même sur le terrain. Je n'ai trouvé personne qui paie des gens du coin, partout dans le monde, pour remplir une carte, puis vend des voyages sur mesure tirés de cette carte.",
-  en: "Planning a trip means dozens of hours digging through reviews you can't verify. We sell custom trips built from places scouted on the ground by paid locals, and every photo is checked before it goes live. Clients get a reliable, ready-to-go itinerary; for high-end trips, I go on the ground myself. I haven't found anyone who pays locals around the world to fill a map, then sells custom trips built from that map.",
+  fr: "Je développe une application qui rémunère des gens du coin pour partager ce qu'ils connaissent de leur ville : les meilleurs restaurants, bars, hôtels, activités et façons de se déplacer. Chaque endroit est photographié sur place et vérifié. Je le fais partout dans le monde, avec un but : remplir la carte du monde, ville par ville, puis vendre des voyages sur mesure tirés de cette carte. Je n'ai trouvé personne d'autre qui fait les deux.",
+  en: "I'm building an app that pays locals to share what they know about their city: the best restaurants, bars, hotels, activities and ways to get around. Every place is photographed on the spot and verified. I'm doing it worldwide, with one goal: fill the world map, city by city, then sell custom trips built from that map. I haven't found anyone else doing both.",
 };
 function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
