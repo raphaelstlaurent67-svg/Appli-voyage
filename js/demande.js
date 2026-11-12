@@ -8,6 +8,7 @@ import { ENVIES, encoder, nuits } from './code-demande.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
+import { PAYS_PRIORITAIRES } from './pays-prioritaires.js';
 
 const fiche = document.getElementById('fiche');
 const params = new URLSearchParams(location.search);
@@ -21,7 +22,7 @@ try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.
 if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // Les destinations les plus demandées (du monde entier) ; les autres se trouvent avec la recherche.
-const POPULAIRES = ['Japon', 'Thaïlande', 'France', 'Italie', 'Espagne', 'Portugal', 'Grèce', 'Mexique', 'Cuba', 'République dominicaine', 'États-Unis', 'Costa Rica', 'Vietnam', 'Indonésie', 'Maroc', 'Pérou'];
+const POPULAIRES = PAYS_PRIORITAIRES;
 const TOUS_PAYS = paysDuContinent('');
 const COULEURS = ['#f0532f', '#2f80ed', '#16a34a', '#a855f7', '#e8a20c', '#0ea5a4', '#db2777', '#64748b'];
 
