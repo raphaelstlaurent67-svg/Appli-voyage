@@ -23,6 +23,9 @@ export const PHOTOS_PAYS = {
   Maroc: '1597212618440-806262de4f6b', // Marrakech et l'Atlas, Paul Macallan
   Pérou: '1587595431973-160d0d94add1', // Machu Picchu, Eddie Kiszka
   'Corée du Sud': '1570191913384-7b4ff11716e7', // Séoul, Robson Hatsukami Morgan
+  'Royaume-Uni': '1486299267070-83823f5448dd', // Big Ben, Londres, Marcin Nowak
+  Allemagne: '1557067175-db3159d938ac', // Château de Neuschwanstein, Felix
+  Canada: '1539667547529-84c607280d20', // Lac Moraine, Rocheuses, James Wheeler
 };
 
 // Photos qui défilent en fond quand aucun pays n'est choisi (et sur le site).

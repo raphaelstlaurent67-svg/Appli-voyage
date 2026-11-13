@@ -9,6 +9,7 @@ import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 import { distanceM } from './exif.js';
+import { PAYS_PRIORITAIRES } from './pays-prioritaires.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -1613,7 +1614,7 @@ function pageContributeurs(onglet) {
   const bilans = etat.contributeurs.map((c) => ({ c, b: bilanContributeur(c) }));
   const du = bilans.reduce((s, x) => s + x.b.du, 0);
   const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
-  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
+  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['pays', 'target', 'Pays à remplir', PAYS_PRIORITAIRES.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
   app.innerHTML = `
     ${entete('Contributeurs', "Ce qu'ils t'envoient et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
     <div class="kpis kpis-3">
@@ -1627,7 +1628,39 @@ function pageContributeurs(onglet) {
   const zone = app.querySelector('#contenu');
   if (onglet === 'paiements') ongletPaiements(zone, bilans);
   else if (onglet === 'regles') ongletRegles(zone);
+  else if (onglet === 'pays') ongletPays(zone);
   else ongletListeContrib(zone, bilans);
+}
+
+// ---------- Pays à remplir (priorités) ----------
+// Les pays à remplir en premier, dans l'ordre. Raph peut écrire une note pour lui-même à côté de chacun.
+async function ongletPays(zone) {
+  const notes = await db.lireReglage('notesPays', {});
+  const lignes = PAYS_PRIORITAIRES.map((pays, i) => {
+    const endroits = etat.endroits.filter((e) => e.pays === pays && utilisable(e)).length;
+    const gens = etat.contributeurs.filter((c) => c.pays === pays).map((c) => c.nom);
+    return `
+      <div class="pays-prio">
+        <span class="pays-rang">${i + 1}</span>
+        <div class="pays-info">
+          <b>${esc(pays)}</b>
+          <small>${pluriel(endroits, 'endroit')} · ${gens.length ? esc(gens.join(', ')) : 'aucun contributeur'}</small>
+        </div>
+        <textarea data-note="${esc(pays)}" rows="2" placeholder="Ta note (ex. : chercher quelqu'un à Paris, contacter…)">${esc(notes[pays] || '')}</textarea>
+      </div>`;
+  }).join('');
+  zone.innerHTML = `
+    <div class="panel">
+      <p class="aide">Les pays à remplir en premier, dans l'ordre. Ce sont aussi ceux qui apparaissent en premier dans le formulaire de demande des clients. Tes notes sont enregistrées toutes seules.</p>
+      <div class="liste-pays-prio">${lignes}</div>
+    </div>`;
+  zone.querySelectorAll('[data-note]').forEach((t) => {
+    t.onchange = async () => {
+      notes[t.dataset.note] = t.value.trim();
+      await db.ecrireReglage('notesPays', notes);
+      toast('Note enregistrée');
+    };
+  });
 }
 
 // ---------- À valider ----------
