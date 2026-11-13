@@ -9,8 +9,9 @@ import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 import { distanceM } from './exif.js';
+import { lienClient, formatHeure } from './carnet-commun.js';
 
-const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
+const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
 const app = document.getElementById('app');
 const side = document.getElementById('side');
@@ -119,6 +120,7 @@ async function charger() {
   etat.voyages = await db.tous('voyages');
   etat.contributeurs = await db.tous('contributeurs');
   etat.paiements = await db.tous('paiements');
+  etat.carnets = await db.tous('carnets');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
@@ -590,6 +592,7 @@ function pageAccueil() {
       <p id="pitch-texte">${esc(PITCH.fr)}</p>
       <div class="rangee-btn"><button class="btn ghost sm" id="copier-pitch">${icone('copy', { taille: 14 })} Copier</button></div>
     </section>
+    ${panneauCarnets()}
     ${etat.endroits.length ? '' : `
       <div class="encart">
         <span class="rond-ico">${icone('upload', { taille: 18 })}</span>
@@ -614,6 +617,37 @@ function pageAccueil() {
   const n2 = app.querySelector('#nouveau2');
   if (n2) n2.onclick = creerVoyage;
   afficherPhotos(app);
+}
+
+// Les voyages sur mesure en direct (créés sur le cellulaire, onglet Clients) et les choix des clients.
+function panneauCarnets() {
+  if (!etat.carnets.length) return '';
+  const maintenant = Date.now();
+  const nomItem = (c, itemId) => { const it = c.items.find((i) => i.id === itemId); return it ? endroit(it.endroitId)?.nom || '' : ''; };
+  const tries = [...etat.carnets].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
+  return `
+    <section class="panel carnets-direct">
+      <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3><span class="aide">Créés sur ton cell, onglet Clients</span></div>
+      ${tries.map((c) => {
+        const livres = c.items.filter((i) => new Date(i.livraison) <= maintenant).length;
+        const attente = c.items.length - livres;
+        const ch = c.choix || {};
+        const dort = Object.entries(ch.dormir || {}).map(([ville, x]) => `${esc(nomItem(c, x))} (${esc(ville)})`).filter((t) => !t.startsWith(' ('));
+        const coeurs = (ch.coeurs || []).map((x) => nomItem(c, x)).filter(Boolean);
+        return `
+          <div class="carnet-studio">
+            <div class="carnet-studio-tete">
+              <b>${esc(c.client?.prenom || 'Client')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
+              <span class="aide">${pluriel(livres, 'livré', 'livrés')}${attente ? `, ${attente} pour ${formatHeure(c.heure)}` : ''}${ch.vuLe ? `, vu le ${esc(new Date(ch.vuLe).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</span>
+              <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>
+            </div>
+            ${dort.length ? `<p>${icone('bed-double', { taille: 14 })} Dort à ${dort.join(', ')}</p>` : ''}
+            ${coeurs.length ? `<p>${icone('heart', { taille: 14 })} ${coeurs.map(esc).join(', ')}</p>` : ''}
+            ${ch.mot ? `<p class="mot">« ${esc(ch.mot)} »</p>` : ''}
+            ${!dort.length && !coeurs.length && !ch.mot ? '<p class="aide">Pas encore de choix.</p>' : ''}
+          </div>`;
+      }).join('')}
+    </section>`;
 }
 
 // ---------- Un voyage ----------

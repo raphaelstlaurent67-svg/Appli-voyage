@@ -1,6 +1,6 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v29';
+const VERSION = 'v30';
 const FICHIERS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'js/icones.js', 'js/sync.js', 'js/monde.js',
   'demande.html', 'js/contact.js',
@@ -8,6 +8,7 @@ const FICHIERS = [
   'js/demande.js',
   'js/code-demande.js', 'js/installer.js', 'demande.webmanifest', 'icons/demande.svg', 'fonts/figtree.woff2', 'js/photos.js', 'contribuer.html', 'contribuer.webmanifest', 'css/contribuer.css', 'js/contribuer.js', 'js/exif.js',
   'generateur.html', 'studio/', 'studio/index.html', 'studio/manifest.webmanifest', 'css/generateur.css', 'css/client.css', 'js/generateur.js', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
+  'carnet.html', 'carnet.webmanifest', 'css/carnet.css', 'js/carnet.js', 'js/carnets.js', 'js/carnet-commun.js', 'js/carnet-demo.js', 'icons/carnet.svg', 'icons/carnet-192.png', 'icons/carnet-512.png',
   'manifest.webmanifest', 'icons/studio.svg', 'icons/studio-192.png', 'icons/studio-512.png', 'icons/icone.svg', 'icons/icone-192.png', 'icons/icone-512.png',
 ];
 
