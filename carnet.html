@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0d12">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mon carnet">
+  <title>Mon carnet de voyage</title>
+  <link rel="manifest" href="carnet.webmanifest">
+  <link rel="icon" href="icons/carnet.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/carnet-192.png">
+  <link rel="preload" href="fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/carnet.css">
+</head>
+<body>
+  <main id="carnet" aria-live="polite">
+    <div class="chargement"><span class="lueur"></span><p>Ouverture de ton carnet…</p></div>
+  </main>
+  <div id="feuille" hidden></div>
+  <div id="toast" role="status"></div>
+  <script type="module" src="js/carnet.js"></script>
+</body>
+</html>
