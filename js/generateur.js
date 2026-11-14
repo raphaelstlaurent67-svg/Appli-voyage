@@ -418,13 +418,20 @@ const lienFiche = (courriel, langue = '', tel = '') => {
 // Durée totale demandée (le client a donné juste la durée, ou ses dates pays par pays).
 const joursDemande = (d) => (d.mode === 'total' ? d.duree || 0 : d.pays.reduce((n, p) => n + nuits(p.debut, p.fin), 0));
 const langueDemande = (d) => (d.langue === 'en' ? 'en anglais' : '');
+// Destination de la demande : ses pays, sinon les régions qui l'attirent (le client n'a pas encore choisi).
+const destinationDemande = (d, sep = ' → ') => (d.pays?.length ? d.pays.map((p) => p.nom).join(sep) : d.regions?.length ? `Pas encore décidé, attiré par : ${d.regions.join(', ')}` : 'Destination pas encore décidée');
+// « 2 adultes, 1 enfant (4 ans) » (les anciennes demandes n'avaient que le nombre total).
+const voyageursDemande = (d) => (d.adultes != null
+  ? [pluriel(d.adultes, 'adulte'), d.enfants ? `${pluriel(d.enfants, 'enfant')}${d.agesEnfants?.trim() ? ` (${d.agesEnfants.trim()})` : ''}` : ''].filter(Boolean).join(', ')
+  : pluriel(d.voyageurs || 1, 'voyageur'));
+const moisDemande = (d) => (d.mois ? new Date(`${d.mois}-15T12:00:00`).toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' }) : '');
 function htmlDatesDemande(d, long = false) {
   const opts = long ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short' };
   if (d.mode === 'total') {
     const n = d.duree || 0;
     return `<ul class="${long ? 'dates-demande' : 'liste-simple'}">
-      <li><b>Voyage au complet : ${d.plage ? `${d.plage.replace('-', ' à ')} jours` : pluriel(n, 'jour')}</b>${long ? '<span>' : ', '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
-      <li><b>${esc(d.pays.map((p) => p.nom).join(' → '))}</b>${long ? `<span>${esc(d.repartition?.trim() || 'Il te laisse répartir le temps entre les pays.')}</span>` : d.repartition?.trim() ? `, ${esc(d.repartition.trim())}` : ', répartition libre'}</li>
+      <li><b>Voyage au complet : ${d.plage ? `${d.plage.replace('-', ' à ')} jours` : n ? pluriel(n, 'jour') : 'durée pas encore décidée'}</b>${long ? '<span>' : ', '}${d.depart ? `départ le ${esc(jolieDate(d.depart, { ...opts, year: 'numeric' }))}` : d.mois ? `départ en ${esc(moisDemande(d))}` : 'date de départ à préciser'}${long ? '</span>' : ''}${long ? `<small>${n >= 7 ? `${Math.round(n / 7 * 10) / 10} sem.` : ''}</small>` : ''}</li>
+      <li><b>${esc(destinationDemande(d))}</b>${(d.pays?.length || 0) < 2 ? '' : long ? `<span>${esc(d.repartition?.trim() || 'Il te laisse répartir le temps entre les pays.')}</span>` : d.repartition?.trim() ? `, ${esc(d.repartition.trim())}` : ', répartition libre'}</li>
     </ul>`;
   }
   return `<ul class="${long ? 'dates-demande' : 'liste-simple'}">${d.pays.map((p) => (long
@@ -448,7 +455,7 @@ function htmlEnvies(d, prevus) {
     const suivi = prevus && TAXONOMIE[k];
     const fait = suivi ? prevus[k] || 0 : 0;
     return `<li class="${suivi && fait >= voulu ? 'ok' : ''}">${icone(ico, { taille: 15 })}<span>${esc(nom)}</span>
-      <b>${suivi ? `${fait} / ${voulu}` : `× ${voulu}`}</b>${suivi ? barre(fait / voulu, fait >= voulu ? 'ok' : '') : ''}</li>`;
+      <b>${suivi ? `${fait} / ${voulu}` : `× ${voulu}`}</b>${suivi ? barre(fait / voulu, fait >= voulu ? 'ok' : '') : ''}${d.idees?.[k]?.length ? `<small class="idees-client">${d.idees[k].map(esc).join(' · ')}</small>` : ''}</li>`;
   }).join('')}</ul>`;
 }
 
@@ -460,14 +467,15 @@ function htmlContact(d) {
 }
 
 const htmlIncontournables = (d) => {
-  const inc = d.pays.filter((p) => p.incontournable?.trim());
-  return inc.length ? `<ul class="liste-simple">${inc.map((p) => `<li><b>${esc(p.nom)} :</b> ${esc(p.incontournable)}</li>`).join('')}</ul>` : '<p class="aide">Rien de précis.</p>';
+  const inc = (d.pays || []).filter((p) => p.incontournable?.trim());
+  const general = d.incontournable?.trim();
+  return inc.length || general ? `<ul class="liste-simple">${general ? `<li>${esc(general)}</li>` : ''}${inc.map((p) => `<li><b>${esc(p.nom)} :</b> ${esc(p.incontournable)}</li>`).join('')}</ul>` : '<p class="aide">Rien de précis.</p>';
 };
 
 function htmlDemandeVoyage(v) {
   const d = v.demande;
   return `
-    <summary>${icone('inbox', { taille: 16 })}<b>Ce que veut le client</b><span class="aide">${[esc(d.nom), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d), `demande du ${esc(dateCourte(d.envoyeLe))}`].filter(Boolean).join(', ')}</span>${icone('chevron-down', { taille: 16, classe: 'chevron' })}</summary>
+    <summary>${icone('inbox', { taille: 16 })}<b>Ce que veut le client</b><span class="aide">${[esc(d.nom), esc(voyageursDemande(d)), esc(NOM_STYLE[d.style] || ''), langueDemande(d), `demande du ${esc(dateCourte(d.envoyeLe))}`].filter(Boolean).join(', ')}</span>${icone('chevron-down', { taille: 16, classe: 'chevron' })}</summary>
     <div class="demande-grille">
       <div><p class="mini-titre">Envies <small>prévu / voulu</small></p>${htmlEnvies(d, prevusParCategorie(v))}</div>
       <div><p class="mini-titre">À voir absolument</p>${htmlIncontournables(d)}
@@ -479,7 +487,7 @@ function htmlDemandeVoyage(v) {
 
 async function creerDepuisDemande(d) {
   const v = nouveauVoyage();
-  v.titre = `${d.pays.map((p) => p.nom).join(', ')}, ${d.nom}`.slice(0, 90);
+  v.titre = `${d.pays.length ? d.pays.map((p) => p.nom).join(', ') : 'Destination à choisir'}, ${d.nom}`.slice(0, 90);
   v.client = d.nom;
   v.dateDebut = d.mode === 'total' ? d.depart || '' : d.pays.map((p) => p.debut).filter(Boolean).sort()[0] || '';
   v.voyageurs = d.voyageurs || 2;
@@ -493,6 +501,11 @@ async function creerDepuisDemande(d) {
     d.courriel ? `Courriel : ${d.courriel}` : '',
     d.telephone ? `Téléphone : ${d.telephone}` : '',
     d.langue === 'en' ? 'Le client a rempli la fiche en anglais.' : '',
+    `Voyageurs : ${voyageursDemande(d)}.`,
+    !d.pays.length ? `${destinationDemande(d)}. À toi de lui proposer des pays.` : '',
+    d.mode === 'total' && !d.depart && d.mois ? `Départ souhaité : ${moisDemande(d)}.` : '',
+    !d.style ? 'Style de voyage pas choisi (Confort mis par défaut).' : '',
+    Object.entries(d.idees || {}).filter(([, l]) => l?.length).length ? `Idées cochées : ${Object.values(d.idees).flat().join(', ')}.` : '',
     d.mode === 'total' ? `Durée totale demandée : ${d.plage ? `${d.plage.replace('-', ' à ')} jours` : pluriel(d.duree || 0, 'jour')}, répartie également entre les pays (à ajuster).${d.repartition?.trim() ? ` Sa préférence : ${d.repartition.trim()}` : ''}` : '',
     d.message ? `Message : ${d.message}` : '',
   ].filter(Boolean).join('\n');
@@ -513,7 +526,7 @@ async function pageDemande(code) {
   const existe = voyageDeDemande(d);
   const total = joursDemande(d);
   app.innerHTML = `
-    ${entete(`Demande de ${esc(d.nom)}`, `${esc(d.pays.map((p) => p.nom).join(' → '))}, ${[pluriel(total, 'jour'), pluriel(d.voyageurs || 1, 'voyageur'), esc(NOM_STYLE[d.style] || ''), langueDemande(d)].filter(Boolean).join(', ')}`,
+    ${entete(`Demande de ${esc(d.nom)}`, `${esc(destinationDemande(d))}, ${[total ? pluriel(total, 'jour') : '', esc(voyageursDemande(d)), esc(NOM_STYLE[d.style] || ''), langueDemande(d)].filter(Boolean).join(', ')}`,
       existe ? `<a class="btn" href="#/voyage/${esc(existe.id)}">${icone('route', { taille: 15 })} Ouvrir le voyage</a>` : `<button class="btn" id="creer">${icone('plus', { taille: 15 })} Créer le voyage</button>`)}
     ${existe ? `<div class="encart"><span class="rond-ico">${icone('check', { taille: 18 })}</span><div><b>Le voyage existe déjà</b><p>Tu as déjà créé « ${esc(existe.titre)} » à partir de cette demande.</p></div><a class="btn" href="#/voyage/${esc(existe.id)}">Ouvrir</a></div>`
       : `<div class="encart"><span class="rond-ico">${icone('inbox', { taille: 18 })}</span><div><b>Nouvelle demande</b><p>Clique sur « Créer le voyage » : les pays, les jours et les envies du client y seront déjà. Tu n'auras qu'à choisir les villes et les endroits.</p></div><button class="btn" id="creer2">Créer le voyage</button></div>`}
@@ -569,7 +582,7 @@ async function pageDemandes() {
     </div>
     <h2 class="titre-section">Demandes reçues <small>${pluriel(recues.length, 'voyage créé', 'voyages créés')} à partir d'une fiche</small></h2>
     ${recues.length ? `<section class="panel"><table class="tableau"><thead><tr><th>Client</th><th>Pays</th><th>Départ</th><th>Reçue le</th><th class="num">Endroits</th></tr></thead><tbody>
-      ${recues.map((v) => `<tr class="cliquable" data-ouvrir="${esc(v.id)}"><td><b>${esc(v.client || v.demande.nom)}</b></td><td>${esc(v.demande.pays.map((p) => p.nom).join(', '))}</td><td>${esc(dateCourte(v.dateDebut))}</td><td>${esc(dateCourte(v.demande.envoyeLe))}</td><td class="num">${nbEndroits(v)}</td></tr>`).join('')}
+      ${recues.map((v) => `<tr class="cliquable" data-ouvrir="${esc(v.id)}"><td><b>${esc(v.client || v.demande.nom)}</b></td><td>${esc(v.demande.pays.length ? v.demande.pays.map((p) => p.nom).join(', ') : v.demande.regions?.join(', ') || 'À décider')}</td><td>${esc(dateCourte(v.dateDebut))}</td><td>${esc(dateCourte(v.demande.envoyeLe))}</td><td class="num">${nbEndroits(v)}</td></tr>`).join('')}
       </tbody></table></section>` : '<p class="vide-ligne">Aucune demande pour l\'instant.</p>'}`;
   const champ = app.querySelector('#courriel');
   const langue = app.querySelector('#langue-fiche');
