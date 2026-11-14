@@ -73,10 +73,10 @@ export async function canalChoix(id, cle) {
 export const cheminPublic = (id, fichier = 'c') => `carnets/${id}/${fichier}.bin`;
 export const urlPublique = (id, fichier = 'c', depot = DEPOT_CARNETS) => `https://raw.githubusercontent.com/${depot}/${BRANCHE_CARNETS}/${cheminPublic(id, fichier)}`;
 
-// Lien à donner au client : il ouvre l'appli de voyage sur son onglet « Mon voyage ».
+// Lien à donner au client : il ouvre sa propre petite appli « Mon voyage » (séparée de l'appli de Raph).
 // La clé est après le « # » : elle ne quitte jamais son téléphone.
 export function lienClient(base, id, cle) {
-  return `${base.replace(/[^/]*$/, '')}index.html#/voyage/${encodeURIComponent(id)}/${cle}`;
+  return `${base.replace(/[^/]*$/, '')}carnet.html?c=${encodeURIComponent(id)}#${cle}`;
 }
 
 // ---------- Heures et fuseaux ----------

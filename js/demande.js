@@ -136,9 +136,10 @@ const vide = () => ({
   pays: [], envies: {}, voyageurs: 2, style: 'moyen', nom: '', courriel: '', telephone: '', message: '',
 });
 let d = vide();
-try { const b = JSON.parse(localStorage.getItem('brouillonDemande') || 'null'); if (b?.f === 'demande') d = { ...vide(), ...b, v: 2 }; } catch (_) { /* rien */ }
+// Un brouillon commencé est gardé une journée ; après, le formulaire repart à zéro.
+try { const b = JSON.parse(localStorage.getItem('brouillonDemande') || 'null'); if (b?.f === 'demande' && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000) d = { ...vide(), ...b, v: 2 }; } catch (_) { /* rien */ }
 if (langueParam) d.langue = langueParam;
-const garder = () => { try { localStorage.setItem('brouillonDemande', JSON.stringify(d)); } catch (_) { /* rien */ } };
+const garder = () => { try { localStorage.setItem('brouillonDemande', JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
 let etape = 0;
 let paysActif = 0;
 let moisAffiche = null;

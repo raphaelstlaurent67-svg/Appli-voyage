@@ -599,20 +599,15 @@ body[data-page="reglages"] .section { gap: 12px; }
 .feuille-corps { padding: 0 20px 24px; display: flex; flex-direction: column; gap: 14px; }
 .zone-mot { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid var(--bordure-forte); background: var(--surface); color: var(--encre); font: inherit; }
 
-/* ---------- Mon voyage (client) ---------- */
-.nav-voyage { display: none !important; }
-body.a-un-voyage .nav-voyage { display: flex !important; }
-body[data-mode="client"] .nav-raph { display: none !important; }
-body[data-page="voyage"] { background: #0e0d12; }
-body[data-page="voyage"] .bouton-ajouter { display: none; }
-.cadre-voyage {
-  position: fixed; top: 0; left: 0; right: 0; bottom: calc(var(--nav) + env(safe-area-inset-bottom));
-  width: 100%; height: calc(100% - var(--nav) - env(safe-area-inset-bottom)); border: 0; background: #0e0d12;
-}
-body[data-page="voyage"] .nav { background: color-mix(in srgb, #15141a 94%, transparent); border-top-color: rgba(255, 255, 255, .08); }
-body[data-page="voyage"] .nav a { color: #79747e; }
-body[data-page="voyage"] .nav a.actif, body[data-page="voyage"] .nav a.actif > span:last-child { color: #f4c88f; }
 .compo-soir { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 .compo-soir span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--surface-2); font-size: .82rem; font-weight: 650; color: var(--doux); }
 .compo-soir span.ok { background: var(--accent-pale); color: var(--accent); }
 .compo-soir .ico { display: inline-block; }
+
+/* Le lien privé du client (page d'un voyage sur mesure) */
+.carte-lien { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+.carte-lien-titre { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #f4c88f; display: flex; align-items: center; gap: 6px; }
+.carte-lien-url { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(0, 0, 0, .3); font-size: .85rem; color: #f4f0ea; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carte-lien .petit { margin: 0; color: #aba5ad; }
+.trois { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.trois > * { min-width: 0; padding-left: 6px; padding-right: 6px; }

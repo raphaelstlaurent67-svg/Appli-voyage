@@ -1,6 +1,6 @@
 {
-  "name": "Mon carnet de voyage",
-  "short_name": "Mon carnet",
+  "name": "Mon voyage",
+  "short_name": "Mon voyage",
   "description": "Ton voyage sur mesure, livré chaque soir.",
   "display": "standalone",
   "background_color": "#0e0d12",

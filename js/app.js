@@ -3,6 +3,7 @@ import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
 import * as sync from './sync.js';
 import * as pwa from './installer.js';
+import { rouvrirALAccueil } from './accueil.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 import * as carnets from './carnets.js';
@@ -352,9 +353,6 @@ function aller(route) { location.hash = route; }
 
 async function router() {
   fermerFeuille();
-  // Le client (pas Raph) : l'appli s'ouvre directement sur son voyage.
-  if ((!location.hash || location.hash === '#/') && document.body.dataset.mode === 'client' && !router.dejaAccueilli) { router.dejaAccueilli = true; location.replace('#/voyage'); return undefined; }
-  router.dejaAccueilli = true;
   const [, page, id] = (location.hash || '#/').split('/');
   const nom = page || 'liste';
   document.body.dataset.page = nom;
@@ -991,36 +989,12 @@ async function pageFormulaire(id) {
 }
 
 
-// ---------- Mon voyage (le côté client) ----------
-// Le lien reçu de Raph ouvre l'appli ici : #/voyage/<carnet>/<clé>. On le garde, puis on affiche le voyage.
-async function pageMonVoyage(id, cle) {
-  if (id && cle) {
-    await db.ecrireReglage('monVoyage', { id: decodeURIComponent(id), cle });
-    await majModeClient();
-    // Installée sur l'écran d'accueil, l'appli rouvre ce voyage.
-    try {
-      const m = { id: './', name: 'Mon voyage', short_name: 'Mon voyage', start_url: location.href, scope: new URL('./', location.href).href, display: 'standalone', background_color: '#0e0d12', theme_color: '#0e0d12', lang: 'fr', icons: [{ src: new URL('icons/carnet-192.png', location.href).href, sizes: '192x192', type: 'image/png' }, { src: new URL('icons/carnet-512.png', location.href).href, sizes: '512x512', type: 'image/png' }] };
-      document.querySelector('link[rel=manifest]').href = `data:application/manifest+json,${encodeURIComponent(JSON.stringify(m))}`;
-      document.querySelector('link[rel=apple-touch-icon]').href = 'icons/carnet-192.png';
-    } catch (_) { /* pas grave */ }
-  }
-  const v = await db.lireReglage('monVoyage', null);
-  if (!v) {
-    app.innerHTML = `
-      <header class="entete-page"><h1>Mon voyage</h1></header>
-      <p class="vide"><span class="vide-icone">${icone('moon', { taille: 28 })}</span><b>Ouvre le lien reçu de ton conseiller</b><span>Ton voyage apparaîtra ici, avec tes choix de chaque soir.</span></p>
-      <a class="bouton-secondaire bouton-bloc" href="carnet.html?demo&appli" target="_blank" rel="noopener">Voir un exemple</a>`;
-    return;
-  }
-  app.innerHTML = `<iframe class="cadre-voyage" title="Mon voyage" src="carnet.html?c=${encodeURIComponent(v.id)}&appli#${v.cle}"></iframe>`;
-}
-
-// Mode client : l'appli de quelqu'un qui a reçu un voyage, sans être Raph (pas d'envoi au Studio branché).
-async function majModeClient() {
-  const voyage = await db.lireReglage('monVoyage', null);
-  const raph = (await sync.lireConfig()) || (await db.tous('carnets')).length;
-  document.body.dataset.mode = voyage && !raph ? 'client' : '';
-  document.body.classList.toggle('a-un-voyage', !!voyage);
+// ---------- Anciens liens clients ----------
+// Les premiers liens ressemblaient à index.html#/voyage/<carnet>/<clé>. Le voyage du client a maintenant
+// sa propre petite appli (carnet.html) : on l'y envoie, sans rien garder dans l'appli de Raph.
+function pageMonVoyage(id, cle) {
+  if (id && cle) location.replace(`carnet.html?c=${id}#${cle}`);
+  else aller('#/');
 }
 
 // ---------- Voyages sur mesure : le carnet en direct du client ----------
@@ -1141,9 +1115,15 @@ async function pageCarnet(id, sous) {
         <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
         <i aria-hidden="true"></i>
       </label>
-      <div class="deux">
-        <button class="bouton-principal" id="envoyer-lien">${icone('send', { taille: 18 })} Son lien</button>
-        <a class="bouton-secondaire" href="${esc(lienClient)}" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Sa page</a>
+      <div class="carte-lien">
+        <p class="carte-lien-titre">${icone('lock', { taille: 14 })} Le lien privé de ${esc(prenom)}</p>
+        <p class="carte-lien-url" id="url-lien">${esc(lienClient.replace(/^https?:\/\//, '').replace(/#.*/, '#…'))}</p>
+        <div class="trois">
+          <button class="bouton-principal" id="copier-lien">${icone('copy', { taille: 17 })} Copier</button>
+          <button class="bouton-secondaire" id="envoyer-lien">${icone('send', { taille: 17 })} Envoyer</button>
+          <a class="bouton-secondaire" href="${esc(lienClient)}" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
+        </div>
+        <p class="petit">Seul ce lien ouvre son voyage. Il l’ajoute à son écran d’accueil : ça devient son appli « Mon voyage », sans rien de tes données.</p>
       </div>
     </section>
 
@@ -1210,11 +1190,16 @@ async function pageCarnet(id, sous) {
   app.querySelector('#repere').onchange = async (ev) => {
     if (ev.target.checked) { c.actif = true; await db.ecrireReglage('carnetActif', c.id); await sauver(); toast(`Tes prochains endroits iront à ${prenom}`); } else { await db.ecrireReglage('carnetActif', null); toast('Repérage en pause'); }
   };
+  // Copier : seulement son lien, rien d'autre.
+  app.querySelector('#copier-lien').onclick = async () => {
+    try { await navigator.clipboard.writeText(lienClient); toast('Son lien est copié'); }
+    catch (_) { window.prompt('Copie son lien :', lienClient); }
+  };
+  // Envoyer : ouvre Messages, WhatsApp… avec seulement son lien.
   app.querySelector('#envoyer-lien').onclick = async () => {
-    const texte = `${c.client?.prenom ? `Salut ${c.client.prenom} ! ` : ''}Voici ton voyage${c.ville ? ` à ${c.ville}` : ''}, dans mon appli. Chaque soir à ${formatHeure(c.heure)}, tu choisis ton hôtel, ton resto et ton activité parmi ce que j’ai repéré pour toi dans la journée. Ajoute l’appli sur ton écran d’accueil. Ce lien est juste pour toi :`;
     try {
-      if (navigator.share) await navigator.share({ text: texte, url: lienClient });
-      else { await navigator.clipboard.writeText(`${texte} ${lienClient}`); toast('Lien copié : colle-le dans un message'); }
+      if (navigator.share) await navigator.share({ title: `Ton voyage${c.ville ? ` à ${c.ville}` : ''}`, url: lienClient });
+      else { await navigator.clipboard.writeText(lienClient); toast('Son lien est copié'); }
     } catch (_) { /* annulé */ }
   };
   const rafraichir = app.querySelector('#rafraichir-choix');
@@ -1552,6 +1537,7 @@ async function demarrerEnvoi() {
 
 // ---------- Démarrage ----------
 document.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = icone(el.dataset.ico, { taille: +(el.dataset.taille || 24), epaisseur: 1.8 }); });
+rouvrirALAccueil({ garder: ['ajouter', 'modifier', 'voyage'] });
 window.addEventListener('hashchange', router);
 // Le bouton + ouvre d'abord le choix de catégorie par-dessus la page.
 // Si on le referme, on reste où on était ; sinon le formulaire s'ouvre.
@@ -1564,7 +1550,7 @@ document.querySelector('.bouton-ajouter').addEventListener('click', (ev) => {
   });
 });
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !feuille.hidden) fermerFeuille(); });
-charger().then(majModeClient).then(router).then(demarrerEnvoi).catch((err) => {
+charger().then(router).then(demarrerEnvoi).catch((err) => {
   app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
 });
 

@@ -115,7 +115,7 @@ Raph repère sur place pour un client (ex. : Montréal). Dans l'appli du cellula
 
 - « Nouveau voyage sur mesure » : prénom du client, ville, mot d'accueil, **heure des choix du soir** (19 h par défaut, heure de chez le client).
 - « Je repère pour Marc » : chaque nouvel endroit propose « Pour Marc » + « Ton mot pour Marc ». Idéal : 3 hôtels, 3 restos et 3 activités par soir (l'appli montre où tu en es). On peut aussi ajouter un endroit déjà noté, livrer tout de suite, retirer.
-- « Son lien » : le client reçoit un seul lien privé (`index.html#/voyage/<id>/<clé>`). Il ouvre l'appli de voyage sur l'onglet **Mon voyage** ; il l'ajoute à son écran d'accueil.
+- « Le lien privé » (Copier / Envoyer / Voir) : le client reçoit un seul lien (`carnet.html?c=<id>#<clé>`). C'est sa propre petite appli **Mon voyage**, séparée de l'appli de Raph : il l'ajoute à son écran d'accueil et elle rouvre son voyage. Les anciens liens `index.html#/voyage/…` y mènent aussi.
 
 Chaque soir, les choix s'ouvrent : le client choisit 1 hôtel sur 3, 1 resto sur 3, 1 activité sur 3 (ou « Aucun ne me plaît »), puis voit « Soirée complétée ». Le mot du soir s'écrit tout seul (`motDuSoir` dans `js/carnet-commun.js`, sans IA payante). Ses choix reviennent tout seuls à Raph (page du client dans l'appli) et entrent **verrouillés** dans son voyage du Studio (créé tout seul, « Choisi par Marc »). Dans le Studio, « Meilleur ordre » remet une journée dans l'ordre le plus court à partir de l'hôtel.
 
@@ -123,6 +123,6 @@ Exemple à montrer : `carnet.html?demo` (repérage à Montréal, photos d'illust
 
 Comment c'est privé : le voyage et ses photos sont chiffrés (AES-256) avec une clé qui n'est que dans le lien du client, après le `#` (jamais envoyée à internet). Les fichiers chiffrés sont dans la branche `carnets` de ce dossier ; les choix du client passent chiffrés par ntfy.sh (gratuit, sans compte, gardés 12 h : le client les renvoie à chaque visite).
 
-Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css` (le voyage du client, affiché dans l'onglet Mon voyage) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, mot du soir, choix) · `js/carnet-demo.js` (démo).
+Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css` (l'appli « Mon voyage » du client) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, choix) · `js/carnet-demo.js` (démo).
 
 À faire une fois : la clé GitHub de l'appli doit aussi pouvoir écrire dans `Appli-voyage` (Fine-grained token > Repository access > ajouter Appli-voyage, Contents : Read and write).
