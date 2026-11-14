@@ -10,6 +10,7 @@ import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 import { distanceM } from './exif.js';
+import * as verif from './verification.js';
 import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX } from './carnet-commun.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
@@ -317,33 +318,21 @@ const MENU = [
 ];
 function rendreSide() {
   const route = location.hash || '#/';
-  const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const n = aValider().length;
-  const actif = (href) => (href === '#/' ? route === '#/' || route === '#' : route.startsWith(href));
-  const lienNav = (href, ico, texte, extra = '') => `<a class="navBtn ${actif(href) ? 'on' : ''}" href="${href}">${icone(ico, { taille: 16 })}<span>${texte}</span>${extra}</a>`;
+  const actif = (href) => (href === '#/' ? route === '#/' || route === '#' || route.startsWith('#/voyage') || route.startsWith('#/demande') : route.startsWith(href) || (href === '#/contributeurs' && route.startsWith('#/a-valider')));
+  const lienNav = (href, ico, texte, extra = '') => `<a class="navBtn ${actif(href) ? 'on' : ''}" href="${href}">${icone(ico, { taille: 17 })}<span>${texte}</span>${extra}</a>`;
   side.innerHTML = `
     <a class="brand" href="#/">
       <span class="mk">${icone('compass', { taille: 17, epaisseur: 2.2 })}</span>
-      <span><b>Studio</b></span>
+      <span><b>Studio</b><small>Voyages sur mesure</small></span>
     </a>
     <nav class="sideNav">
-      ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/contributeurs' && n ? `<span class="pastille-n">${n}</span>` : '')).join('')}
+      ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/contributeurs' && n ? `<span class="pastille-n" title="${n} à valider">${n}</span>` : '')).join('')}
     </nav>
-    <div class="sideLab">Voyages</div>
-    <div class="sideVoyages">
-      ${tries.map((v) => `
-        <a class="camp ${route.startsWith(`#/voyage/${v.id}`) ? 'on' : ''}" href="#/voyage/${esc(v.id)}">
-          <span class="nm"><i class="cdot ${v.vendu ? 'vendu' : v.modele ? 'modele' : ''}"></i><span>${esc(v.titre)}</span></span>
-          <span class="sub">${v.modele ? 'Modèle, ' : v.vendu ? 'Vendu, ' : ''}${pluriel(v.jours.length, 'jour')}, ${pluriel(nbEndroits(v), 'endroit')}</span>
-        </a>`).join('')}
-      <button class="navBtn" id="side-nouveau">${icone('plus', { taille: 16 })}<span>Nouveau voyage</span></button>
-    </div>
-    <div class="sideFoot">
-      ${pwa.dejaInstallee() ? '' : `<button class="navBtn installer" id="side-installer">${icone('download', { taille: 16 })}<span>Installer sur mon ordi</span></button>`}
-      <a href="../index.html">${icone('external-link', { taille: 13 })} Appli des endroits</a>
-      <span>Données gardées sur cet ordinateur</span>
+    <div class="side-droite">
+      <a class="lien-discret" href="../index.html">${icone('smartphone', { taille: 14 })} Appli des endroits</a>
+      ${pwa.dejaInstallee() ? '' : `<button class="btn ghost sm" id="side-installer">${icone('download', { taille: 14 })} Installer</button>`}
     </div>`;
-  side.querySelector('#side-nouveau').onclick = creerVoyage;
   const inst = side.querySelector('#side-installer');
   if (inst) inst.onclick = () => installerAppli('le Studio');
 }
@@ -1828,7 +1817,7 @@ function formulaireContributeur(c = null) {
     <div class="form-grille">
       <label class="champ large"><span>Nom</span><input name="nom" required value="${esc(c?.nom)}" placeholder="Ex. : Mai Tran"></label>
       <label class="champ"><span>Ville</span><input name="ville" value="${esc(c?.ville)}" placeholder="Ex. : Hanoï"></label>
-      <label class="champ"><span>Pays</span><input name="pays" value="${esc(c?.pays)}" placeholder="Ex. : Vietnam"></label>
+      <label class="champ"><span>Pays où il habite <small>sert à la vérification</small></span><input name="pays" value="${esc(c?.pays)}" placeholder="Ex. : Vietnam"></label>
       <label class="champ large"><span>Contact <small>courriel, WhatsApp, Instagram…</small></span><input name="contact" value="${esc(c?.contact)}"></label>
       <label class="champ large"><span>Façon de le payer <small>PayPal, Wise, virement…</small></span><input name="paiement" value="${esc(c?.paiement)}"></label>
       <label class="champ large"><span>Notes</span><textarea name="notes" rows="2">${esc(c?.notes)}</textarea></label>
@@ -1873,7 +1862,7 @@ function ongletListeContrib(zone, bilans) {
         <section class="panel contrib">
           <div class="contrib-tete">
             <span class="avatar">${initiales(c.nom)}</span>
-            <div class="contrib-nom"><b>${esc(c.nom)}</b><small>${esc([c.ville, c.pays].filter(Boolean).join(', ') || 'Ville non précisée')}${c.contact ? `, ${esc(c.contact)}` : ''}</small></div>
+            <div class="contrib-nom"><b>${esc(c.nom)} ${(() => { const n = verif.confianceContributeur(c, etat.endroits); return n == null ? '' : `<span class="confiance ${n >= 85 ? 'vert' : n >= 50 ? 'orange' : 'rouge'}" title="Note de confiance, d'après la vérification de ses endroits et tes refus">${icone(n >= 85 ? 'shield-check' : 'shield-alert', { taille: 13 })} Confiance ${n}/100</span>`; })()}</b><small>${esc([c.ville, c.pays].filter(Boolean).join(', ') || 'Ville non précisée')}${c.contact ? `, ${esc(c.contact)}` : ''}</small></div>
             <div class="head-actions">
               <button class="btn ${b.du > 0 ? '' : 'ghost'} sm" data-payer="${esc(c.id)}" ${b.du > 0 ? '' : 'disabled'}>${icone('banknote', { taille: 14 })} ${b.du > 0 ? `Payer ${formatArgent(b.du)}` : 'Rien à payer'}</button>
               <button class="btn ghost sm" data-invitation="${esc(c.id)}">${icone('link', { taille: 14 })} Son lien</button>
@@ -1915,86 +1904,49 @@ function formulairePaiement(contributeurId) {
   }, { ok: 'Noter le paiement' });
 }
 
-// ---------- Vérification des photos des contributeurs ----------
-// Aucun outil gratuit ne fouille tout internet tout seul. Le Studio fait donc ce qui est
-// faisable sans service payant :
-//  1. il lit les infos cachées de la photo (envoyées par l'appli des contributeurs) :
-//     appareil, date, position GPS, logiciel de retouche ;
-//  2. il compare chaque photo à toutes les autres photos déjà reçues (même photo réutilisée) ;
-//  3. pour une photo douteuse, un clic copie la photo et ouvre Google Lens ou TinEye :
-//     on colle (Ctrl+V) et on voit si elle existe déjà ailleurs (Google Maps, Reddit, Facebook…).
-const empreintes = new Map(); // id photo -> empreinte de 64 bits (« dHash »)
-async function empreinte(id) {
-  if (empreintes.has(id)) return empreintes.get(id);
-  let h = null;
-  try {
-    const p = await db.lire('photos', id);
-    const bmp = await createImageBitmap(p.blob);
-    const c = document.createElement('canvas');
-    c.width = 9; c.height = 8;
-    const ctx = c.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(bmp, 0, 0, 9, 8);
-    const d = ctx.getImageData(0, 0, 9, 8).data;
-    const gris = (i) => d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
-    h = '';
-    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (y * 9 + x) * 4; h += gris(i) > gris(i + 4) ? '1' : '0'; }
-  } catch (_) { h = null; }
-  empreintes.set(id, h);
-  return h;
-}
-const ecartBits = (a, b) => { let n = 0; for (let i = 0; i < 64; i++) if (a[i] !== b[i]) n++; return n; };
-const RETOUCHE = /photoshop|lightroom|canva|snapseed|picsart|gimp|facetune|vsco|meitu|remini/i;
-const distTexte = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`);
+// ---------- Vérification anti-fraude des endroits des contributeurs ----------
+// Le travail est dans js/verification.js. Ici : l'affichage (pastille sur chaque fiche,
+// et le rapport complet derrière le bouton « Vérifier »).
+const rapports = new Map(); // id endroit -> rapport
+const carteTemp = new Map(); // résultats de la carte pas gardés (erreur réseau)
+let indexVerif = null;
 
-async function indexPhotos() {
-  const index = [];
-  for (const e of etat.endroits) for (const id of e.photos || []) index.push({ id, endroitId: e.id, h: await empreinte(id) });
-  return index;
-}
-
-// Résultat : vert (rien à signaler), orange (à regarder), rouge (presque sûrement pas la sienne).
-async function verifierPhotos(e, index) {
-  let niveau = 'vert';
-  const pire = (n) => { if (n === 'rouge' || (n === 'orange' && niveau === 'vert')) niveau = n; };
-  const photos = [];
-  for (const pid of e.photos || []) {
-    const info = e.photosInfo?.[pid];
-    const raisons = [];
-    let n = 'vert';
-    const marquer = (x, r) => { raisons.push(r); if (x === 'rouge' || n === 'vert') n = x; };
-    if (!info) marquer('orange', 'envoyée sans les infos de la photo (ancienne version de l\'appli)');
-    else {
-      if (!info.appareil) marquer('orange', 'aucun appareil photo dans le fichier : capture d\'écran ou image d\'internet ?');
-      if (info.logiciel && RETOUCHE.test(info.logiciel)) marquer('orange', `retouchée avec ${info.logiciel}`);
-      if (info.datePhoto) {
-        const mois = (Date.now() - new Date(info.datePhoto)) / 2.63e9;
-        if (mois > 18) marquer('orange', `prise en ${info.datePhoto.slice(0, 4)}`);
-      } else if (info.appareil) marquer('orange', 'date de la prise inconnue');
-      if (info.lat != null && e.lat) {
-        const m = distanceM(info, { lat: +e.lat, lng: +e.lng });
-        if (m > 1000) marquer('rouge', `prise à ${distTexte(m)} de l'endroit`);
-      }
-    }
-    const h = await empreinte(pid);
-    if (h) {
-      const double = index.find((x) => x.id !== pid && x.endroitId !== e.id && x.h && ecartBits(x.h, h) <= 5);
-      if (double) {
-        const autre = endroit(double.endroitId);
-        // La photo la plus ancienne est sans doute l'originale : seule la copie est en rouge.
-        if ((autre?.creeLe || '') <= (e.creeLe || '')) marquer('rouge', `même photo que « ${autre?.nom || 'un autre endroit'} », reçu avant`);
-        else marquer('orange', `la même photo a été réutilisée plus tard pour « ${autre?.nom || 'un autre endroit'} »`);
-      }
-    }
-    photos.push({ id: pid, niveau: n, raisons });
-    pire(n);
+async function rapportDe(e, { carte = true, forcer = false } = {}) {
+  if (forcer) { delete e.verifCarte; carteTemp.delete(e.id); }
+  if (carte && !e.verifCarte && !carteTemp.has(e.id) && navigator.onLine && e.lat) {
+    try {
+      const res = await verif.chercherSurLaCarte(e);
+      if (res && !res.erreur) e.verifCarte = res; else if (res) carteTemp.set(e.id, res);
+    } catch (_) { /* pas d'internet : on vérifie le reste */ }
   }
-  if (!photos.length) pire('orange');
-  return { niveau, photos };
+  if (!indexVerif) indexVerif = await verif.indexPhotos(etat.endroits);
+  const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
+  const vue = e.verifCarte || !carteTemp.has(e.id) ? e : { ...e, verifCarte: carteTemp.get(e.id) };
+  const r = await verif.analyser(vue, { tous: etat.endroits, contributeur: c, index: indexVerif });
+  e.verifNote = r.score;
+  e.verifNiveau = r.niveau;
+  await db.ecrire('endroits', e); // cache local seulement (sans changer la date de la fiche)
+  rapports.set(e.id, r);
+  return r;
 }
 
-// Copie la photo puis ouvre Google Lens ou TinEye : il reste à coller (Ctrl+V).
+const ICO_NIVEAU = { vert: 'circle-check-big', orange: 'triangle-alert', rouge: 'circle-x', info: 'info' };
+const REPONSE = { vert: 'Oui', orange: 'Pas sûr', rouge: 'Non', info: 'À voir' };
+const ICO_VERDICT = { vert: 'shield-check', orange: 'shield-alert', rouge: 'shield-x' };
+
+function htmlVerdictMini(r) {
+  return `
+    <div class="verdict-ligne">
+      <span class="pastille-verdict ${r.niveau}">${icone(ICO_VERDICT[r.niveau], { taille: 15 })} ${r.verdict} <b>${r.score}/100</b></span>
+      <span class="feux">${r.questions.map((q) => `<i class="feu ${q.niveau}" title="${esc(q.titre)} ${REPONSE[q.niveau]}">${icone(q.ico, { taille: 13 })}</i>`).join('')}</span>
+    </div>
+    <p class="verdict-raison">${esc(r.raison)}${r.enLigne ? '' : ' <span class="aide">(carte pas encore vérifiée)</span>'}</p>`;
+}
+
+// Copie la photo puis ouvre le moteur de recherche d'images : il reste à coller (Ctrl+V).
 function chercherEnLigne(pid, moteur) {
-  window.open(moteur === 'tineye' ? 'https://tineye.com/' : 'https://lens.google.com/', '_blank', 'noopener');
+  const m = verif.MOTEURS_IMAGE.find(([k]) => k === moteur) || verif.MOTEURS_IMAGE[0];
+  window.open(m[2], '_blank', 'noopener');
   const png = db.lire('photos', pid).then(async (p) => {
     const bmp = await createImageBitmap(p.blob);
     const c = document.createElement('canvas');
@@ -2003,24 +1955,147 @@ function chercherEnLigne(pid, moteur) {
     return new Promise((ok) => c.toBlob(ok, 'image/png'));
   });
   navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
-    .then(() => toast('Photo copiée : dans la page qui s\'ouvre, fais Ctrl+V'))
+    .then(() => toast(`Photo copiée : dans ${m[1]}, fais Ctrl+V`))
     .catch(() => toast('Copie impossible : enregistre la photo et dépose-la dans la page'));
+}
+
+async function decider(id, statut, raison = '') {
+  const e = endroit(id);
+  Object.assign(e, { statut, decideLe: new Date().toISOString(), raisonRefus: raison || undefined });
+  await sauver('endroits', e);
+}
+function demanderRefus(id, raison = '') {
+  ouvrirModale('Refuser cet endroit ?', `<label class="champ"><span>Raison <small>optionnel, pour l'expliquer au contributeur</small></span><input name="raison" value="${esc(raison)}" placeholder="Ex. : photo floue, endroit fermé…"></label>`, async (val) => {
+    await decider(id, 'refuse', val.raison.trim());
+    toast('Endroit refusé');
+    router();
+    return true;
+  }, { ok: 'Refuser', danger: true });
+}
+
+// Le rapport complet : 5 questions, une réponse claire pour chacune, et de quoi vérifier soi-même.
+async function ouvrirRapport(id, forcer = false) {
+  const e = endroit(id);
+  if (!e) return;
+  const cat = categorie(e);
+  const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
+  modale.innerHTML = `<div class="mod-fond" data-fermer></div><div class="mod mod-rapport" role="dialog" aria-modal="true"><div class="rapport-attente">${icone('scan-search', { taille: 30, epaisseur: 1.6 })}<b>Vérification de « ${esc(e.nom)} »…</b><span>Photos, position, carte du monde, historique du contributeur.</span></div></div>`;
+  modale.hidden = false;
+  modale.querySelectorAll('[data-fermer]').forEach((b) => { b.onclick = fermerModale; });
+  const r = await rapportDe(e, { forcer });
+  if (modale.hidden) return;
+  const lienBtn = (href, ico, texte) => `<a class="btn ghost sm" href="${esc(href)}" target="_blank" rel="noopener">${icone(ico, { taille: 14 })} ${texte}</a>`;
+  const pireRaison = r.questions.flatMap((q) => q.points).find((p) => p.niveau === 'rouge')?.texte || '';
+  modale.innerHTML = `
+    <div class="mod-fond" data-fermer></div>
+    <div class="mod mod-rapport" role="dialog" aria-modal="true">
+      <header class="rapport-tete ${r.niveau}">
+        <div class="rapport-note"><b>${r.score}</b><small>/100</small></div>
+        <div class="rapport-titre">
+          <span class="pastille-verdict ${r.niveau}">${icone(ICO_VERDICT[r.niveau], { taille: 15 })} ${r.verdict}</span>
+          <h2>${esc(e.nom)}</h2>
+          <p>${esc([cat.nom, [e.ville, e.pays].filter(Boolean).join(', ')].filter(Boolean).join(' · '))} · par ${esc(c?.nom || 'inconnu')}</p>
+        </div>
+        <button type="button" class="ico-btn" data-fermer aria-label="Fermer">${icone('x', { taille: 18 })}</button>
+      </header>
+      <div class="rapport-corps">
+        <p class="rapport-raison">${icone(ICO_NIVEAU[r.niveau === 'vert' ? 'vert' : r.niveau], { taille: 16 })} ${esc(r.raison)}</p>
+        <div class="rapport-grille">
+          <div class="questions">
+            ${r.questions.map((q) => `
+              <section class="question ${q.niveau}">
+                <div class="q-tete">${icone(q.ico, { taille: 16 })}<b>${esc(q.titre)}</b><span class="reponse">${REPONSE[q.niveau]}</span></div>
+                <ul>${q.points.map((p) => `<li class="${p.niveau}">${icone(ICO_NIVEAU[p.niveau], { taille: 14 })}<span>${esc(p.texte)}</span></li>`).join('')}</ul>
+              </section>`).join('')}
+          </div>
+          <aside class="rapport-outils">
+            ${e.photos?.length ? `
+              <div class="outil">
+                <h4>Chercher la photo sur Internet</h4>
+                <p class="aide">Un clic copie la photo et ouvre le site : fais Ctrl+V. Si elle existe déjà ailleurs, elle a été volée.</p>
+                <div class="rapport-photos">${r.photos.map((p) => `
+                  <div class="r-photo ${p.niveau}"><img data-photo="${esc(p.id)}" alt="">
+                    <div class="moteurs">${verif.MOTEURS_IMAGE.map(([k, nom]) => `<button type="button" data-chercher="${esc(p.id)}" data-moteur="${k}">${nom}</button>`).join('')}</div>
+                  </div>`).join('')}</div>
+              </div>` : ''}
+            ${e.lat ? `
+              <div class="outil">
+                <h4>Sur la carte</h4>
+                <div class="carte rapport-carte" id="carte-rapport"></div>
+                <p class="legende"><i class="pt-endroit"></i> position envoyée ${r.carte.photo ? '<i class="pt-photo"></i> où la photo a été prise' : ''} ${r.carte.trouve ? '<i class="pt-osm"></i> trouvé sur OpenStreetMap' : ''}</p>
+                <div class="rangee-btn">
+                  ${lienBtn(verif.liens.googleMaps(e), 'map', 'Google Maps')}
+                  ${lienBtn(verif.liens.streetView(e), 'eye', 'Street View')}
+                </div>
+              </div>` : ''}
+            <div class="outil">
+              <h4>Autres vérifications</h4>
+              <div class="rangee-btn">
+                ${(e.description || '').length >= 40 ? lienBtn(verif.liens.texte(e), 'search', 'Texte copié d\'Internet ?') : ''}
+                <button type="button" class="btn ghost sm" id="reverifier">${icone('refresh-cw', { taille: 14 })} Revérifier la carte</button>
+              </div>
+            </div>
+            <div class="outil">
+              <h4>Lui demander une preuve</h4>
+              <p class="aide">Un message poli, prêt à copier : une vidéo de 10 secondes devant l'endroit, ou un appel vidéo.</p>
+              <div class="rangee-btn">
+                <button type="button" class="btn ghost sm" data-preuve="en">${icone('copy', { taille: 14 })} En anglais</button>
+                <button type="button" class="btn ghost sm" data-preuve="fr">${icone('copy', { taille: 14 })} En français</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <p class="aide rapport-honnete">${icone('info', { taille: 13 })} Aucune vérification gratuite n'est sûre à 100 %. Cette note réunit une trentaine d'indices ; en cas de doute, fie-toi aux boutons ci-dessus.</p>
+      </div>
+      <footer class="mod-pied">
+        ${e.statut === 'en_attente' ? `
+          <button type="button" class="btn danger" id="r-refuser">${icone('x', { taille: 15 })} Refuser</button>
+          <button type="button" class="btn" id="r-accepter">${icone('check', { taille: 15 })} Accepter</button>` : `<span class="aide">Déjà ${e.statut === 'accepte' ? 'accepté' : 'refusé'}.</span><button type="button" class="btn ghost" data-fermer>Fermer</button>`}
+      </footer>
+    </div>`;
+  modale.querySelectorAll('[data-fermer]').forEach((b) => { b.onclick = fermerModale; });
+  afficherPhotos(modale);
+  modale.querySelectorAll('[data-chercher]').forEach((b) => { b.onclick = () => chercherEnLigne(b.dataset.chercher, b.dataset.moteur); });
+  modale.querySelectorAll('[data-preuve]').forEach((b) => {
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(verif.messagePreuve(e, c, b.dataset.preuve)); toast('Message copié : colle-le dans ta conversation avec lui'); } catch (_) { toast('Copie impossible'); }
+    };
+  });
+  modale.querySelector('#reverifier').onclick = () => ouvrirRapport(id, true);
+  const acc = modale.querySelector('#r-accepter');
+  if (acc) acc.onclick = async () => { await decider(id, 'accepte'); fermerModale(); toast('Endroit accepté'); router(); };
+  const ref = modale.querySelector('#r-refuser');
+  if (ref) ref.onclick = () => demanderRefus(id, pireRaison);
+  const zoneCarte = modale.querySelector('#carte-rapport');
+  if (zoneCarte && window.L) {
+    const m = L.map(zoneCarte, { scrollWheelZoom: false, attributionControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', { maxZoom: 19, subdomains: 'abc', attribution: '© OpenStreetMap' }).addTo(m);
+    const pts = [];
+    const rond = (p, classe, titre) => { pts.push([p.lat, p.lng]); L.marker([p.lat, p.lng], { icon: L.divIcon({ className: `pt-carte ${classe}`, html: '<span></span>', iconSize: [18, 18] }), title: titre }).addTo(m); };
+    if (r.carte.trouve) rond(r.carte.trouve, 'pt-osm', `OpenStreetMap : ${r.carte.trouve.nom}`);
+    if (r.carte.photo) rond(r.carte.photo, 'pt-photo', 'Photo prise ici');
+    rond(r.carte.endroit, 'pt-endroit', 'Position envoyée');
+    if (pts.length > 1) m.fitBounds(pts, { padding: [30, 30], maxZoom: 17 }); else m.setView(pts[0], 16);
+  }
 }
 
 function ongletSoumissions(zone) {
   const liste = aValider().sort((a, b) => (a.recuLe || '').localeCompare(b.recuLe || ''));
+  indexVerif = null;
   if (!liste.length) {
-    zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un contributeur (dans « Mes données »), ses nouveaux endroits arrivent ici.</span></div>`;
+    zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un contributeur (dans « Mes données »), ses nouveaux endroits arrivent ici et sont vérifiés tout seuls.</span></div>`;
     return;
   }
   zone.innerHTML = `
-    <div class="barre-actions"><span>${pluriel(liste.length, 'endroit')} en attente. Fiche sûre = photos vérifiées, position et description. Regarde seulement les autres.</span>
-      <button class="btn sm" id="accepter-verts" disabled>${icone('shield-check', { taille: 14 })} Accepter toutes les fiches sûres</button></div>
+    <div class="panel bandeau-verif">
+      <span class="rond-ico">${icone('scan-search', { taille: 20 })}</span>
+      <div><b id="verif-etat">Vérification de ${pluriel(liste.length, 'endroit')}…</b><p>Chaque fiche reçoit une note sur 100 : photo volée, endroit qui n'existe pas, personne pas sur place, copier-coller, doublon. Clique « Vérifier » pour voir le détail.</p></div>
+      <button class="btn" id="accepter-verts" disabled>${icone('shield-check', { taille: 15 })} Accepter les fiables</button>
+    </div>
     <div class="soumissions">
       ${liste.map((e) => {
         const cat = categorie(e);
         const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
-        const manque = [e.lat ? '' : 'position', (e.description || '').length >= 20 ? '' : 'description', e.photos?.length ? '' : 'photo'].filter(Boolean);
         return `
           <article class="panel soum" style="--c:${cat.couleur}">
             <div class="soum-photo">${iconeCat(e.categorie, { taille: 26, epaisseur: 1.5 })}${e.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}${e.photos?.length > 1 ? `<span class="soum-nb">${e.photos.length} photos</span>` : ''}</div>
@@ -2028,77 +2103,53 @@ function ongletSoumissions(zone) {
               <span class="c-cat">${iconeCat(e.categorie, { taille: 12 })}${esc([cat.nom, e.sousType || e.type, e.complexe ? 'trajet complexe, compte double' : ''].filter(Boolean).join(', '))}</span>
               <b class="soum-nom">${esc(e.nom)}</b>
               <small>${esc([e.ville, e.pays].filter(Boolean).join(', '))}. Par ${esc(c?.nom || 'inconnu')}${e.recuLe ? `, reçu le ${esc(dateCourte(e.recuLe))}` : ''}</small>
-              ${manque.length ? `<p class="manque">Manque : ${esc(manque.join(', '))}</p>` : ''}
-              <div class="verif" data-verif="${esc(e.id)}"><div class="verif-tete">${icone('shield-check', { taille: 15 })} Vérification des photos…</div></div>
-              <details><summary>Voir la fiche</summary>
-                <dl class="fiche-courte">
-                  ${e.description ? `<dt>Description</dt><dd>${esc(e.description)}</dd>` : ''}
-                  ${e.notes ? `<dt>Notes privées</dt><dd>${esc(e.notes)}</dd>` : ''}
-                  ${e.prix || e.montant ? `<dt>Prix</dt><dd>${dollars(e.prix)} ${esc(e.montant || '')} ${esc(e.montant ? e.devise : '')}</dd>` : ''}
-                  ${e.adresse ? `<dt>Adresse</dt><dd>${esc(e.adresse)}</dd>` : ''}
-                  ${e.lat ? `<dt>GPS</dt><dd><a href="https://www.google.com/maps/search/?api=1&query=${e.lat},${e.lng}" target="_blank" rel="noopener">${e.lat}, ${e.lng}</a></dd>` : ''}
-                  ${e.verifieLe ? `<dt>Visité le</dt><dd>${esc(dateCourte(e.verifieLe))}</dd>` : ''}
-                </dl>
-              </details>
+              ${e.description ? `<p class="soum-desc">${esc(e.description)}</p>` : ''}
+              <div class="verdict" data-verdict="${esc(e.id)}"><div class="verdict-ligne"><span class="pastille-verdict attente">${icone('scan-search', { taille: 15 })} Vérification…</span></div></div>
             </div>
             <div class="soum-actions">
-              <button class="btn sm" data-accepter="${esc(e.id)}">${icone('check', { taille: 14 })} Accepter</button>
+              <button class="btn" data-rapport="${esc(e.id)}">${icone('scan-search', { taille: 15 })} Vérifier</button>
+              <button class="btn ghost sm" data-accepter="${esc(e.id)}">${icone('check', { taille: 14 })} Accepter</button>
               <button class="btn danger sm" data-refuser="${esc(e.id)}">${icone('x', { taille: 14 })} Refuser</button>
             </div>
           </article>`;
       }).join('')}
     </div>`;
   afficherPhotos(zone);
-  const decider = async (id, statut, raison = '') => {
-    const e = endroit(id);
-    Object.assign(e, { statut, decideLe: new Date().toISOString(), raisonRefus: raison || undefined });
-    await sauver('endroits', e);
-  };
-  zone.querySelectorAll('[data-accepter]').forEach((b) => { b.onclick = async () => { await decider(b.dataset.accepter, 'accepte'); toast('Endroit accepté'); router(); }; });
-  zone.querySelectorAll('[data-refuser]').forEach((b) => {
-    b.onclick = () => ouvrirModale('Refuser cet endroit ?', `<label class="champ"><span>Raison <small>optionnel, pour l'expliquer au contributeur</small></span><input name="raison" placeholder="Ex. : photo floue, endroit fermé…"></label>`, async (val) => {
-      await decider(b.dataset.refuser, 'refuse', val.raison.trim());
-      toast('Endroit refusé');
-      router();
-      return true;
-    }, { ok: 'Refuser', danger: true });
+  zone.querySelectorAll('[data-rapport]').forEach((b) => { b.onclick = () => ouvrirRapport(b.dataset.rapport); });
+  zone.querySelectorAll('[data-accepter]').forEach((b) => {
+    b.onclick = async () => {
+      const r = rapports.get(b.dataset.accepter);
+      if (r?.niveau === 'rouge' && !confirm(`Cette fiche a la note ${r.score}/100 (${r.raison}). L'accepter quand même ?`)) return;
+      await decider(b.dataset.accepter, 'accepte'); toast('Endroit accepté'); router();
+    };
   });
-  // Vérification des photos, puis le bouton « Accepter toutes les fiches sûres ».
-  const resultats = new Map();
+  zone.querySelectorAll('[data-refuser]').forEach((b) => { b.onclick = () => demanderRefus(b.dataset.refuser, rapports.get(b.dataset.refuser)?.niveau === 'rouge' ? rapports.get(b.dataset.refuser).raison : ''); });
+
+  // Vérifie tout, une fiche à la fois (la carte en ligne accepte une demande par seconde).
   (async () => {
-    const index = await indexPhotos();
+    let fait = 0;
+    const etatTxt = () => zone.querySelector('#verif-etat');
     for (const e of liste) {
-      const r = await verifierPhotos(e, index);
-      resultats.set(e.id, r);
-      const boite = zone.querySelector(`[data-verif="${CSS.escape(e.id)}"]`);
-      if (!boite) continue;
-      const titres = { vert: 'Photos vérifiées : rien à signaler', orange: 'Photos à regarder', rouge: 'Photo probablement pas la sienne' };
-      const raisons = r.photos.flatMap((p) => p.raisons);
-      boite.className = `verif ${r.niveau}`;
-      boite.innerHTML = `
-        <div class="verif-tete">${icone(r.niveau === 'vert' ? 'shield-check' : 'shield-alert', { taille: 15 })} ${r.photos.length ? titres[r.niveau] : 'Aucune photo'}</div>
-        ${raisons.length ? `<ul>${[...new Set(raisons)].map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-        ${r.niveau !== 'vert' && r.photos.length ? `<div class="verif-photos">${r.photos.map((p) => `
-          <div class="verif-photo ${p.niveau}"><img data-photo="${esc(p.id)}" alt="">
-            <div class="chercher"><button type="button" data-chercher="${esc(p.id)}" data-moteur="google" title="Chercher cette photo sur Google Lens">Google</button><button type="button" data-chercher="${esc(p.id)}" data-moteur="tineye" title="Chercher cette photo sur TinEye">TinEye</button></div>
-          </div>`).join('')}</div>` : ''}`;
-      afficherPhotos(boite);
+      if (!zone.isConnected) return;
+      const r = await rapportDe(e);
+      fait++;
+      const boite = zone.querySelector(`[data-verdict="${CSS.escape(e.id)}"]`);
+      if (boite) { boite.className = `verdict ${r.niveau}`; boite.innerHTML = htmlVerdictMini(r); }
+      if (etatTxt() && fait < liste.length) etatTxt().textContent = `Vérification… ${fait} sur ${liste.length}`;
     }
-    const surs = liste.filter((e) => resultats.get(e.id)?.niveau === 'vert' && e.lat && (e.description || '').length >= 20);
+    const n = (k) => liste.filter((e) => rapports.get(e.id)?.niveau === k).length;
+    if (etatTxt()) etatTxt().textContent = `${pluriel(n('vert'), 'fiable', 'fiables')}, ${n('orange')} à regarder, ${pluriel(n('rouge'), 'fraude probable', 'fraudes probables')}`;
+    const surs = liste.filter((e) => rapports.get(e.id)?.niveau === 'vert');
     const bouton = zone.querySelector('#accepter-verts');
     if (!bouton) return;
     bouton.disabled = !surs.length;
-    bouton.innerHTML = `${icone('shield-check', { taille: 14 })} ${surs.length === 1 ? 'Accepter la fiche sûre' : surs.length ? `Accepter les ${surs.length} fiches sûres` : 'Aucune fiche sûre pour l\'instant'}`;
+    bouton.innerHTML = `${icone('shield-check', { taille: 15 })} ${surs.length ? `Accepter les ${surs.length} fiables` : 'Aucune fiche fiable'}`;
     bouton.onclick = async () => {
       for (const e of surs) await decider(e.id, 'accepte');
       toast(pluriel(surs.length, 'endroit accepté', 'endroits acceptés'));
       router();
     };
   })();
-  zone.addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-chercher]');
-    if (b) chercherEnLigne(b.dataset.chercher, b.dataset.moteur);
-  });
 }
 
 function ongletPaiements(zone, bilans) {
