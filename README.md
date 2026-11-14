@@ -108,3 +108,23 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 ## Suivi sur place (page privée du client)
 
 Dans le Studio, chaque voyage a un onglet « Suivi sur place ». Raph y écrit un mot au client, ajoute des nouvelles du terrain (texte, photos, lien de vidéo) et des choix à faire (2 ou 3 options, avec photo ou un endroit de sa carte). « Télécharger la page » crée un seul fichier .html à envoyer au client par WhatsApp ou courriel. Le client y voit son voyage qui se remplit, choisit ses options et les envoie à Raph en un clic (WhatsApp, texto ou courriel). L'onglet contient aussi un modèle de courriel (FR/EN) pour demander la visite gratuite d'un hôtel. L'accueil du Studio présente le projet en 30 secondes (FR/EN).
+
+## Voyage sur mesure en direct (carnet du client)
+
+Raph repère sur place pour un client (ex. : Montréal). Dans l'appli du cellulaire, onglet **Clients** :
+
+- « Nouveau voyage sur mesure » : prénom et courriel du client, ville, mot d'accueil, **heure de livraison** (19 h par défaut, heure de chez le client).
+- « Je repère pour Marc » : chaque nouvel endroit propose « Pour Marc » + « Ton mot pour Marc ». On peut aussi ajouter un endroit déjà noté, livrer tout de suite, retirer.
+- « Son lien » : le client reçoit un seul lien privé (`carnet.html?c=…#clé`), qu'il peut mettre sur son écran d'accueil.
+
+Le client voit ses trouvailles livrées chaque soir, avec un mot écrit tout seul (`motDuSoir` dans `js/carnet-commun.js`, sans IA payante), met des ❤ et choisit où dormir. Ses choix reviennent tout seuls dans l'appli (page du client) et le Studio (Accueil).
+
+Exemple à montrer : `carnet.html?demo` (repérage à Montréal, photos d'illustration).
+
+Comment c'est privé : le carnet et ses photos sont chiffrés (AES-256) avec une clé qui n'est que dans le lien du client, après le `#` (jamais envoyée à internet). Les fichiers chiffrés sont dans la branche `carnets` de ce dossier ; les choix du client passent chiffrés par ntfy.sh (gratuit, sans compte).
+
+Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css`, `carnet.webmanifest` (page du client) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, mot du soir) · `js/carnet-demo.js` (démo) · `.github/workflows/carnets-soir.yml` + `.github/scripts/carnets-soir.mjs` (courriel du soir).
+
+À faire une fois :
+1. La clé GitHub de l'appli doit aussi pouvoir écrire dans `Appli-voyage` (Fine-grained token > Repository access > ajouter Appli-voyage, Contents : Read and write).
+2. Pour le courriel du soir : dans ce dossier, Settings > Secrets and variables > Actions, ajouter `DONNEES_CLE` (la même clé), `COURRIEL_ADRESSE` (Gmail) et `COURRIEL_MOT_DE_PASSE` (mot de passe d'application Gmail).

@@ -774,3 +774,14 @@ input[type='date'] { color-scheme: dark; }
 .repli > summary .ico { margin-left: auto; color: var(--dim2); transition: transform 0.15s; }
 .repli[open] > summary { margin-bottom: 14px; }
 .repli[open] > summary .ico { transform: rotate(180deg); }
+
+/* Voyages sur mesure en direct (accueil) */
+.carnets-direct { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.carnets-direct .panel-tete { margin-bottom: 4px; }
+.carnets-direct .panel-tete h3 { display: flex; align-items: center; gap: 7px; }
+.carnet-studio { padding: 12px 14px; border-radius: var(--rayon-s); background: var(--p2); border: 1px solid var(--ln); display: flex; flex-direction: column; gap: 6px; }
+.carnet-studio-tete { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.carnet-studio-tete .btn { margin-left: auto; }
+.carnet-studio p { display: flex; align-items: center; gap: 7px; color: var(--dim); }
+.carnet-studio p .ico { color: var(--ac); }
+.carnet-studio .mot { font-style: italic; color: var(--tx); }

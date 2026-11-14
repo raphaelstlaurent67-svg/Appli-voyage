@@ -3,7 +3,7 @@
 
 const NOM_BASE = 'appli-voyage';
 const CLES_SYNC = ['sync', 'syncShas', 'syncFile', 'syncDernier'];
-const VERSION = 3; // 2 : voyages (générateur) · 3 : contributeurs et paiements
+const VERSION = 4; // 2 : voyages (générateur) · 3 : contributeurs et paiements · 4 : carnets clients en direct
 let basePromise;
 
 function ouvrir() {
@@ -19,6 +19,7 @@ function ouvrir() {
         if (!db.objectStoreNames.contains('voyages')) db.createObjectStore('voyages', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('contributeurs')) db.createObjectStore('contributeurs', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('paiements')) db.createObjectStore('paiements', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('carnets')) db.createObjectStore('carnets', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -93,6 +94,7 @@ export async function exporterTout() {
     voyages: await tous('voyages'),
     contributeurs: await tous('contributeurs'),
     paiements: await tous('paiements'),
+    carnets: await tous('carnets'),
     // La clé GitHub et l'état de l'envoi automatique ne sortent jamais dans une copie.
     reglages: (await tous('reglages')).filter((r) => !CLES_SYNC.includes(r.cle)),
     photos: photosTexte,
@@ -116,7 +118,7 @@ export async function importerTout(donnees) {
     const actuel = await lire('voyages', v.id);
     if (!actuel || (v.modifieLe || '') > (actuel.modifieLe || '')) await ecrire('voyages', v);
   }
-  for (const magasin of ['contributeurs', 'paiements']) {
+  for (const magasin of ['contributeurs', 'paiements', 'carnets']) {
     for (const x of donnees[magasin] || []) {
       const actuel = await lire(magasin, x.id);
       if (!actuel || (x.modifieLe || '') > (actuel.modifieLe || '')) await ecrire(magasin, x);

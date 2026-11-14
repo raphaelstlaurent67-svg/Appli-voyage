@@ -1,0 +1,49 @@
+# Le courriel du soir des carnets clients (voyage sur mesure).
+# Gratuit : GitHub fait tourner ce petit programme toutes les 30 minutes.
+#   1. Il range les choix des clients (leurs ❤) dans le dossier privé, pour l'appli et le Studio.
+#   2. À l'heure de livraison d'un carnet (19 h par défaut, heure du client), s'il y a du nouveau,
+#      il envoie au client un petit courriel propre avec le mot du soir et le bouton vers son carnet.
+# À régler une seule fois (Settings > Secrets and variables > Actions) :
+#   DONNEES_CLE            la clé GitHub déjà utilisée dans l'appli (elle lit le dossier privé)
+#   COURRIEL_ADRESSE       l'adresse Gmail qui envoie (ex. : ton adresse d'affaires)
+#   COURRIEL_MOT_DE_PASSE  un « mot de passe d'application » Gmail (pas ton vrai mot de passe)
+# Sans ces secrets, rien n'est envoyé et rien ne casse.
+
+name: Courriel du soir des carnets
+
+on:
+  schedule:
+    - cron: '5,35 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carnets-soir
+  cancel-in-progress: false
+
+jobs:
+  soir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            js
+            .github/scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Outil d'envoi de courriels (gratuit)
+        run: npm install --prefix .github/scripts --no-save --no-audit --no-fund nodemailer@6.9.16
+      - name: Ranger les choix et envoyer les courriels du soir
+        env:
+          DONNEES_CLE: ${{ secrets.DONNEES_CLE }}
+          DONNEES_DEPOT: ${{ vars.DONNEES_DEPOT }}
+          COURRIEL_ADRESSE: ${{ secrets.COURRIEL_ADRESSE }}
+          COURRIEL_MOT_DE_PASSE: ${{ secrets.COURRIEL_MOT_DE_PASSE }}
+          PROPRIO: ${{ github.repository_owner }}
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node .github/scripts/carnets-soir.mjs

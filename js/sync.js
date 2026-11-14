@@ -5,6 +5,8 @@
 //   photos/<id>.jpg         toutes les photos
 //   contributions/<id>.json endroits des contributeurs (Studio)
 //   studio/<magasin>.json   voyages, contributeurs, paiements (Studio)
+//   carnets/<id>.json       carnets « voyage sur mesure » en direct (cellulaire)
+//   carnets-choix/<id>.json choix du client, rangés chaque heure par l'envoi du soir (GitHub)
 // Si internet manque, les envois attendent et repartent tout seuls plus tard.
 
 import * as db from './db.js';
@@ -104,6 +106,7 @@ export const cheminEndroit = (e) => (e.contributeurId ? `contributions/${e.id}.j
 export const cheminPhoto = (id) => `photos/${id}.jpg`;
 export const cheminVille = (id) => `villes/${encodeURIComponent(id)}.json`;
 export const cheminStudio = (magasin) => `studio/${magasin}.json`;
+export const cheminCarnet = (id) => `carnets/${id}.json`;
 
 // Donne le contenu à envoyer pour un chemin (null = à effacer).
 async function contenuPour(chemin) {
@@ -120,6 +123,10 @@ async function contenuPour(chemin) {
   if (dossier === 'villes') {
     const v = await db.lire('villes', id);
     return v ? texteVersBase64(JSON.stringify(v, null, 1)) : null;
+  }
+  if (dossier === 'carnets') {
+    const c = await db.lire('carnets', id);
+    return c ? texteVersBase64(JSON.stringify(c, null, 1)) : null;
   }
   if (dossier === 'studio') {
     return texteVersBase64(JSON.stringify(await db.tous(id), null, 1));
@@ -185,7 +192,7 @@ export async function envoyer() {
 
 // Va chercher ce qui a changé dans le dossier GitHub et l'ajoute ici.
 // dossiers : ceux à lire (le cellulaire lit ses endroits ; le Studio lit tout).
-export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'contributions', 'studio']) {
+export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'contributions', 'studio', 'carnets', 'carnets-choix']) {
   if (!(await lireConfig()) || !navigator.onLine) return { nouveaux: 0 };
   const r = await api(`/repos/${config.depot}/git/trees/HEAD?recursive=1`);
   if (r.statut === 409 || r.statut === 404) return { nouveaux: 0 }; // dossier encore vide
@@ -204,7 +211,18 @@ export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'cont
     if (!b.ok) continue;
     let objet;
     try { objet = JSON.parse(base64VersTexte(b.donnees.content)); } catch (_) { continue; }
-    if (dossier === 'studio') {
+    if (dossier === 'carnets-choix') {
+      // Les choix du client, récupérés par l'envoi du soir : on les ajoute au carnet.
+      const c = objet && (await db.lire('carnets', objet.id));
+      if (c && (objet.choix?.recuLe || '') > (c.choix?.recuLe || '')) { c.choix = objet.choix; await db.ecrire('carnets', c); }
+    } else if (dossier === 'carnets') {
+      const actuel = await db.lire('carnets', objet.id);
+      if (!actuel || (objet.modifieLe || '') > (actuel.modifieLe || '')) {
+        // Les choix les plus récents du client restent, d'où qu'ils viennent.
+        if (actuel && (actuel.choix?.recuLe || '') > (objet.choix?.recuLe || '')) objet.choix = actuel.choix;
+        await db.ecrire('carnets', objet);
+      }
+    } else if (dossier === 'studio') {
       const magasin = f.path.slice(7, -5);
       for (const x of Array.isArray(objet) ? objet : []) {
         const actuel = await db.lire(magasin, x.id);
@@ -247,12 +265,13 @@ export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'cont
 }
 
 // Tout envoyer une première fois (après avoir branché le dossier).
-export async function toutMarquer(magasins = ['endroits', 'villes']) {
+export async function toutMarquer(magasins = ['endroits', 'villes', 'carnets']) {
   const chemins = [];
   if (magasins.includes('endroits')) {
     for (const e of await db.tous('endroits')) { chemins.push(cheminEndroit(e)); for (const p of e.photos || []) chemins.push(cheminPhoto(p)); }
   }
   if (magasins.includes('villes')) for (const v of await db.tous('villes')) chemins.push(cheminVille(v.id));
+  if (magasins.includes('carnets')) for (const c of await db.tous('carnets')) chemins.push(cheminCarnet(c.id));
   for (const m of ['voyages', 'contributeurs', 'paiements']) if (magasins.includes(m)) chemins.push(cheminStudio(m));
   await marquer(chemins);
 }

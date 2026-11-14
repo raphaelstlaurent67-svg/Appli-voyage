@@ -5,6 +5,8 @@ import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
+import * as carnets from './carnets.js';
+import { prochaineLivraison, dateLongue, formatHeure, HEURE_PAR_DEFAUT, motDuSoir } from './carnet-commun.js';
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -353,13 +355,15 @@ async function router() {
   const [, page, id] = (location.hash || '#/').split('/');
   const nom = page || 'liste';
   document.body.dataset.page = nom;
-  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === nom));
+  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === (nom === 'carnet' ? 'clients' : nom)));
   window.scrollTo(0, 0);
   if (page === 'ajouter') return pageFormulaire(null);
   if (page === 'modifier') return pageFormulaire(id);
   if (page === 'endroit') return pageFiche(id);
   if (page === 'villes') return pageVilles();
   if (page === 'reglages') return pageReglages();
+  if (page === 'clients') return pageClients();
+  if (page === 'carnet') return pageCarnet(id, (location.hash.split('/')[3] || ''));
   return pageListe();
 }
 
@@ -595,6 +599,7 @@ async function pageFiche(id) {
 
       ${e.notes ? `<section class="bloc-fiche"><h2>${icone('lock', { taille: 17 })} Mes notes privées</h2><p class="texte notes">${esc(e.notes)}</p></section>` : ''}
 
+      <div id="zone-client"></div>
       <p class="verifie">${e.verifieLe ? `${icone('badge-check', { taille: 16 })} Vérifié le ${esc(new Date(`${e.verifieLe}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }))}` : 'Pas de date de vérification'}</p>
       <button class="bouton-danger" id="supprimer">${icone('trash-2', { taille: 18 })} Supprimer cet endroit</button>
       <div class="confirmer" id="confirmer" hidden>
@@ -612,6 +617,17 @@ async function pageFiche(id) {
     }, { passive: true });
   }
   afficherPhotos(app);
+  carnets.carnetActif().then((c) => {
+    const zone = app.querySelector('#zone-client');
+    if (!c || !zone || e.contributeurId) return;
+    const prenom = c.client?.prenom || 'ton client';
+    const dedans = c.items.some((i) => i.endroitId === e.id);
+    zone.innerHTML = dedans
+      ? `<p class="etat-branche">${icone('moon', { taille: 16 })}<span>Dans le carnet de <b>${esc(prenom)}</b></span></p>`
+      : `<button class="bouton-secondaire bouton-bloc" id="envoyer-client">${icone('send', { taille: 18 })} Envoyer à ${esc(prenom)} (${formatHeure(c.heure)})</button>`;
+    const b = zone.querySelector('#envoyer-client');
+    if (b) b.onclick = async () => { carnets.ajouterItem(c, e.id); await carnets.enregistrer(c); toast(`En route pour ${prenom}`); zone.innerHTML = `<p class="etat-branche">${icone('moon', { taille: 16 })}<span>Dans le carnet de <b>${esc(prenom)}</b></span></p>`; };
+  });
   const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
   app.querySelector('#supprimer').onclick = () => demander(true);
   app.querySelector('#non-supprimer').onclick = () => demander(false);
@@ -637,6 +653,10 @@ async function pageFormulaire(id) {
     ? structuredClone(existant)
     : { id: db.nouvelId(), pays: lieu.pays || '', ville: lieu.ville || '', devise: lieu.devise || DEVISE_DU_PAYS[lieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
   brouillon = null;
+  // Repérage en cours pour un client : on propose d'envoyer l'endroit dans son carnet.
+  const carnetPour = await carnets.carnetActif();
+  const itemClient = carnetPour?.items.find((i) => i.endroitId === f.id);
+  const prenomClient = carnetPour?.client?.prenom || 'ton client';
   f.contacts = f.contacts || {};
   f.photos = f.photos || [];
   f.nouvellesPhotos = []; // { cle, blob, url }
@@ -700,6 +720,16 @@ async function pageFormulaire(id) {
           <i aria-hidden="true"></i>
         </label>
       </section>
+
+      ${carnetPour ? `
+      <section class="section section-client">
+        <label class="interrupteur">
+          <span><b>${icone('moon', { taille: 18 })} Pour ${esc(prenomClient)}</b><small>Livré dans son carnet ${esc(formatHeure(carnetPour.heure))}, avec tes photos</small></span>
+          <input type="checkbox" name="pourClient" ${itemClient || !existant ? 'checked' : ''}>
+          <i aria-hidden="true"></i>
+        </label>
+        <label class="champ"><span>Ton mot pour ${esc(prenomClient)} <small>il le lira</small></span><textarea name="motClient" rows="2" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(itemClient?.mot)}</textarea></label>
+      </section>` : ''}
 
       <section class="section">
         <h2 class="section-titre">Notes</h2>
@@ -903,6 +933,8 @@ async function pageFormulaire(id) {
   }
 
   app.querySelector('#ma-position').addEventListener('click', () => prendrePosition(false));
+  // Écrire un mot pour le client, c'est vouloir lui envoyer l'endroit.
+  if (carnetPour) champ('motClient').addEventListener('input', () => { if (champ('motClient').value.trim()) champ('pourClient').checked = true; });
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -931,6 +963,15 @@ async function pageFormulaire(id) {
     sync.marquer(sync.cheminEndroit(endroit), nouvellesPhotos.map((p) => sync.cheminPhoto(p.cle)), photosRetirees.map(sync.cheminPhoto));
     await db.ecrireReglage('dernierLieu', { pays: endroit.pays, ville: endroit.ville, devise: endroit.devise });
     db.demanderStockagePersistant();
+    let envoyeAuClient = false;
+    if (carnetPour) {
+      const c = await db.lire('carnets', carnetPour.id);
+      const dans = c.items.some((i) => i.endroitId === endroit.id);
+      if (champ('pourClient').checked) { carnets.ajouterItem(c, endroit.id, champ('motClient').value.trim()); envoyeAuClient = !dans; await carnets.enregistrer(c); } else if (dans) { c.items = c.items.filter((i) => i.endroitId !== endroit.id); await carnets.enregistrer(c); }
+    }
+    // Un endroit déjà dans le carnet d'un client : son carnet se met à jour (photos, textes).
+    for (const c of await db.tous('carnets')) if (c.id !== carnetPour?.id && c.items.some((i) => i.endroitId === endroit.id)) carnets.publierBientot(c.id);
+    if (envoyeAuClient) { toast(`Ajouté, et en route pour ${prenomClient} (${formatHeure(carnetPour.heure)})`); aller('#/'); return; }
     toast(existant ? 'Modifications enregistrées' : 'Endroit ajouté ✓');
     aller(existant ? `#/endroit/${endroit.id}` : '#/');
   });
@@ -943,6 +984,312 @@ async function pageFormulaire(id) {
   afficherPosition();
   // Nouvel endroit (sauf un trajet) : position GPS prise automatiquement.
   if (!existant && !f.lat && f.categorie !== 'trajets') prendrePosition(true);
+}
+
+// ---------- Voyages sur mesure : le carnet en direct du client ----------
+// Raph repère sur place pour un client. Chaque endroit envoyé au client part dans son carnet,
+// et lui est livré tous les soirs à la même heure (19 h par défaut), avec un petit mot écrit tout seul.
+
+const FUSEAUX = [
+  ['America/Toronto', 'Montréal, Toronto, New York'],
+  ['America/Vancouver', 'Vancouver, Los Angeles'],
+  ['Europe/Paris', 'Paris, Bruxelles, Genève'],
+  ['Europe/London', 'Londres'],
+  ['America/Mexico_City', 'Mexico'],
+  ['Asia/Tokyo', 'Tokyo, Séoul'],
+  ['Asia/Bangkok', 'Bangkok, Hanoï'],
+  ['Asia/Singapore', 'Singapour, Manille, Bali'],
+  ['Asia/Kathmandu', 'Katmandou'],
+  ['Australia/Sydney', 'Sydney'],
+];
+const HEURES = [7, 8, 9, 12, 17, 18, 19, 20, 21, 22];
+
+function etatPublication(c) {
+  const p = c.publication || {};
+  if (p.erreur === 'hors-ligne') return { classe: 'attente', texte: 'Pas d’internet : le carnet se met en ligne dès que possible.' };
+  if (p.erreur) return { classe: 'erreur', texte: p.erreur };
+  if (p.publieLe) return { classe: 'ok', texte: `En ligne, à jour (${new Date(p.publieLe).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit' })})` };
+  return { classe: 'attente', texte: 'Mise en ligne…' };
+}
+const enAttente = (c) => c.items.filter((i) => new Date(i.livraison) > Date.now());
+const livres = (c) => c.items.filter((i) => new Date(i.livraison) <= Date.now());
+const nbChoix = (c) => (c.choix?.coeurs?.length || 0) + Object.keys(c.choix?.dormir || {}).length;
+const depuis = (iso) => {
+  if (!iso) return '';
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 2) return 'à l’instant';
+  if (min < 60) return `il y a ${min} min`;
+  if (min < 1440) return `il y a ${Math.round(min / 60)} h`;
+  return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' });
+};
+
+async function pageClients() {
+  const tous = (await db.tous('carnets')).sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
+  const actif = await db.lireReglage('carnetActif', null);
+  app.innerHTML = `
+    <header class="entete-page">
+      <h1>Clients</h1>
+      <p>Voyage sur mesure : tu repères sur place, ton client reçoit tes trouvailles chaque soir.</p>
+    </header>
+    <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau voyage sur mesure</button>
+    <ul class="carnets">
+      ${tous.map((c) => `
+        <li><a class="carnet-ligne" href="#/carnet/${esc(c.id)}">
+          <span class="carnet-avatar">${esc((c.client?.prenom || '?').charAt(0).toUpperCase())}</span>
+          <span class="carnet-txt">
+            <b>${esc(c.client?.prenom || 'Client sans nom')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
+            <small>${livres(c).length} livré${livres(c).length > 1 ? 's' : ''}${enAttente(c).length ? `, ${enAttente(c).length} pour ce soir` : ''}${nbChoix(c) ? ` · ${icone('heart', { taille: 12 })} ${nbChoix(c)}` : ''}${c.choix?.vuLe ? ` · vu ${esc(depuis(c.choix.vuLe))}` : ''}</small>
+          </span>
+          ${c.id === actif && c.actif ? '<span class="pastille-direct">En repérage</span>' : !c.actif ? '<span class="pastille-fini">Terminé</span>' : ''}
+          ${icone('chevron-right', { taille: 18 })}
+        </a></li>`).join('')}
+    </ul>
+    ${tous.length ? '' : `<p class="vide"><span class="vide-icone">${icone('moon', { taille: 28 })}</span><b>Aucun client pour l’instant</b><span>Crée un voyage sur mesure : ton client aura sa page privée, livrée chaque soir.</span></p>`}
+    <a class="bouton-secondaire bouton-bloc lien-demo" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Voir l’exemple : Montréal</a>`;
+  app.querySelector('#nouveau-carnet').onclick = async () => {
+    const dernier = await db.lireReglage('dernierLieu', {});
+    const c = carnets.nouveauCarnet({ ville: dernier.ville || '', pays: dernier.pays || etat.region.pays || '' });
+    await db.ecrire('carnets', c);
+    await db.ecrireReglage('carnetActif', c.id);
+    sync.marquer(sync.cheminCarnet(c.id));
+    aller(`#/carnet/${c.id}/reglages`);
+  };
+}
+
+function ligneItem(c, i, endroit, { attente }) {
+  const aime = c.choix?.coeurs?.includes(i.id);
+  const dort = Object.values(c.choix?.dormir || {}).includes(i.id);
+  return `
+    <li class="item-carnet">
+      <a class="item-vignette" href="#/endroit/${esc(endroit.id)}">${endroit.photos?.length ? `<img data-photo="${esc(endroit.photos[0])}" alt="">` : iconeCat(endroit.categorie, { taille: 22 })}</a>
+      <div class="item-txt">
+        <b>${esc(endroit.nom)}</b>
+        <small>${esc(endroit.sousType || endroit.type || TAXONOMIE[endroit.categorie]?.nom || '')}${dort ? ` · <span class="choisi-client">${icone('bed-double', { taille: 12 })} son choix</span>` : ''}${aime ? ` · <span class="choisi-client">${icone('heart', { taille: 12 })} aimé</span>` : ''}</small>
+        <button type="button" class="lien item-mot" data-mot="${esc(i.id)}">${i.mot ? `« ${esc(i.mot)} »` : '+ Ajouter ton mot pour le client'}</button>
+      </div>
+      <div class="item-actions">
+        ${attente ? `<button type="button" class="petit-rond" data-livrer="${esc(i.id)}" aria-label="Livrer tout de suite" title="Livrer tout de suite">${icone('send', { taille: 16 })}</button>` : ''}
+        <button type="button" class="petit-rond" data-retirer="${esc(i.id)}" aria-label="Retirer du carnet" title="Retirer du carnet">${icone('x', { taille: 16 })}</button>
+      </div>
+    </li>`;
+}
+
+async function pageCarnet(id, sous) {
+  let c = await db.lire('carnets', id);
+  if (!c) return aller('#/clients');
+  const actifId = await db.lireReglage('carnetActif', null);
+  const prenom = c.client?.prenom || 'ton client';
+  const lienClient = carnets.lien(c);
+  const parId = new Map(etat.endroits.map((e) => [e.id, e]));
+  const items = c.items.filter((i) => parId.has(i.endroitId));
+  const attente = items.filter((i) => new Date(i.livraison) > Date.now());
+  const faits = items.filter((i) => new Date(i.livraison) <= Date.now());
+  const soirs = [...new Set(faits.map((i) => i.livraison))].sort().reverse();
+  const pub = etatPublication(c);
+  const prochaine = prochaineLivraison(new Date(), c.heure, c.fuseau);
+  const ch = c.choix || {};
+  const reglagesOuverts = sous === 'reglages' || !c.client?.prenom;
+
+  app.innerHTML = `
+    <header class="entete-form">
+      <a class="rond" href="#/clients" aria-label="Retour">${icone('chevron-left')}</a>
+      <h1>${esc(c.client?.prenom ? `Voyage de ${c.client.prenom}` : 'Nouveau voyage sur mesure')}</h1>
+      <span class="rond vide-rond"></span>
+    </header>
+
+    <section class="carnet-entete">
+      <p class="carnet-sur">${icone('moon', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')} · livraison chaque soir à ${formatHeure(c.heure)}</p>
+      <p class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</p>
+      <label class="interrupteur carte-interrupteur">
+        <span><b>Je repère pour ${esc(prenom)}</b><small>Chaque nouvel endroit te propose de l’envoyer dans son carnet</small></span>
+        <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
+        <i aria-hidden="true"></i>
+      </label>
+      <div class="deux">
+        <button class="bouton-principal" id="envoyer-lien">${icone('send', { taille: 18 })} Son lien</button>
+        <a class="bouton-secondaire" href="${esc(lienClient)}" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Sa page</a>
+      </div>
+    </section>
+
+    ${ch.envoyeLe || nbChoix(c) ? `
+    <section class="section">
+      <h2 class="section-titre">${icone('heart', { taille: 20 })} Ses choix</h2>
+      <p class="petit">${ch.vuLe ? `${esc(prenom)} a ouvert son carnet ${esc(depuis(ch.vuLe))}.` : ''} Ses ❤ arrivent tout seuls, il n’a rien à t’envoyer.</p>
+      ${Object.entries(ch.dormir || {}).map(([ville, x]) => { const i = c.items.find((y) => y.id === x); const e = i && parId.get(i.endroitId); return e ? `<p class="choix-ligne">${icone('bed-double', { taille: 16 })}<span>Dort à <b>${esc(e.nom)}</b> (${esc(ville)})</span></p>` : ''; }).join('')}
+      ${(ch.coeurs || []).map((x) => { const i = c.items.find((y) => y.id === x); const e = i && parId.get(i.endroitId); return e ? `<p class="choix-ligne">${icone('heart', { taille: 16 })}<span>${esc(e.nom)}</span></p>` : ''; }).join('')}
+      ${ch.mot ? `<blockquote class="mot-du-client">« ${esc(ch.mot)} »</blockquote>` : ''}
+      <button class="lien lien-icone" id="rafraichir-choix">${icone('refresh-cw', { taille: 14 })} Regarder s’il y a du nouveau</button>
+    </section>` : ''}
+
+    <section class="section">
+      <h2 class="section-titre">${icone('clock', { taille: 20 })} ${esc(dateLongue(prochaine, c.fuseau).replace(/^./, (x) => x.toUpperCase()))}, ${formatHeure(c.heure)}</h2>
+      ${attente.length ? `
+        <div class="apercu-soir">
+          <small>Ce que ${esc(prenom)} lira :</small>
+          <p>${esc(motDuSoir(attente.map((i) => parId.get(i.endroitId)).map((e, n) => ({ ...e, id: attente[n].id })), { prenom: c.client?.prenom, raph: c.raph, ville: c.ville, numero: soirs.length + 1, cle: c.id }).texte)}</p>
+        </div>
+        <ul class="items-carnet">${attente.map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: true })).join('')}</ul>
+        <button class="bouton-secondaire bouton-bloc" id="livrer-tout">${icone('send', { taille: 18 })} Tout livrer maintenant</button>` : `
+        <p class="petit">Rien pour ce soir encore. Ajoute un endroit avec le bouton +${actifId === c.id ? '' : ' (active « Je repère » plus haut)'}, ou ajoute un endroit déjà noté.</p>`}
+      <button class="bouton-secondaire bouton-bloc" id="ajouter-existant">${icone('plus', { taille: 18 })} Ajouter un endroit déjà noté</button>
+    </section>
+
+    ${soirs.length ? `
+    <section class="section">
+      <h2 class="section-titre">${icone('book-open', { taille: 20 })} Déjà livré</h2>
+      ${soirs.map((s) => `
+        <p class="soir-titre">${esc(dateLongue(s, c.fuseau))}</p>
+        <ul class="items-carnet">${faits.filter((i) => i.livraison === s).map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: false })).join('')}</ul>`).join('')}
+    </section>` : ''}
+
+    <details class="section" id="reglages-carnet" ${reglagesOuverts ? 'open' : ''}>
+      <summary>Réglages du voyage <small>prénom, courriel, ville, heure…</small></summary>
+      <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" placeholder="Ex. : Marc" autocapitalize="words"></label>
+      <label class="champ"><span>Courriel du client <small>pour le petit courriel du soir</small></span><input id="c-courriel" type="email" inputmode="email" value="${esc(c.client?.courriel)}" placeholder="marc@exemple.com" autocapitalize="off"></label>
+      <div class="deux">
+        <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" placeholder="Ex. : Montréal"></label>
+        <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" placeholder="Ex. : Canada"></label>
+      </div>
+      <label class="champ"><span>Ton mot d’accueil <small>en haut de sa page</small></span><textarea id="c-mot" rows="3" placeholder="Salut Marc ! Je suis à Montréal pour toi cette semaine…">${esc(c.mot)}</textarea></label>
+      <div class="deux">
+        <label class="champ"><span>Heure de livraison</span><select id="c-heure">${HEURES.map((h) => `<option value="${h}" ${h === c.heure ? 'selected' : ''}>${formatHeure(h)}${h === HEURE_PAR_DEFAUT ? ' (conseillé)' : ''}</option>`).join('')}</select></label>
+        <label class="champ"><span>Heure de chez lui</span><select id="c-fuseau">${FUSEAUX.map(([f, nom]) => `<option value="${f}" ${f === c.fuseau ? 'selected' : ''}>${esc(nom)}</option>`).join('')}</select></label>
+      </div>
+      <p class="aide">19 h, c’est après le souper : le moment où on a le temps de rêver. L’heure est celle de chez ton client.</p>
+      <label class="interrupteur">
+        <span><b>Courriel du soir</b><small>Un petit courriel à l’heure de livraison, seulement s’il y a du nouveau</small></span>
+        <input type="checkbox" id="c-courriel-soir" ${c.courrielSoir ? 'checked' : ''}>
+        <i aria-hidden="true"></i>
+      </label>
+      <label class="interrupteur">
+        <span><b>Repérage terminé</b><small>Sa page reste ouverte, sans le « En repérage »</small></span>
+        <input type="checkbox" id="c-fini" ${c.actif ? '' : 'checked'}>
+        <i aria-hidden="true"></i>
+      </label>
+      <button class="bouton-danger" id="supprimer-carnet">${icone('trash-2', { taille: 18 })} Supprimer ce voyage</button>
+    </details>`;
+
+  afficherPhotos(app);
+  const recharger = () => pageCarnet(id, reglagesOuverts && app.querySelector('#reglages-carnet')?.open ? 'reglages' : '');
+  const sauver = async () => { await carnets.enregistrer(c); };
+
+  const arret = carnets.surPublication((x) => {
+    const el = app.querySelector('#pub');
+    if (!el) { arret(); return; }
+    if (x.id === c.id) { const p = etatPublication(x); el.className = `pub ${p.classe}`; el.textContent = p.texte; }
+  });
+  if (!c.publication?.publieLe || c.publication?.erreur) carnets.publierBientot(c.id, 300);
+
+  app.querySelector('#repere').onchange = async (ev) => {
+    if (ev.target.checked) { c.actif = true; await db.ecrireReglage('carnetActif', c.id); await sauver(); toast(`Tes prochains endroits iront à ${prenom}`); } else { await db.ecrireReglage('carnetActif', null); toast('Repérage en pause'); }
+  };
+  app.querySelector('#envoyer-lien').onclick = async () => {
+    const texte = `${c.client?.prenom ? `Salut ${c.client.prenom} ! ` : ''}Voici ton carnet de voyage${c.ville ? ` pour ${c.ville}` : ''}. Chaque soir à ${formatHeure(c.heure)}, tu y trouveras ce que j’ai repéré pour toi dans la journée. Garde-le sur ton écran d’accueil. Ce lien est juste pour toi :`;
+    try {
+      if (navigator.share) await navigator.share({ text: texte, url: lienClient });
+      else { await navigator.clipboard.writeText(`${texte} ${lienClient}`); toast('Lien copié : colle-le dans un message'); }
+    } catch (_) { /* annulé */ }
+  };
+  const rafraichir = app.querySelector('#rafraichir-choix');
+  if (rafraichir) rafraichir.onclick = async () => { await carnets.lireChoix(c); toast('À jour'); recharger(); };
+
+  app.querySelector('#ajouter-existant').onclick = () => {
+    const deja = new Set(c.items.map((i) => i.endroitId));
+    const proposes = [...etat.endroits].filter((e) => !deja.has(e.id) && !e.contributeurId).sort((a, b) => (b.creeLe || '').localeCompare(a.creeLe || ''));
+    if (!proposes.length) { toast('Tous tes endroits sont déjà dans ce carnet'); return; }
+    choisirDansListe({
+      titre: `Pour ${prenom}`,
+      valeurs: proposes.map((e) => e.id),
+      etiquette: (x) => { const e = parId.get(x); return [e.nom, e.ville].filter(Boolean).join(', '); },
+      placeholder: 'Chercher un endroit',
+      quandChoisi: async (x) => { carnets.ajouterItem(c, x); await sauver(); toast(`Ajouté pour ce soir, ${formatHeure(c.heure)}`); recharger(); },
+    });
+  };
+
+  app.querySelectorAll('[data-livrer]').forEach((b) => {
+    b.onclick = async () => {
+      const i = c.items.find((x) => x.id === b.dataset.livrer);
+      i.livraison = new Date().toISOString();
+      await sauver();
+      toast('Livré : il le voit déjà');
+      recharger();
+    };
+  });
+  const toutLivrer = app.querySelector('#livrer-tout');
+  if (toutLivrer) {
+    toutLivrer.onclick = async () => {
+      const t = new Date().toISOString();
+      for (const i of c.items) if (new Date(i.livraison) > Date.now()) i.livraison = t;
+      await sauver();
+      toast('Tout est livré');
+      recharger();
+    };
+  }
+  app.querySelectorAll('[data-retirer]').forEach((b) => {
+    b.onclick = async () => {
+      c.items = c.items.filter((x) => x.id !== b.dataset.retirer);
+      await sauver();
+      toast('Retiré du carnet');
+      recharger();
+    };
+  });
+  app.querySelectorAll('[data-mot]').forEach((b) => {
+    b.onclick = () => {
+      const i = c.items.find((x) => x.id === b.dataset.mot);
+      ouvrirFeuille(`
+        ${enteteFeuille('Ton mot pour le client')}
+        <div class="feuille-corps">
+          <p class="petit">Une ou deux phrases, comme si tu lui parlais. C’est ce qui rend le carnet unique.</p>
+          <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(i.mot)}</textarea>
+          <button type="button" class="bouton-principal" id="ok-mot">Enregistrer</button>
+        </div>`, async (ev) => {
+        if (!ev.target.closest('#ok-mot')) return;
+        i.mot = feuille.querySelector('#mot-item').value.trim();
+        await sauver();
+        fermerFeuille();
+        recharger();
+      });
+      feuille.querySelector('#mot-item').focus();
+    };
+  });
+
+  // Réglages : enregistrés dès qu'on les change.
+  const champ = (sel) => app.querySelector(sel);
+  const surChange = (sel, fn) => { champ(sel).addEventListener('change', async () => { fn(champ(sel)); await sauver(); }); };
+  surChange('#c-prenom', (el) => { c.client = { ...c.client, prenom: el.value.trim() }; });
+  surChange('#c-courriel', (el) => { c.client = { ...c.client, courriel: el.value.trim() }; });
+  surChange('#c-ville', (el) => { c.ville = el.value.trim(); });
+  surChange('#c-pays', (el) => { c.pays = el.value.trim(); });
+  surChange('#c-mot', (el) => { c.mot = el.value.trim(); });
+  surChange('#c-courriel-soir', (el) => { c.courrielSoir = el.checked; });
+  surChange('#c-fini', (el) => { c.actif = !el.checked; });
+  const changerHeure = () => {
+    // Ce qui attend la livraison suit la nouvelle heure.
+    for (const i of c.items) if (new Date(i.livraison) > Date.now()) i.livraison = prochaineLivraison(new Date(), c.heure, c.fuseau).toISOString();
+  };
+  surChange('#c-heure', (el) => { c.heure = +el.value; changerHeure(); });
+  surChange('#c-fuseau', (el) => { c.fuseau = el.value; changerHeure(); });
+  ['#c-heure', '#c-fuseau', '#c-fini'].forEach((s) => champ(s).addEventListener('change', () => setTimeout(recharger, 50)));
+  app.querySelector('#supprimer-carnet').onclick = async (ev) => {
+    const b = ev.currentTarget;
+    if (!b.dataset.confirmer) { b.dataset.confirmer = '1'; b.textContent = `Toucher encore pour supprimer (la page de ${prenom} ne s’ouvrira plus)`; return; }
+    await db.effacer('carnets', c.id);
+    if (actifId === c.id) await db.ecrireReglage('carnetActif', null);
+    sync.marquer(sync.cheminCarnet(c.id));
+    toast('Voyage supprimé');
+    aller('#/clients');
+  };
+
+  // Les choix du client : on regarde en arrivant, puis chaque minute tant que la page est ouverte.
+  const avant = JSON.stringify(c.choix || null);
+  c = await carnets.lireChoix(c);
+  if (JSON.stringify(c.choix || null) !== avant && location.hash.startsWith(`#/carnet/${id}`)) recharger();
+  const minuterie = setInterval(async () => {
+    if (!location.hash.startsWith(`#/carnet/${id}`)) { clearInterval(minuterie); return; }
+    const a = JSON.stringify(c.choix || null);
+    c = await carnets.lireChoix(c);
+    if (JSON.stringify(c.choix || null) !== a && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) { clearInterval(minuterie); recharger(); }
+  }, 60000);
 }
 
 // ---------- Villes (jours recommandés) ----------
@@ -1108,7 +1455,7 @@ async function pageReglages() {
       if (!t.ok) { msg.textContent = t.message; return; }
       await sync.enregistrerConfig(t.depot, app.querySelector('#jeton').value);
       msg.textContent = 'Branché ! Envoi de tes endroits…';
-      await sync.recevoir(['endroits', 'villes', 'photos']).catch(() => {});
+      await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix']).catch(() => {});
       await charger();
       await sync.toutMarquer();
       toast('Branché : tes endroits partent vers le Studio');
@@ -1173,7 +1520,7 @@ function texteDetailEnvoi(e) {
 async function demarrerEnvoi() {
   if (!(await sync.lireConfig())) return;
   try {
-    const { nouveaux } = await sync.recevoir(['endroits', 'villes', 'photos']);
+    const { nouveaux } = await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix']);
     if (nouveaux) { await charger(); if (!location.hash || location.hash === '#/') router(); }
   } catch (_) { /* on réessaiera */ }
   sync.envoyerBientot(300);
