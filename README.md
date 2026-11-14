@@ -109,22 +109,20 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 
 Dans le Studio, chaque voyage a un onglet « Suivi sur place ». Raph y écrit un mot au client, ajoute des nouvelles du terrain (texte, photos, lien de vidéo) et des choix à faire (2 ou 3 options, avec photo ou un endroit de sa carte). « Télécharger la page » crée un seul fichier .html à envoyer au client par WhatsApp ou courriel. Le client y voit son voyage qui se remplit, choisit ses options et les envoie à Raph en un clic (WhatsApp, texto ou courriel). L'onglet contient aussi un modèle de courriel (FR/EN) pour demander la visite gratuite d'un hôtel. L'accueil du Studio présente le projet en 30 secondes (FR/EN).
 
-## Voyage sur mesure en direct (carnet du client)
+## Voyage sur mesure en direct (« Mon voyage » du client)
 
 Raph repère sur place pour un client (ex. : Montréal). Dans l'appli du cellulaire, onglet **Clients** :
 
-- « Nouveau voyage sur mesure » : prénom et courriel du client, ville, mot d'accueil, **heure de livraison** (19 h par défaut, heure de chez le client).
-- « Je repère pour Marc » : chaque nouvel endroit propose « Pour Marc » + « Ton mot pour Marc ». On peut aussi ajouter un endroit déjà noté, livrer tout de suite, retirer.
-- « Son lien » : le client reçoit un seul lien privé (`carnet.html?c=…#clé`), qu'il peut mettre sur son écran d'accueil.
+- « Nouveau voyage sur mesure » : prénom du client, ville, mot d'accueil, **heure des choix du soir** (19 h par défaut, heure de chez le client).
+- « Je repère pour Marc » : chaque nouvel endroit propose « Pour Marc » + « Ton mot pour Marc ». Idéal : 3 hôtels, 3 restos et 3 activités par soir (l'appli montre où tu en es). On peut aussi ajouter un endroit déjà noté, livrer tout de suite, retirer.
+- « Son lien » : le client reçoit un seul lien privé (`index.html#/voyage/<id>/<clé>`). Il ouvre l'appli de voyage sur l'onglet **Mon voyage** ; il l'ajoute à son écran d'accueil.
 
-Le client voit ses trouvailles livrées chaque soir, avec un mot écrit tout seul (`motDuSoir` dans `js/carnet-commun.js`, sans IA payante), met des ❤ et choisit où dormir. Ses choix reviennent tout seuls dans l'appli (page du client) et le Studio (Accueil).
+Chaque soir, les choix s'ouvrent : le client choisit 1 hôtel sur 3, 1 resto sur 3, 1 activité sur 3 (ou « Aucun ne me plaît »), puis voit « Soirée complétée ». Le mot du soir s'écrit tout seul (`motDuSoir` dans `js/carnet-commun.js`, sans IA payante). Ses choix reviennent tout seuls à Raph (page du client dans l'appli) et entrent **verrouillés** dans son voyage du Studio (créé tout seul, « Choisi par Marc »). Dans le Studio, « Meilleur ordre » remet une journée dans l'ordre le plus court à partir de l'hôtel.
 
 Exemple à montrer : `carnet.html?demo` (repérage à Montréal, photos d'illustration).
 
-Comment c'est privé : le carnet et ses photos sont chiffrés (AES-256) avec une clé qui n'est que dans le lien du client, après le `#` (jamais envoyée à internet). Les fichiers chiffrés sont dans la branche `carnets` de ce dossier ; les choix du client passent chiffrés par ntfy.sh (gratuit, sans compte).
+Comment c'est privé : le voyage et ses photos sont chiffrés (AES-256) avec une clé qui n'est que dans le lien du client, après le `#` (jamais envoyée à internet). Les fichiers chiffrés sont dans la branche `carnets` de ce dossier ; les choix du client passent chiffrés par ntfy.sh (gratuit, sans compte, gardés 12 h : le client les renvoie à chaque visite).
 
-Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css`, `carnet.webmanifest` (page du client) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, mot du soir) · `js/carnet-demo.js` (démo) · `.github/workflows/carnets-soir.yml` + `.github/scripts/carnets-soir.mjs` (courriel du soir).
+Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css` (le voyage du client, affiché dans l'onglet Mon voyage) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, mot du soir, choix) · `js/carnet-demo.js` (démo).
 
-À faire une fois :
-1. La clé GitHub de l'appli doit aussi pouvoir écrire dans `Appli-voyage` (Fine-grained token > Repository access > ajouter Appli-voyage, Contents : Read and write).
-2. Pour le courriel du soir : dans ce dossier, Settings > Secrets and variables > Actions, ajouter `DONNEES_CLE` (la même clé), `COURRIEL_ADRESSE` (Gmail) et `COURRIEL_MOT_DE_PASSE` (mot de passe d'application Gmail).
+À faire une fois : la clé GitHub de l'appli doit aussi pouvoir écrire dans `Appli-voyage` (Fine-grained token > Repository access > ajouter Appli-voyage, Contents : Read and write).

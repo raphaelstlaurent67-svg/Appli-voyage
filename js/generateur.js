@@ -9,7 +9,7 @@ import * as sync from './sync.js';
 import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 import { distanceM } from './exif.js';
-import { lienClient, formatHeure } from './carnet-commun.js';
+import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX } from './carnet-commun.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -126,6 +126,68 @@ async function charger() {
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
   if (etat.regles.pourcentage === 10) etat.regles.pourcentage = 1;
   etat.regles.cibles = { ...REGLES_DEFAUT.cibles, ...(etat.regles.cibles || {}) };
+  await integrerChoixClients();
+}
+
+// ---------- Voyages sur mesure : les choix du client entrent dans son voyage ----------
+// Chaque endroit choisi par le client (son hôtel, son resto, son activité du soir) est mis
+// dans son voyage du Studio, à 100 %, et verrouillé. Raph le place ensuite dans le bon jour
+// et ajoute ce qu'il veut autour. Si le client change d'avis, l'ancien choix est retiré.
+const voyageDuCarnet = (c) => etat.voyages.find((v) => v.carnetId === c.id);
+async function integrerChoixClients() {
+  for (const c of etat.carnets) {
+    const voulus = endroitsChoisis(c);
+    let v = voyageDuCarnet(c);
+    if (!v && !voulus.size) continue;
+    let change = false;
+    if (!v) {
+      v = nouveauVoyage();
+      Object.assign(v, { titre: `${c.ville || 'Voyage'} sur mesure`, client: c.client?.prenom || '', carnetId: c.id });
+      v.etapes = [{ id: db.nouvelId(), pays: c.pays || '', ville: c.ville || '', jours: Math.max(2, new Set(c.items.map((i) => i.livraison)).size) }];
+      synchroniserJours(v);
+      change = true;
+    }
+    if (!v.jours.length) { v.etapes.push({ id: db.nouvelId(), pays: c.pays || '', ville: c.ville || '', jours: 2 }); synchroniserJours(v); }
+    // Retirer les anciens choix que le client a changés.
+    for (const j of v.jours) {
+      const avant = j.items.length;
+      j.items = j.items.filter((it) => !it.choixClient || voulus.has(it.endroitId));
+      if (j.items.length !== avant) change = true;
+    }
+    // Ajouter les nouveaux, dans le jour le moins rempli. Déjà dans le voyage : on le verrouille.
+    for (const endroitId of voulus) {
+      const deja = v.jours.flatMap((j) => j.items).find((it) => it.endroitId === endroitId);
+      if (deja) { if (!deja.choixClient) { deja.choixClient = true; change = true; } continue; }
+      const jour = [...v.jours].sort((a, b) => a.items.length - b.items.length)[0];
+      const item = c.items.find((i) => i.endroitId === endroitId);
+      jour.items.push({ id: db.nouvelId(), endroitId, noteClient: item?.mot || '', choixClient: true });
+      change = true;
+    }
+    if (change) {
+      v.modifieLe = new Date().toISOString();
+      await db.ecrire('voyages', v);
+      etat.voyages = etat.voyages.filter((x) => x.id !== v.id).concat(v);
+      marquerEnvoi('voyages', v);
+    }
+  }
+}
+
+// Meilleur ordre pour une journée : on part de l'hôtel (ou du premier endroit) et on va
+// chaque fois au plus proche. Les endroits sans position GPS restent à la fin.
+function meilleurOrdre(items) {
+  const pos = (it) => { const e = endroit(it.endroitId); return e?.lat ? { lat: +e.lat, lng: +e.lng } : null; };
+  const avec = items.filter(pos);
+  const sans = items.filter((it) => !pos(it));
+  if (avec.length < 3) return items;
+  const depart = avec.find((it) => endroit(it.endroitId)?.categorie === 'hebergement') || avec[0];
+  const ordre = [depart];
+  const reste = avec.filter((it) => it !== depart);
+  while (reste.length) {
+    const ici = pos(ordre[ordre.length - 1]);
+    reste.sort((a, b) => distanceM(ici, pos(a)) - distanceM(ici, pos(b)));
+    ordre.push(reste.shift());
+  }
+  return [...ordre, ...sans];
 }
 
 async function sauver(magasin, objet) {
@@ -627,24 +689,25 @@ function panneauCarnets() {
   const tries = [...etat.carnets].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   return `
     <section class="panel carnets-direct">
-      <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3><span class="aide">Créés sur ton cell, onglet Clients</span></div>
+      <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3><span class="aide">Les choix du client entrent tout seuls dans son voyage</span></div>
       ${tries.map((c) => {
         const livres = c.items.filter((i) => new Date(i.livraison) <= maintenant).length;
         const attente = c.items.length - livres;
         const ch = c.choix || {};
-        const dort = Object.entries(ch.dormir || {}).map(([ville, x]) => `${esc(nomItem(c, x))} (${esc(ville)})`).filter((t) => !t.startsWith(' ('));
-        const coeurs = (ch.coeurs || []).map((x) => nomItem(c, x)).filter(Boolean);
+        const retenus = choixRetenus(c);
+        const v = voyageDuCarnet(c);
         return `
           <div class="carnet-studio">
             <div class="carnet-studio-tete">
               <b>${esc(c.client?.prenom || 'Client')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
-              <span class="aide">${pluriel(livres, 'livré', 'livrés')}${attente ? `, ${attente} pour ${formatHeure(c.heure)}` : ''}${ch.vuLe ? `, vu le ${esc(new Date(ch.vuLe).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</span>
-              <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>
+              <span class="aide">${pluriel(livres, 'endroit proposé', 'endroits proposés')}${attente ? `, ${attente} pour ${formatHeure(c.heure)}` : ''}${ch.vuLe ? `, vu le ${esc(new Date(ch.vuLe).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</span>
+              <span class="rangee-btn">
+                ${v ? `<a class="btn sm" href="#/voyage/${esc(v.id)}">${icone('route', { taille: 14 })} Son voyage</a>` : ''}
+                <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>
+              </span>
             </div>
-            ${dort.length ? `<p>${icone('bed-double', { taille: 14 })} Dort à ${dort.join(', ')}</p>` : ''}
-            ${coeurs.length ? `<p>${icone('heart', { taille: 14 })} ${coeurs.map(esc).join(', ')}</p>` : ''}
+            ${retenus.length ? `<ul class="choix-studio">${retenus.map((r) => `<li>${icone(GROUPES_CHOIX[r.groupe].ico, { taille: 14 })}<span>${GROUPES_CHOIX[r.groupe].court}</span><b>${r.itemId === 'aucun' ? '<i>aucun ne lui plaisait</i>' : esc(nomItem(c, r.itemId))}</b></li>`).join('')}</ul>` : '<p class="aide">Pas encore de choix.</p>'}
             ${ch.mot ? `<p class="mot">« ${esc(ch.mot)} »</p>` : ''}
-            ${!dort.length && !coeurs.length && !ch.mot ? '<p class="aide">Pas encore de choix.</p>' : ''}
           </div>`;
       }).join('')}
     </section>`;
@@ -952,11 +1015,11 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
             <span class="poignee" aria-hidden="true">${icone('grip-vertical', { taille: 14 })}</span>
             <span class="vignette">${iconeCat(e?.categorie, { taille: 18 })}${e?.photos?.length ? `<img data-photo="${esc(e.photos[0])}" alt="">` : ''}<i class="item-num">${k + 1}</i></span>
             <span class="item-texte">
-              <b>${e ? esc(e.nom) : '<i>Endroit introuvable</i>'}</b>
+              <b>${e ? esc(e.nom) : '<i>Endroit introuvable</i>'}${it.choixClient ? `<span class="badge-client" title="Choisi par le client : reste dans le voyage">${icone('lock', { taille: 11 })} Choisi par ${esc(v.client || 'le client')}</span>` : ''}</b>
               <small>${esc(e?.sousType || e?.type || cat.nom)}${e?.prix ? `, ${dollars(e.prix)}` : ''}${e?.montant ? `, ${esc(e.montant)} ${esc(e.devise || '')}` : ''}</small>
               <input class="note-client" data-note="${esc(it.id)}" value="${esc(it.noteClient)}" placeholder="+ Conseil pour le client">
             </span>
-            <button class="ico-btn rouge" data-retirer-item="${esc(it.id)}" aria-label="Retirer">${icone('x', { taille: 15 })}</button>
+            ${it.choixClient ? `<span class="ico-btn verrou" title="Choisi par le client : il reste dans le voyage">${icone('lock', { taille: 14 })}</span>` : `<button class="ico-btn rouge" data-retirer-item="${esc(it.id)}" aria-label="Retirer">${icone('x', { taille: 15 })}</button>`}
           </li>`;
       }).join('');
       return `
@@ -966,6 +1029,7 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
             <span class="jour-num">Jour ${i + 1}</span>
             ${v.dateDebut ? `<span class="jour-date">${esc(dateDuJour(v, i))}</span>` : ''}
             <input class="jour-titre" data-titre-jour="${esc(j.id)}" value="${esc(j.titre)}" placeholder="Titre du jour, ex. : Temples et marché de nuit">
+            ${j.items.length > 2 ? `<button class="btn ghost sm" data-ordre-jour="${esc(j.id)}" title="Remet les endroits dans l'ordre le plus court, à partir de l'hôtel">${icone('route', { taille: 13 })} Meilleur ordre</button>` : ''}
           </header>
           <ul class="items">${lignes || `<li class="depot">${icone('plus', { taille: 15 })} Glisse des endroits ici</li>`}</ul>
         </article>`;
@@ -978,6 +1042,15 @@ function ongletItineraire(v, zone, enregistrer, majCrumb) {
     rendreBiblio(); majCarte();
   }
   $('#jours').addEventListener('click', (ev) => {
+    const ordre = ev.target.closest('[data-ordre-jour]')?.dataset.ordreJour;
+    if (ordre) {
+      const j = v.jours.find((x) => x.id === ordre);
+      const avant = j.items.map((it) => it.id).join();
+      j.items = meilleurOrdre(j.items);
+      apresChangement();
+      toast(avant === j.items.map((it) => it.id).join() ? 'Déjà dans le meilleur ordre (ou positions GPS manquantes)' : 'Journée remise dans le meilleur ordre');
+      return;
+    }
     const retirer = ev.target.closest('[data-retirer-item]')?.dataset.retirerItem;
     if (retirer) {
       for (const j of v.jours) j.items = j.items.filter((it) => it.id !== retirer);
