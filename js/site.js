@@ -29,7 +29,8 @@ const TXT = {
     faq: [
       ['Combien ça coûte ?', "Ça dépend du nombre de pays et de jours. Après votre fiche, nous vous donnons un prix clair avant de commencer. Aucune obligation."],
       ['Est-ce que vous réservez pour moi ?', 'Non : nous préparons votre itinéraire complet avec tous les liens, et vous réservez vous-même. Vous gardez le contrôle de vos billets et de votre argent.'],
-      ['Et si je ne connais pas encore mes dates ?', 'Aucun problème. Dans la fiche, indiquez simplement la durée (par exemple 10 jours) ; on précise le reste ensuite.'],
+      ['Et si je ne sais pas encore où aller ?', 'C’est très courant. Choisissez simplement une région qui vous attire (ou « Surprenez-moi »), dites-nous ce que vous aimez, et on vous propose des destinations.'],
+      ['Et si je ne connais pas encore mes dates ?', 'Aucun problème. Indiquez juste le mois ou la durée approximative, ou passez cette étape : tout est facultatif dans la fiche, sauf votre nom et un moyen de vous joindre.'],
       ['Est-ce que je peux modifier l’itinéraire ?', 'Oui. Si quelque chose ne vous convient pas, nous l’ajustons ensemble.'],
     ],
     appelTitre: 'Envie de partir ?', appelTexte: 'Remplissez la fiche. On vous répond avec une proposition.',
@@ -58,7 +59,8 @@ const TXT = {
     faq: [
       ['How much does it cost?', 'It depends on the number of countries and days. After your form, we give you a clear price before starting. No obligation.'],
       ['Do you book for me?', 'No: we prepare your full itinerary with every link, and you book yourself. You stay in control of your tickets and your money.'],
-      ["What if I don't know my dates yet?", 'No problem. In the form, just enter the length (for example 10 days) and we sort out the rest later.'],
+      ["What if I don't know where to go yet?", 'That’s very common. Just pick a region you’re drawn to (or “Surprise me”), tell us what you love, and we’ll suggest destinations.'],
+      ["What if I don't know my dates yet?", 'No problem. Just give the month or a rough length, or skip that step: everything in the form is optional except your name and a way to reach you.'],
       ['Can I change the itinerary?', "Yes. If something doesn't feel right, we adjust it together."],
     ],
     appelTitre: 'Want to go?', appelTexte: 'Fill in the form. We reply with a proposal.',
