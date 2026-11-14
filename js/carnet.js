@@ -1,7 +1,7 @@
-// « Mon voyage » : l'espace privé du client, dans l'appli de voyage.
+// « Mon voyage » : la petite appli privée du client (séparée de l'appli de Raph, aucune de ses données).
 // Chaque soir (19 h par défaut), les choix du soir s'ouvrent : 1 hôtel sur 3, 1 resto sur 3, 1 activité sur 3.
 // Quand il a choisi, la soirée est complétée. Le lendemain, ça recommence.
-// Le lien ressemble à index.html#/voyage/<carnet>/<clé> (ou carnet.html?c=<carnet>#<clé>).
+// Le lien ressemble à carnet.html?c=<carnet>#<clé>. Ajoutée à l'écran d'accueil, elle rouvre ce voyage.
 // La clé ne quitte jamais le téléphone du client. Ses choix partent tout seuls à Raph, chiffrés.
 
 import { TAXONOMIE } from './taxonomie.js';
@@ -38,8 +38,9 @@ let cle = location.hash.slice(1);
 if (!DEMO) {
   if (id && cle) memoire.ecrire('carnet', { id, cle });
   else {
+    // Ouvert depuis l'écran d'accueil : on rouvre le voyage gardé sur ce téléphone.
     const m = memoire.lire('carnet', null);
-    if (m) { id = m.id; cle = m.cle; history.replaceState(null, '', `?c=${encodeURIComponent(id)}${DANS_APPLI ? '&appli' : ''}#${cle}`); }
+    if (m && (!id || m.id === id)) { id = m.id; cle = m.cle; history.replaceState(null, '', `?c=${encodeURIComponent(id)}${DANS_APPLI ? '&appli' : ''}#${cle}`); }
   }
 }
 const cleLocale = DEMO ? 'demo-montreal' : id;
@@ -168,6 +169,19 @@ function quandLivraison(date) {
   if (jour === commun.jourLocal(new Date(maintenant.getTime() + 864e5), fuseau)) return `Demain, ${h}`;
   return `${commun.dateLongue(date, fuseau)}, ${h}`;
 }
+// « 9 mars au 16 mars »
+function periode(d) {
+  if (!d.debut) return '';
+  const f = (x, annee) => new Date(`${x}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', ...(annee ? { year: 'numeric' } : {}) });
+  if (!d.fin) return `Dès le ${f(d.debut, true)}`;
+  const [a, b] = [new Date(`${d.debut}T12:00:00`), new Date(`${d.fin}T12:00:00`)];
+  const debut = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear() ? String(a.getDate()) : f(d.debut);
+  return `${debut} au ${f(d.fin, true)}`;
+}
+// « 3 hôtels · 3 restos · 3 activités »
+function composition(items) {
+  return groupesDuSoir(items).map((g) => { const n = items.filter((i) => groupeDe(i) === g).length; return pluriel(n, GROUPES[g].court.toLowerCase()); }).join(' · ');
+}
 function compteARebours(date) {
   const ms = new Date(date) - Date.now();
   if (ms <= 0) return 'Ça arrive…';
@@ -216,12 +230,13 @@ function rendre() {
       <div class="couv-bas">
         <p class="surtitre">${d.prenom ? `Le voyage de ${esc(d.prenom)}` : 'Ton voyage'}</p>
         <h1>${esc(d.ville || 'Ton voyage')}</h1>
-        <p class="par"><span class="avatar">${initiale(d.raph)}</span><span>Préparé sur place par <b>${esc(d.raph)}</b>, juste pour toi</span></p>
+        ${periode(d) ? `<p class="periode">${esc(periode(d))}</p>` : ''}
+        <p class="par"><span class="avatar">${initiale(d.raph)}</span><span>Repéré sur place par <b>${esc(d.raph)}</b></span></p>
       </div>
     </header>
 
     <section class="chiffres">
-      <div><b>${d.items.length}</b><span>${d.items.length > 1 ? 'endroits trouvés' : 'endroit trouvé'} pour toi</span></div>
+      <div><b>${d.items.length}</b><span>${d.items.length > 1 ? 'endroits repérés' : 'endroit repéré'}</span></div>
       <div><b>${liste.length}</b><span>${liste.length > 1 ? 'soirées' : 'soirée'}</span></div>
       <div><b>${completes}</b><span>${completes > 1 ? 'complétées' : 'complétée'}</span></div>
     </section>
@@ -230,10 +245,10 @@ function rendre() {
     <section class="rdv">
       <div class="rdv-lune">${icone('moon', { taille: 22 })}</div>
       <div class="rdv-texte">
+        <p class="rdv-etiquette">Prochaine sélection</p>
         <p class="rdv-quand">${esc(quandLivraison(prochaine))}</p>
-        <p class="rdv-sous"><b id="rebours">${esc(compteARebours(prochaine))}</b>${enRouteBientot.length ? ` · ${pluriel(enRouteBientot.length, 'choix', 'choix')} en route` : ` · ${esc(d.raph)} est sur le terrain`}</p>
+        <p class="rdv-sous">${enRouteBientot.length ? esc(composition(enRouteBientot)) : 'Hôtels, restos et activités, chaque soir'}</p>
       </div>
-      ${enRouteBientot.length ? `<div class="rdv-icones">${groupesDuSoir(enRouteBientot).map((g) => `<span>${icone(GROUPES[g].ico, { taille: 16 })}</span>`).join('')}</div>` : ''}
     </section>` : ''}
 
 
@@ -275,7 +290,8 @@ function pageSoirees(liste) {
         <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)} : où dormir, où manger, quoi faire.</p>
       </div>`;
   }
-  return liste.map((s, n) => {
+  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touche ton préféré dans chaque section. Rien n’est obligatoire.</p>';
+  return aide + liste.map((s, n) => {
     const gs = groupesDuSoir(s.items);
     const complet = soirComplet(s);
     const savoir = s.items.filter((i) => groupeDe(i) === 'savoir');

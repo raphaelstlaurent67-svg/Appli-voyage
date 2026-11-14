@@ -84,6 +84,7 @@ export function demo() {
   return {
     v: 1, id: 'demo-montreal', demo: true,
     prenom: 'Marc', raph: 'Raph', ville: 'Montréal', pays: 'Canada',
+    debut: new Date(derniere - JOUR).toISOString().slice(0, 10), fin: new Date(derniere + 5 * JOUR).toISOString().slice(0, 10),
     mot: '',
     choixDemo,
     heure, fuseau, actif: true,

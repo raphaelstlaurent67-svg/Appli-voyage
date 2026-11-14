@@ -3,6 +3,7 @@
 // de sauvegarde du cellulaire (Mes données > Importer). Tout reste sur cet appareil.
 
 import { TAXONOMIE, TAUX_PAR_DEFAUT } from './taxonomie.js';
+import { rouvrirALAccueil } from './accueil.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 import * as sync from './sync.js';
@@ -2321,6 +2322,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- Démarrage ----------
 // Permet d'installer le Studio comme une appli sur l'ordinateur (et de l'ouvrir sans internet).
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
+rouvrirALAccueil();
 window.addEventListener('hashchange', router);
 app.addEventListener('dragstart', (ev) => {
   const e = ev.target.closest?.('[data-endroit]');
