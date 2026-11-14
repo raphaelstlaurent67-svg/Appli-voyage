@@ -4,7 +4,7 @@
 import { icone } from './icones.js';
 import { photo, PHOTOS_PAYS, PHOTOS_FOND } from './photos.js';
 
-const MARQUE = 'Voyage sur mesure';
+const MARQUE = 'Voyage Belvédère';
 
 const TXT = {
   fr: {
@@ -14,6 +14,9 @@ const TXT = {
     titre: 'Votre voyage, préparé par des gens du coin.',
     sousTitre: "Des restos, des hôtels et des activités choisis par des gens qui vivent sur place. Vous recevez un itinéraire jour par jour, prêt à réserver.",
     rassure1: 'Une fiche, deux minutes', rassure2: 'Le prix avant de commencer', rassure3: 'Vous réservez, à votre rythme',
+    defSur: 'Pourquoi Belvédère', defMot: 'belvédère', defNature: 'nom masculin · de l’italien « bel vedere », belle vue',
+    defSens: 'Un endroit en hauteur d’où l’on voit tout le paysage.',
+    defMarque: 'C’est ce qu’on fait pour vous : on regarde votre voyage d’en haut, on vérifie chaque endroit sur place, et on vous mène aux plus beaux.',
     commentSur: 'Comment ça marche', commentTitre: 'En trois étapes',
     e1t: 'Vous nous dites où', e1p: 'Les pays, la durée, ce qui vous attire. Deux minutes.',
     e2t: 'On prépare votre itinéraire', e2p: 'Où dormir, où manger et quoi faire, jour par jour.',
@@ -43,6 +46,9 @@ const TXT = {
     titre: 'Your trip, planned by locals.',
     sousTitre: 'Restaurants, hotels and activities picked by people who live there. You get a day-by-day itinerary, ready to book.',
     rassure1: 'One form, two minutes', rassure2: 'The price before we begin', rassure3: 'You book, at your own pace',
+    defSur: 'Why Belvédère', defMot: 'belvédère', defNature: 'noun · from the Italian “bel vedere”, beautiful view',
+    defSens: 'A high place where you can see the whole landscape.',
+    defMarque: 'That is what we do for you: we look at your trip from above, check every place on the ground, and lead you to the most beautiful ones.',
     commentSur: 'How it works', commentTitre: 'In three steps',
     e1t: 'Tell us where', e1p: 'The countries, the length, what draws you. Two minutes.',
     e2t: 'We plan your itinerary', e2p: 'Where to sleep, where to eat and what to do, day by day.',
@@ -93,7 +99,7 @@ function afficher() {
 }
 
 document.querySelectorAll('[data-ico]').forEach((el) => {
-  const grand = el.closest('.etapes, .liste-recois');
+  const grand = el.closest('.etapes, .liste-recois, .def-carte');
   el.innerHTML = icone(el.dataset.ico, { taille: grand ? 22 : el.classList.contains('marque-ico') ? 17 : 18, epaisseur: el.classList.contains('marque-ico') ? 2.2 : 2 });
 });
 document.querySelectorAll('[data-langue]').forEach((b) => {

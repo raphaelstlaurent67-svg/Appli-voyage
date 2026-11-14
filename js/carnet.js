@@ -224,7 +224,7 @@ function rendre() {
     <header class="couv">
       ${couverture ? `<img class="couv-img" data-p="${esc(couverture)}" alt="">` : ''}
       <div class="couv-haut">
-        <span class="marque">${icone('moon', { taille: 15 })} Voyage sur mesure</span>
+        <span class="marque">${icone('moon', { taille: 15 })} Voyage Belvédère</span>
         ${d.actif ? '<span class="direct"><i></i> En repérage</span>' : '<span class="direct fini">Repérage terminé</span>'}
       </div>
       <div class="couv-bas">

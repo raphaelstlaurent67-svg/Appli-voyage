@@ -97,6 +97,15 @@ section[id] { scroll-margin-top: 72px; }
 .section h2, .appel h2 { font-size: clamp(30px, 4.4vw, 44px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em; max-width: 700px; }
 .texte { color: var(--doux); margin: 16px 0 24px; max-width: 520px; font-size: 18px; }
 
+/* Pourquoi Belvédère : la définition du mot, comme dans un dictionnaire. */
+.definition { text-align: center; }
+.def-carte { position: relative; background: var(--carte); border: 1px solid var(--ligne); border-radius: 26px; padding: 34px 28px 30px; margin-top: 8px; }
+.def-ico { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--accent-fond); color: var(--accent); margin: 0 auto 16px; }
+.def-mot { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(38px, 6vw, 54px); line-height: 1.05; font-weight: 700; letter-spacing: -.01em; }
+.def-nature { color: var(--pale); font-style: italic; font-size: 15px; margin-top: 8px; }
+.def-sens { font-size: clamp(19px, 2.4vw, 22px); font-weight: 600; margin: 18px auto 0; max-width: 520px; }
+.def-marque { color: var(--doux); font-size: 18px; margin: 26px auto 0; max-width: 560px; }
+
 .etapes { list-style: none; padding: 0; margin: 40px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .etapes li { position: relative; background: var(--carte); border: 1px solid var(--ligne); border-radius: 22px; padding: 26px 24px 28px; }
 .etapes .num { position: absolute; top: 18px; right: 22px; font-size: 44px; font-weight: 800; color: #f3eee8; line-height: 1; }
