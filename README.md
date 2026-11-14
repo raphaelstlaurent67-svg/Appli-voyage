@@ -54,11 +54,28 @@ un lien à lui envoyer (`contribuer.html?c=<id>&n=<nom>`). La personne ajoute se
 fichier part par message ou courriel. Raph l'importe dans « Mes données » : le fichier est
 reconnu tout seul et les endroits arrivent dans « À valider ».
 
-Les infos cachées des photos (appareil, date, GPS, logiciel) sont lues avant de réduire
-la photo (`js/exif.js`). Dans « À valider », le Studio vérifie chaque photo : appareil
-photo présent, date récente, prise près de l'endroit, pas déjà reçue (empreinte d'image).
-Les fiches sûres s'acceptent en un clic ; pour une photo douteuse, les boutons Google et
-TinEye copient la photo et ouvrent la recherche par image (coller avec Ctrl+V).
+### Vérification anti-fraude (`js/verification.js`)
+
+Dans « À valider », chaque endroit reçu est vérifié tout seul et reçoit une note sur 100 :
+vert « Fiable », jaune « À regarder », rouge « Fraude probable ». Le bouton « Vérifier »
+ouvre le rapport complet, qui répond à 5 questions (Oui / Pas sûr / Non) :
+
+1. **La photo est-elle la sienne ?** Infos cachées de la photo (appareil, date, GPS, logiciel
+   de retouche, prise dans l'appli ou choisie dans la galerie), même photo déjà reçue
+   (empreinte d'image). Boutons Google Lens, TinEye, Bing et Yandex (la photo est copiée, Ctrl+V).
+2. **L'endroit existe-t-il ?** OpenStreetMap (gratuit, sans compte) : pays et ville du point GPS,
+   le nom cherché autour du point et dans la ville. Liens Google Maps et Street View.
+3. **Était-il sur place ?** Position prise par le téléphone et sa précision, fuseau horaire du
+   téléphone comparé à la position, déplacements impossibles, plusieurs endroits au même point exact.
+4. **Vit-il dans le pays ?** Pays déclaré dans sa fiche, langue du téléphone, endroits ajoutés
+   sur plusieurs semaines. Bouton « Lui demander une preuve » (message prêt à copier).
+5. **Le travail est-il sérieux ?** Copier-coller, fiche remplie trop vite, rafales, endroit déjà
+   dans la base (pour ne pas payer deux fois), historique de refus.
+
+Chaque contributeur a une note de confiance. Aucune vérification gratuite n'est sûre à 100 % :
+un fraudeur habile peut trafiquer son fichier ; les boutons de recherche restent la preuve finale.
+L'appli des contributeurs garde, pour chaque fiche, le fuseau horaire et la langue du téléphone
+et le temps passé sur la fiche (`preuves`).
 
 ## Site web (`site/`)
 
@@ -96,7 +113,8 @@ Dans ce dossier, lancer `python3 -m http.server 8000`, puis ouvrir http://localh
 - `js/monde.js` : les pays du monde par continent, et des villes hors Asie
 - `demande.html`, `js/demande.js`, `css/demande.css` : la fiche client
 - `js/code-demande.js` : met la demande dans un lien, et l'inverse
-- `site/`, `js/site.js`, `css/site.css` : le site web public
+- `site/`, `js/site.js`, `css/site.css` : le site web public (nom de la marque : `js/marque.js`)
+- `site/contributeurs.html`, `js/site-contrib.js` : la page « Devenir contributeur » (montants dans `GAINS`)
 - `js/photos.js` : les photos de voyage (Unsplash)
 - `contribuer.html`, `js/contribuer.js`, `css/contribuer.css` : l'appli des contributeurs
 - `js/exif.js` : lit l'appareil, la date et le GPS cachés dans une photo

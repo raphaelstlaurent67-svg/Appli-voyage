@@ -1,10 +1,9 @@
 // Site web public : présente le service et envoie les clients vers la fiche de demande.
-// Pour changer le nom de la marque partout sur le site, il suffit de changer MARQUE.
+// Pour changer le nom de la marque partout sur le site, il suffit de changer MARQUE (js/marque.js).
 
 import { icone } from './icones.js';
 import { photo, PHOTOS_PAYS, PHOTOS_FOND } from './photos.js';
-
-const MARQUE = 'Voyage sur mesure';
+import { MARQUE } from './marque.js';
 
 const TXT = {
   fr: {
@@ -34,7 +33,7 @@ const TXT = {
       ['Est-ce que je peux modifier l’itinéraire ?', 'Oui. Si quelque chose ne vous convient pas, nous l’ajustons ensemble.'],
     ],
     appelTitre: 'Envie de partir ?', appelTexte: 'Remplissez la fiche. On vous répond avec une proposition.',
-    pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash',
+    pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir contributeur',
   },
   en: {
     navComment: 'How it works', navRecois: 'What you get', navFaq: 'Questions',
@@ -63,7 +62,7 @@ const TXT = {
       ['Can I change the itinerary?', "Yes. If something doesn't feel right, we adjust it together."],
     ],
     appelTitre: 'Want to go?', appelTexte: 'Fill in the form. We reply with a proposal.',
-    pied: 'Custom travel itineraries', credits: 'Photos: Unsplash',
+    pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a contributor',
   },
 };
 

@@ -285,6 +285,7 @@ async function pageFormulaire(id) {
   f.photosInfo = f.photosInfo || {};
   const nouvelles = []; // { id, blob, url }
   const retirees = [];
+  const ouvertLe = Date.now(); // pour savoir combien de temps la fiche a pris à remplir
 
   app.innerHTML = `
     <header class="tete-form">
@@ -365,6 +366,7 @@ async function pageFormulaire(id) {
       f.lng = Math.round(p.coords.longitude * 1e6) / 1e6;
       f.precision = Math.round(p.coords.accuracy);
       f.positionSource = 'telephone';
+      f.gpsLe = new Date().toISOString();
       majPosition();
     }, () => { etatPos.textContent = t().positionErreur; }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
   }
@@ -408,6 +410,16 @@ async function pageFormulaire(id) {
     f.creeLe = f.creeLe || maintenant;
     f.modifieLe = maintenant;
     f.verifieLe = f.verifieLe || maintenant.slice(0, 10);
+    // Indices pour la vérification dans le Studio (aucune donnée personnelle de plus) :
+    // fuseau horaire et langue du téléphone, temps passé sur la fiche.
+    const avant = f.preuves || {};
+    f.preuves = {
+      fuseau: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      decalageMin: -new Date().getTimezoneOffset(),
+      langue: navigator.language || '',
+      secondes: (avant.secondes || 0) + Math.round((Date.now() - ouvertLe) / 1000),
+      mobile: /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),
+    };
     await ecrire('endroits', f);
     await garderReglage('dernierLieu', { ville: f.ville, pays: f.pays });
     navigator.storage?.persist?.();

@@ -154,3 +154,70 @@ section[id] { scroll-margin-top: 72px; }
   .bouton.petit { padding: 0 12px; font-size: 14px; }
   .boutons .bouton { width: 100%; }
 }
+
+/* ---------- Page « Devenir contributeur » ---------- */
+.bande-chiffres { background: var(--carte); border-bottom: 1px solid var(--ligne); }
+.chiffres-int { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.chiffres-int > div { padding: 26px 22px; border-left: 1px solid var(--ligne); display: flex; flex-direction: column; gap: 2px; }
+.chiffres-int > div:first-child { border-left: 0; padding-left: 0; }
+.chiffres-int b { font-size: 32px; font-weight: 800; letter-spacing: -.02em; color: var(--accent); line-height: 1.1; }
+.chiffres-int span { color: var(--doux); font-size: 15px; line-height: 1.4; }
+.etapes-4 { grid-template-columns: repeat(4, 1fr); }
+.gains { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 8px; }
+.gain { background: var(--carte); border: 1px solid var(--ligne); border-radius: 22px; padding: 26px 22px; display: flex; flex-direction: column; gap: 4px; }
+.gain.hi { background: var(--encre); color: #fff; border-color: var(--encre); }
+.gain-ico { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-fond); color: var(--accent); margin-bottom: 14px; }
+.gain.hi .gain-ico { background: rgba(255, 255, 255, .12); color: #fff; }
+.gain b { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.gain small { font-size: 15px; font-weight: 700; color: var(--accent); }
+.gain.hi small { color: #ffb39f; }
+.gain p { color: var(--doux); font-size: 15px; margin-top: 8px; }
+.gain.hi p { color: rgba(255, 255, 255, .75); }
+.cat-ico { width: 44px; height: 44px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--accent-fond); color: var(--accent); }
+.section.sombre { background: #1d1b19; color: #fff; }
+.section.sombre .surtitre { color: #ff9b80; }
+.section.sombre .texte { color: rgba(255, 255, 255, .72); }
+.regles-qualite { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.regles-qualite li { display: flex; flex-direction: column; gap: 10px; padding: 22px; border-radius: 18px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); }
+.regles-qualite li > span { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: rgba(240, 83, 47, .18); color: #ff9b80; }
+.regles-qualite b { font-size: 17px; }
+.regles-qualite p { color: rgba(255, 255, 255, .7); font-size: 15px; margin-top: 2px; }
+.inscription { display: grid; grid-template-columns: 1fr 1.1fr; gap: 56px; align-items: start; }
+.inscription-texte { position: sticky; top: 100px; }
+.rassure-liste { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; font-weight: 600; }
+.rassure-liste li { display: flex; align-items: center; gap: 10px; }
+.rassure-liste .ico { color: var(--accent); }
+.carte-form { background: var(--carte); border: 1px solid var(--ligne); border-radius: 24px; padding: clamp(22px, 4vw, 34px); box-shadow: 0 24px 60px rgba(29, 27, 25, .08); display: flex; flex-direction: column; gap: 18px; }
+.carte-form h3 { font-size: 22px; }
+.grille-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grille-form .plein { grid-column: 1 / -1; }
+.champ-s { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14.5px; }
+.champ-s small { font-weight: 500; color: var(--pale); }
+.champ-s input, .champ-s select, .champ-s textarea {
+  width: 100%; font: inherit; font-weight: 500; font-size: 16px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid #ddd6cd; background: #fdfcfa; color: var(--encre); outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.champ-s input:focus, .champ-s select:focus, .champ-s textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(240, 83, 47, .15); background: #fff; }
+.champ-s textarea { resize: vertical; }
+.case-s { display: flex; align-items: flex-start; gap: 10px; font-size: 14.5px; color: var(--doux); cursor: pointer; }
+.case-s input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.bouton.plein { width: 100%; }
+.deja { text-align: center; color: var(--doux); font-size: 15px; }
+.deja a { color: var(--accent); font-weight: 700; }
+.erreur-champ, .erreur-envoi { color: #b42318; font-weight: 600; font-size: 15px; }
+.erreur-envoi { background: #fdecea; padding: 10px 14px; border-radius: 12px; }
+.merci-insc { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 40px 10px; }
+.merci-ico { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-fond); color: var(--accent); }
+.merci-insc p { color: var(--doux); max-width: 420px; }
+@media (max-width: 960px) {
+  .gains, .etapes-4 { grid-template-columns: 1fr 1fr; }
+  .inscription { grid-template-columns: 1fr; gap: 28px; }
+  .inscription-texte { position: static; }
+}
+@media (max-width: 640px) {
+  .chiffres-int { grid-template-columns: 1fr 1fr; }
+  .chiffres-int > div { padding: 18px 12px; border-left: 0; border-top: 1px solid var(--ligne); }
+  .chiffres-int > div:nth-child(-n+2) { border-top: 0; }
+  .chiffres-int > div:first-child, .chiffres-int > div:nth-child(3) { padding-left: 0; }
+  .gains, .etapes-4, .regles-qualite, .grille-form { grid-template-columns: 1fr; }
+}
