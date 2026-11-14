@@ -6,11 +6,11 @@
 export const ENVIES = [
   ['visites', 'Culture et visites', 'landmark', 'Temples, musées, quartiers historiques'],
   ['restos', 'Gastronomie', 'utensils', 'Bons restos, cuisine de rue, marchés'],
-  ['experiences', 'Expériences', 'sparkles', 'Cours de cuisine, spectacles, activités uniques'],
+  ['experiences', 'Expériences locales', 'sparkles', 'Cours, spectacles, rencontres avec les gens du coin'],
   ['sport', 'Sport et aventure', 'dumbbell', 'Randonnée, plongée, surf, vélo'],
-  ['nuit', 'Vie nocturne', 'martini', 'Bars, rooftops, boîtes de nuit'],
-  ['nature', 'Nature et plein air', 'mountain-snow', 'Parcs, montagnes, plages sauvages'],
-  ['detente', 'Détente', 'sun', 'Plage, spa, onsen, journées tranquilles'],
+  ['nuit', 'Vie nocturne', 'martini', 'Bars, terrasses sur les toits, musique live'],
+  ['nature', 'Nature et plein air', 'mountain-snow', 'Parcs, montagnes, animaux, plages sauvages'],
+  ['detente', 'Détente', 'sun', 'Plage, spa, sources chaudes, journées tranquilles'],
 ];
 
 const versBase64Url = (octets) => {

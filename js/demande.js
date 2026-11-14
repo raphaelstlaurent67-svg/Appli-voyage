@@ -1,12 +1,15 @@
 // Fiche de demande que Raph envoie à ses clients (en français ou en anglais).
-// Le client choisit ses pays, ses dates (le voyage au complet, ou pays par pays) et ses envies.
+// Cinq petites étapes : destination, dates, voyageurs, envies, coordonnées.
+// Tout est facultatif sauf le moyen de répondre au client : beaucoup de gens ne savent pas encore où aller.
 // À la fin, ses réponses deviennent un lien : en cliquant dessus, Raph crée le voyage dans le Studio.
 
 import { paysDuContinent } from './monde.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
+import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
+import { MARQUE } from './marque.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
@@ -20,94 +23,138 @@ let TEL = (params.get('tel') || '').replace(/[^\d+]/g, '');
 try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.getItem('telDemande') || ''; } catch (_) { /* rien */ }
 if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
-// Les destinations les plus demandées (du monde entier) ; les autres se trouvent avec la recherche.
-const POPULAIRES = ['Japon', 'Thaïlande', 'France', 'Italie', 'Espagne', 'Portugal', 'Grèce', 'Mexique', 'Cuba', 'République dominicaine', 'États-Unis', 'Costa Rica', 'Vietnam', 'Indonésie', 'Maroc', 'Pérou'];
+// Les destinations les plus demandées ; les autres se trouvent avec la recherche.
+const POPULAIRES = ['Japon', 'Italie', 'Thaïlande', 'France', 'Grèce', 'Portugal', 'Espagne', 'Islande', 'Mexique', 'Costa Rica', 'Pérou', 'Vietnam', 'Corée du Sud', 'Indonésie', 'Maroc', 'Cuba', 'République dominicaine', 'États-Unis'];
 const TOUS_PAYS = paysDuContinent('');
 const COULEURS = ['#f0532f', '#2f80ed', '#16a34a', '#a855f7', '#e8a20c', '#0ea5a4', '#db2777', '#64748b'];
+// Pour qui ne sait pas encore où aller : une région suffit (nom français gardé, nom anglais affiché).
+const REGIONS = [
+  ['Asie', 'Asia'], ['Europe', 'Europe'], ['Caraïbes', 'Caribbean'], ['Amérique latine', 'Latin America'],
+  ['Amérique du Nord', 'North America'], ['Afrique', 'Africa'], ['Océanie', 'Oceania'], ['Moyen-Orient', 'Middle East'],
+  ['Surprenez-moi', 'Surprise me'],
+];
+const STYLES = [['eco', 'backpack', '$'], ['moyen', 'sofa', '$$'], ['luxe', 'gem', '$$$']];
+const NB_ETAPES = 5;
 
 // ---------- Textes (français / anglais) ----------
 const TXT = {
   fr: {
-    sur: 'Voyage sur mesure', etapes: ['Pays', 'Dates', 'Envies', 'Vous'],
-    titres: ['Pays', 'Durée du voyage', "Qu'est-ce qui vous fait envie ?", 'Coordonnées'],
-    retour: 'Retour', continuer: 'Continuer', envoyerDemande: 'Terminer', installer: 'Installer sur mon ordi',
-    introPays: "Un ou plusieurs, dans l'ordre du voyage.", chercher: 'Chercher un pays',
-    resultats: 'Résultats', populaires: 'Populaires', aucunPays: 'Aucun pays trouvé.', trajet: 'Votre trajet',
-    plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer', choisisPays: 'Choisissez au moins un pays',
-    combien: 'Nombre de jours', plusDe: '21+', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre', longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']], parPays: 'Des dates différentes pour chaque pays ?', retourTotal: 'Juste une durée totale', jours: (n) => `${n} jour${n > 1 ? 's' : ''}`,
+    etapes: ['Destination', 'Dates', 'Voyageurs', 'Envies', 'Coordonnées'],
+    titres: ['Où aimeriez-vous aller ?', 'Quand, et pour combien de temps ?', 'Qui part en voyage ?', 'Qu’aimeriez-vous vivre là-bas ?', 'Où pouvons-nous vous répondre ?'],
+    etapeSur: (i, n) => `Étape ${i} sur ${n}`, facultatif: 'Facultatif', optionnel: 'facultatif',
+    retour: 'Retour', continuer: 'Continuer', passer: 'Passer cette étape', envoyerDemande: 'Envoyer ma demande', installer: 'Installer sur mon ordi',
+    introPays: 'Un ou plusieurs pays, dans l’ordre du voyage. Rien de décidé ? Choisissez une région, ou passez simplement à la suite.',
+    chercher: 'Chercher un pays', resultats: 'Résultats', populaires: 'Les plus demandés', aucunPays: 'Aucun pays trouvé. Essayez un autre nom, ou choisissez une région plus bas.',
+    trajet: 'Votre itinéraire', plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer',
+    pasDecide: 'Pas encore décidé ? Une région qui vous attire', regionsChoisies: 'Régions qui vous attirent',
+    introDates: 'Une idée approximative nous suffit. Vous pourrez tout préciser avec nous plus tard.',
+    combien: 'Durée du voyage', plusDe: '3 sem. et +', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre durée',
+    longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']],
+    jours: (n) => `${n} jour${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
-    quandPars: 'Départ', optionnel: 'optionnel', touchDepart: 'Touchez votre jour de départ',
-    pasSur: 'Pas encore sûr ? Laissez vide.', depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer',
-    repartition: 'Une préférence pour répartir votre temps ?', repartitionEx: 'Ex. : plus de temps au Japon, le reste à votre choix',
-    introPays2: "Touchez l'arrivée, puis le départ.",
-    arrivee: 'Arrivée', choisisJour: 'Choisissez un jour', choisisDepart: 'Choisissez le départ', aChoisir: 'À choisir',
-    tonVoyage: 'Votre voyage', au: 'au', astuce: "Astuce : le départ d'un pays peut être le même jour que l'arrivée dans le suivant.",
+    quand: 'Départ', quandAide: 'Le mois suffit.', dateExacte: 'J’ai déjà une date précise', sansDateExacte: 'Juste le mois, finalement',
+    parPays: 'Des dates précises pour chaque pays', retourTotal: 'Revenir à une durée totale',
+    depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer', touchDepart: 'Touchez votre jour de départ',
+    repartition: 'Une préférence pour répartir votre temps ?', repartitionEx: (p) => `Ex. : plus de temps en ${p}, le reste à votre choix`,
+    introPays2: 'Pour chaque pays, touchez le jour d’arrivée, puis le jour de départ.',
+    arrivee: 'Arrivée', choisisJour: 'Choisir un jour', choisisDepart: 'Choisir le départ', aChoisir: 'Dates à choisir',
+    tonVoyage: 'Votre voyage', au: 'au', astuce: 'Le jour où vous quittez un pays peut être celui où vous arrivez dans le suivant.',
     moisPrec: 'Mois précédent', moisSuiv: 'Mois suivant', semaineJours: ['L', 'M', 'M', 'J', 'V', 'S', 'D'], sem: 'S',
-    nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`, choisisDuree: 'Choisissez la durée du voyage', datesPour: (p) => `Choisissez vos dates pour : ${p}`,
-    introEnvies: () => 'Combien de fois ? Laissez à 0 ce qui ne vous intéresse pas.',
-    moins: 'Moins', plus: 'Plus', aVoir: 'À voir absolument', aVoirEx: 'Un lieu, un plat, une activité…',
-    voyageurs: 'Voyageurs', style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
-    introToi: '',
-    nom: 'Nom', nomEx: 'Ex. : Julie Tremblay', courriel: 'Courriel', courrielEx: 'julie@exemple.com',
-    tel: 'Téléphone', message: 'Autre chose à nous dire ?', messageEx: 'Allergies, occasion spéciale, budget…',
-    ecrisNom: 'Écrivez votre nom', ecrisCourriel: 'Écrivez votre courriel (ou votre téléphone)',
-    monVoyage: 'Voyage sur mesure', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'), joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
-    dureeTotale: 'Durée totale', departLe: (x) => `Départ le ${x}`, datesAVoir: 'Dates à préciser', jeTeLaisse: 'Répartition du temps entre les pays : à votre choix',
-    mesEnvies: 'Envies', aVoirCourt: 'À voir absolument',
-    presque: 'Votre demande est prête', presqueTxt: 'Envoyez-la-nous : notre équipe vous répond avec une proposition d’itinéraire.',
-    envoiCours: 'Envoi de votre demande…', envoyee: 'Demande envoyée', envoyeeTxt: 'Merci ! Notre équipe vous répond sous 48 heures avec une proposition d’itinéraire.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
+    nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`,
+    adultes: 'Adultes', adultesAide: '13 ans et plus', enfants: 'Enfants', enfantsAide: '0 à 12 ans', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
+    moins: 'Moins', plus: 'Plus', nombreDe: (x) => `Nombre : ${x}`,
+    style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
+    enSavoirPlus: 'En savoir plus sur les styles', masquer: 'Masquer',
+    stylesTxt: {
+      eco: 'Parfait pour les étudiants et les jeunes voyageurs. Auberges et petits hôtels sympathiques, transport local, cuisine de rue : on mise sur l’expérience plutôt que sur le confort.',
+      moyen: 'Le juste milieu, choisi par la plupart des voyageurs. Hôtels de charme (3 à 4 étoiles), bonnes tables, et quelques transferts privés pour voyager l’esprit tranquille.',
+      luxe: 'Le voyage de rêve, niveau lune de miel. Hôtels 5 étoiles et adresses d’exception, chauffeurs privés, expériences exclusives et service aux petits soins.',
+    },
+    introEnvies: 'Touchez ce qui vous plaît. Des idées concrètes apparaîtront selon votre destination.',
+    ideesPour: (p) => (p ? `Idées : ${p}` : 'Quelques idées'), touchezIdees: 'Touchez celles qui vous tentent.',
+    combienFois: 'Combien de fois pendant le voyage, environ ?',
+    aVoir: 'Un lieu ou une activité à ne pas manquer ?', aVoirEx: 'Ex. : voir les cerisiers en fleurs, un resto en particulier',
+    nom: 'Votre nom', nomEx: 'Ex. : Julie Tremblay', courriel: 'Courriel', courrielEx: 'julie@exemple.com',
+    tel: 'Téléphone', message: 'Autre chose à nous dire ?', messageEx: 'Occasion spéciale, budget, allergies, rythme souhaité',
+    introToi: 'Pour vous envoyer votre proposition d’itinéraire. Gratuit et sans engagement.',
+    ecrisNom: 'Écrivez votre nom pour que l’on sache à qui répondre', ecrisCourriel: 'Écrivez votre courriel ou votre téléphone pour recevoir la réponse',
+    monVoyage: 'Votre voyage sur mesure', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'),
+    adultesN: (n) => `${n} adulte${n > 1 ? 's' : ''}`, enfantsN: (n) => `${n} enfant${n > 1 ? 's' : ''}`,
+    destinationAVoir: 'Destination à définir ensemble', dureeTotale: 'Durée', departLe: (x) => `Départ : ${x}`, datesAVoir: 'Dates à préciser',
+    jeTeLaisse: 'Répartition du temps entre les pays : à votre choix', styleMot: 'style', aDefinir: 'À définir', flexible: 'Flexible', dureeMot: 'durée',
+    mesEnvies: 'Envies', aVoirCourt: 'À ne pas manquer',
+    presque: 'Votre demande est prête', presqueTxt: 'Envoyez-la-nous avec un des boutons ci-dessous. Notre équipe vous répond avec une proposition d’itinéraire.',
+    envoiCours: 'Envoi de votre demande', envoyee: 'Merci, c’est envoyé', envoyeeTxt: 'Notre équipe vous répond sous 48 heures avec une première proposition d’itinéraire.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
     parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message', copier: 'Copier la demande',
-    image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses',
+    image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses', nouvelle: 'Faire une autre demande',
     merci: 'Merci ! Demande envoyée', copie: 'Copié ! Collez-le dans un courriel ou un message', copieCeTexte: 'Copiez ce texte :',
-    sujet: (p, n) => `Demande de voyage : ${p} (${n})`,
-    corps: (lignes, v, lien, n) => `Bonjour,\n\nVoici ma demande de voyage sur mesure.\n\n${lignes}\n- ${v} voyageur(s)\n\nToutes mes réponses (pays, dates, envies) sont dans ce lien :\n${lien}\n\n${n}`,
+    sujet: (p, n) => `Demande de voyage : ${p}${n ? ` (${n})` : ''}`,
+    corps: (lignes, lien, n) => `Bonjour,\n\nVoici ma demande de voyage sur mesure.\n\n${lignes}\n\nToutes mes réponses sont dans ce lien :\n${lien}\n\n${n}`,
     imagePrete: 'Image enregistrée',
   },
   en: {
-    sur: 'Custom trip', etapes: ['Countries', 'Dates', 'Interests', 'You'],
-    titres: ['Countries', 'Trip length', 'What are you into?', 'Your details'],
-    retour: 'Back', continuer: 'Continue', envoyerDemande: 'Finish', installer: 'Install on my computer',
-    introPays: 'One or more, in travel order.', chercher: 'Search a country',
-    resultats: 'Results', populaires: 'Popular', aucunPays: 'No country found.', trajet: 'Your route',
-    plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove', choisisPays: 'Pick at least one country',
-        combien: 'Number of days', plusDe: '21+', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other', longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']], parPays: 'Different dates for each country?', retourTotal: 'Just a total length', jours: (n) => `${n} day${n > 1 ? 's' : ''}`,
+    etapes: ['Destination', 'Dates', 'Travellers', 'Interests', 'Contact'],
+    titres: ['Where would you like to go?', 'When, and for how long?', 'Who’s travelling?', 'What would you love to do there?', 'Where can we reach you?'],
+    etapeSur: (i, n) => `Step ${i} of ${n}`, facultatif: 'Optional', optionnel: 'optional',
+    retour: 'Back', continuer: 'Continue', passer: 'Skip this step', envoyerDemande: 'Send my request', installer: 'Install on my computer',
+    introPays: 'One or more countries, in travel order. Nothing decided yet? Pick a region, or simply skip ahead.',
+    chercher: 'Search a country', resultats: 'Results', populaires: 'Most requested', aucunPays: 'No country found. Try another name, or pick a region below.',
+    trajet: 'Your route', plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove',
+    pasDecide: 'Not sure yet? A region you’re drawn to', regionsChoisies: 'Regions you’re drawn to',
+    introDates: 'A rough idea is all we need. You can fine-tune everything with us later.',
+    combien: 'Trip length', plusDe: '3 wks +', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other length',
+    longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']],
+    jours: (n) => `${n} day${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'days' : 'day'),
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
-    quandPars: 'Departure', optionnel: 'optional', touchDepart: 'Tap your departure day',
-    pasSur: 'Not sure yet? Leave it empty.', depart: 'Departure', retourLe: 'Return', effacer: 'Clear',
-    repartition: 'Any preference on how to split your time?', repartitionEx: 'E.g. more time in Japan, the rest is up to you',
-    introPays2: 'Tap arrival, then departure.',
-    arrivee: 'Arrival', choisisJour: 'Pick a day', choisisDepart: 'Pick departure', aChoisir: 'To pick',
-    tonVoyage: 'Your trip', au: 'to', astuce: 'Tip: leaving a country can be the same day you arrive in the next one.',
+    quand: 'Departure', quandAide: 'The month is enough.', dateExacte: 'I already have an exact date', sansDateExacte: 'Just the month after all',
+    parPays: 'Exact dates for each country', retourTotal: 'Back to a total length',
+    depart: 'Departure', retourLe: 'Return', effacer: 'Clear', touchDepart: 'Tap your departure day',
+    repartition: 'Any preference on how to split your time?', repartitionEx: (p) => `E.g. more time in ${p}, the rest is up to you`,
+    introPays2: 'For each country, tap your arrival day, then your departure day.',
+    arrivee: 'Arrival', choisisJour: 'Pick a day', choisisDepart: 'Pick departure', aChoisir: 'Dates to pick',
+    tonVoyage: 'Your trip', au: 'to', astuce: 'The day you leave one country can be the day you arrive in the next.',
     moisPrec: 'Previous month', moisSuiv: 'Next month', semaineJours: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], sem: 'W',
-    nuitsTxt: (n) => `${n} night${n > 1 ? 's' : ''}`, choisisDuree: 'Pick the length of your trip', datesPour: (p) => `Pick your dates for: ${p}`,
-    introEnvies: () => "How many times? Leave 0 if it's not for you.",
-    moins: 'Less', plus: 'More', aVoir: 'Must see', aVoirEx: 'A place, a dish, an activity…',
-    voyageurs: 'Travellers', style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
-    introToi: '',
-    nom: 'Your name', nomEx: 'E.g. Julie Smith', courriel: 'Your email', courrielEx: 'julie@example.com',
-    tel: 'Phone', message: 'Anything else we should know?', messageEx: 'Allergies, special occasion, budget…',
-    ecrisNom: 'Enter your name', ecrisCourriel: 'Enter your email (or phone)',
-    monVoyage: 'Custom trip', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'), joursMot: (n) => (n > 1 ? 'days' : 'day'),
-    dureeTotale: 'Total length', departLe: (x) => `Leaving ${x}`, datesAVoir: 'Dates to confirm', jeTeLaisse: 'Time split between countries: up to you',
-    mesEnvies: 'Interests', aVoirCourt: 'Must see',
-    presque: 'Your request is ready', presqueTxt: 'Send it to us: our team will reply with an itinerary proposal.',
-    envoiCours: 'Sending your request…', envoyee: 'Request sent', envoyeeTxt: 'Thank you! Our team will reply within 48 hours with an itinerary proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
+    nuitsTxt: (n) => `${n} night${n > 1 ? 's' : ''}`,
+    adultes: 'Adults', adultesAide: '13 and over', enfants: 'Children', enfantsAide: 'Ages 0 to 12', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
+    moins: 'Fewer', plus: 'More', nombreDe: (x) => `Number: ${x}`,
+    style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
+    enSavoirPlus: 'Learn more about the styles', masquer: 'Hide',
+    stylesTxt: {
+      eco: 'Perfect for students and young travellers. Hostels and friendly small hotels, local transport, street food: the experience comes first, comfort second.',
+      moyen: 'The sweet spot most travellers choose. Charming 3 to 4-star hotels, good restaurants, and a few private transfers so you can relax.',
+      luxe: 'The dream trip, honeymoon level. 5-star hotels and exceptional addresses, private drivers, exclusive experiences and attentive service.',
+    },
+    introEnvies: 'Tap what appeals to you. Concrete ideas will show up based on your destination.',
+    ideesPour: (p) => (p ? `Ideas: ${p}` : 'A few ideas'), touchezIdees: 'Tap the ones you like.',
+    combienFois: 'Roughly how many times during the trip?',
+    aVoir: 'A place or activity you don’t want to miss?', aVoirEx: 'E.g. the cherry blossoms, a specific restaurant',
+    nom: 'Your name', nomEx: 'E.g. Julie Smith', courriel: 'Email', courrielEx: 'julie@example.com',
+    tel: 'Phone', message: 'Anything else we should know?', messageEx: 'Special occasion, budget, allergies, preferred pace',
+    introToi: 'So we can send you your itinerary proposal. Free, no commitment.',
+    ecrisNom: 'Enter your name so we know who to reply to', ecrisCourriel: 'Enter your email or phone to receive our reply',
+    monVoyage: 'Your custom trip', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'),
+    adultesN: (n) => `${n} adult${n > 1 ? 's' : ''}`, enfantsN: (n) => `${n} child${n > 1 ? 'ren' : ''}`,
+    destinationAVoir: 'Destination to decide together', dureeTotale: 'Length', departLe: (x) => `Departure: ${x}`, datesAVoir: 'Dates to confirm',
+    jeTeLaisse: 'Time split between countries: up to you', styleMot: 'style', aDefinir: 'To decide', flexible: 'Flexible', dureeMot: 'length',
+    mesEnvies: 'Interests', aVoirCourt: 'Not to miss',
+    presque: 'Your request is ready', presqueTxt: 'Send it to us with one of the buttons below. Our team will reply with an itinerary proposal.',
+    envoiCours: 'Sending your request', envoyee: 'Thank you, it’s sent', envoyeeTxt: 'Our team will reply within 48 hours with a first itinerary proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
     parCourriel: 'Send by email', parMessage: 'Send by message', copier: 'Copy the request',
-    image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers',
+    image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers', nouvelle: 'Start a new request',
     merci: 'Thanks! Request sent', copie: 'Copied! Paste it in an email or a message', copieCeTexte: 'Copy this text:',
-    sujet: (p, n) => `Trip request: ${p} (${n})`,
-    corps: (lignes, v, lien, n) => `Hello,\n\nHere is my custom trip request.\n\n${lignes}\n- ${v} traveller(s)\n\nAll my answers (countries, dates, interests) are in this link:\n${lien}\n\n${n}`,
+    sujet: (p, n) => `Trip request: ${p}${n ? ` (${n})` : ''}`,
+    corps: (lignes, lien, n) => `Hello,\n\nHere is my custom trip request.\n\n${lignes}\n\nAll my answers are in this link:\n${lien}\n\n${n}`,
     imagePrete: 'Image saved',
   },
 };
 const ENVIES_EN = {
-  visites: ['Culture and sights', 'Temples, museums, historic districts'],
+  visites: ['Culture and sights', 'Monuments, museums, historic districts'],
   restos: ['Food', 'Great restaurants, street food, markets'],
-  experiences: ['Experiences', 'Cooking classes, shows, unique activities'],
+  experiences: ['Local experiences', 'Classes, shows, meeting locals'],
   sport: ['Sport and adventure', 'Hiking, diving, surfing, cycling'],
-  nuit: ['Nightlife', 'Bars, rooftops, clubs'],
-  nature: ['Nature and outdoors', 'Parks, mountains, wild beaches'],
-  detente: ['Relaxation', 'Beach, spa, onsen, slow days'],
+  nuit: ['Nightlife', 'Bars, rooftops, live music'],
+  nature: ['Nature and outdoors', 'Parks, mountains, wildlife, wild beaches'],
+  detente: ['Relaxation', 'Beach, spa, hot springs, slow days'],
 };
 
 // ---------- Noms des pays en anglais (la demande garde le nom français, pour le Studio) ----------
@@ -131,35 +178,56 @@ const NOM_EN = (() => {
 // ---------- Réponses (gardées dans le navigateur au cas où la page se ferme) ----------
 const langueParam = ['fr', 'en'].includes(params.get('lang')) ? params.get('lang') : '';
 const vide = () => ({
-  f: 'demande', v: 2, langue: langueParam || (/^fr/i.test(navigator.language || 'fr') ? 'fr' : 'en'),
-  mode: 'total', duree: 0, plage: '', depart: '', repartition: '',
-  pays: [], envies: {}, voyageurs: 2, style: 'moyen', nom: '', courriel: '', telephone: '', message: '',
+  f: 'demande', v: 3, langue: langueParam || (/^fr/i.test(navigator.language || 'fr') ? 'fr' : 'en'),
+  pays: [], regions: [],
+  mode: 'total', duree: 0, plage: '', depart: '', mois: '', repartition: '',
+  adultes: 2, enfants: 0, agesEnfants: '', voyageurs: 2, style: '',
+  envies: {}, idees: {}, incontournable: '',
+  nom: '', courriel: '', telephone: '', message: '',
 });
 let d = vide();
-// Un brouillon commencé est gardé une journée ; après, le formulaire repart à zéro.
-try { const b = JSON.parse(localStorage.getItem('brouillonDemande') || 'null'); if (b?.f === 'demande' && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000) d = { ...vide(), ...b, v: 2 }; } catch (_) { /* rien */ }
+// Un brouillon commencé est gardé une journée ; après (ou une fois la demande envoyée), on repart à zéro.
+try {
+  const b = JSON.parse(localStorage.getItem('brouillonDemande') || 'null');
+  if (b?.f === 'demande' && !b.envoyeLe && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000) {
+    d = { ...vide(), ...b, v: 3 };
+    if (!b.v || b.v < 3) {
+      d.adultes = Math.max(1, b.voyageurs || 2); d.style = b.style || '';
+      d.incontournable = d.pays.filter((p) => p.incontournable?.trim()).map((p) => `${p.nom} : ${p.incontournable.trim()}`).join('\n');
+      d.pays.forEach((p) => { p.incontournable = ''; });
+    }
+    delete d.gardeLe;
+  }
+} catch (_) { /* rien */ }
 if (langueParam) d.langue = langueParam;
 const garder = () => { try { localStorage.setItem('brouillonDemande', JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
 let etape = 0;
 let paysActif = 0;
 let moisAffiche = null;
+let voirCalendrier = Boolean(d.depart);
+let voirStyles = false;
+let dureeLibre = false; // « 3 sem. et + » touché : on montre les durées longues
 
 const t = () => TXT[d.langue] || TXT.fr;
 const loc = () => (d.langue === 'en' ? 'en-CA' : 'fr-CA');
+const deuxPoints = () => (d.langue === 'en' ? ':' : ' :');
 const nomPays = (p) => (d.langue === 'en' ? NOM_EN[p] || p : p);
+const nomRegion = (r) => (d.langue === 'en' ? REGIONS.find(([fr]) => fr === r)?.[1] || r : r);
 const nomEnvie = (k, nom) => (d.langue === 'en' ? ENVIES_EN[k]?.[0] || nom : nom);
 const exEnvie = (k, ex) => (d.langue === 'en' ? ENVIES_EN[k]?.[1] || ex : ex);
+const totalVoyageurs = () => Math.max(1, (d.adultes || 0) + (d.enfants || 0));
 
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 const date = (s) => new Date(`${s}T12:00:00`);
 const ajouterJours = (s, n) => { const x = date(s); x.setDate(x.getDate() + n); return iso(x); };
 const jolie = (s, opts = { weekday: 'short', day: 'numeric', month: 'short' }) => (s ? date(s).toLocaleDateString(loc(), opts) : '');
-// « 5 – 12 avr. » plutôt que deux dates complètes.
+const nomMois = (cle, opts = { month: 'long', year: 'numeric' }) => (cle ? date(`${cle}-15`).toLocaleDateString(loc(), opts) : '');
+// « 5 au 12 avr. » plutôt que deux dates complètes.
 function plage(debut, fin, annee = false) {
   if (!debut || !fin) return '';
   const opts = { day: 'numeric', month: 'short', ...(annee ? { year: 'numeric' } : {}) };
-  try { return new Intl.DateTimeFormat(loc(), opts).formatRange(date(debut), date(fin)); } catch (_) { return `${jolie(debut, opts)} – ${jolie(fin, opts)}`; }
+  try { return new Intl.DateTimeFormat(loc(), opts).formatRange(date(debut), date(fin)); } catch (_) { return `${jolie(debut, opts)} au ${jolie(fin, opts)}`; }
 }
 const coul = (i) => COULEURS[i % COULEURS.length];
 
@@ -180,6 +248,15 @@ const totalJours = () => (d.mode === 'total' ? d.duree : d.pays.reduce((n, x) =>
 const debutVoyage = () => (d.mode === 'total' ? d.depart : d.pays.map((x) => x.debut).filter(Boolean).sort()[0] || '');
 const finVoyage = () => (d.mode === 'total' ? (d.depart && d.duree && !d.plage ? ajouterJours(d.depart, d.duree) : '') : d.pays.map((x) => x.fin).filter(Boolean).sort().pop() || '');
 
+// Une étape est « vide » si le client n'y a rien indiqué : le bouton devient alors « Passer cette étape ».
+function etapeVide(i = etape) {
+  if (i === 0) return !d.pays.length && !d.regions.length;
+  if (i === 1) return d.mode === 'total' ? !d.duree && !d.depart && !d.mois : !d.pays.some((p) => p.debut);
+  if (i === 2) return !d.style && !d.voyageursChoisis;
+  if (i === 3) return !Object.values(d.envies).some(Boolean) && !d.incontournable.trim() && !d.pays.some((p) => p.incontournable?.trim());
+  return false;
+}
+
 // ---------- Photo en fond, sur les côtés de la fiche (grands écrans) ----------
 // La photo du pays choisi (ou du pays dont on choisit les dates) ; sinon, des photos de voyage qui défilent.
 const decor = document.getElementById('decor');
@@ -192,8 +269,7 @@ function montrerPhoto(id) {
   const img = new Image();
   const afficher = () => {
     if (decorActuel !== id) return; // une autre photo a été demandée entre-temps
-    // Fondu enchaîné : la nouvelle photo apparaît par-dessus l'ancienne, qui reste en place
-    // (et continue son zoom) jusqu'à la fin du fondu. Rien ne saute, pas de trou entre les deux.
+    // Fondu enchaîné : la nouvelle photo apparaît par-dessus l'ancienne, qui reste en place jusqu'à la fin du fondu.
     const calques = [...decor.querySelectorAll('.decor-img')];
     const visible = calques.find((c) => c.classList.contains('visible'));
     const suivant = calques.find((c) => c !== visible) || calques[0];
@@ -206,7 +282,6 @@ function montrerPhoto(id) {
     montrerPhoto.fin = setTimeout(() => { if (visible) visible.classList.remove('sortie'); }, 2200);
   };
   img.src = photo(id, 1800);
-  // decode() : l'image est prête à peindre avant le fondu, donc pas d'accroc pendant l'animation
   (img.decode ? img.decode() : new Promise((ok) => { img.onload = ok; })).then(afficher, () => {});
 }
 function majDecor() {
@@ -223,108 +298,151 @@ window.addEventListener('resize', () => { clearTimeout(majDecor.r); majDecor.r =
 function toast(m) {
   const el = document.getElementById('toast');
   el.textContent = m; el.classList.add('visible');
-  clearTimeout(toast.m); toast.m = setTimeout(() => el.classList.remove('visible'), 2600);
+  clearTimeout(toast.m); toast.m = setTimeout(() => el.classList.remove('visible'), 3200);
 }
+
+// Un compteur « − 2 + » dont on peut aussi toucher le chiffre pour l'écrire.
+const compteur = (cle, n, min, max, nomA11y, classe = '') => `
+  <span class="compteur ${classe}">
+    <button type="button" data-moins="${cle}" ${n > min ? '' : 'disabled'} aria-label="${t().moins}">${icone('minus', { taille: 16, epaisseur: 2.4 })}</button>
+    <input class="nombre" data-nombre="${cle}" type="number" inputmode="numeric" pattern="[0-9]*" min="${min}" max="${max}" value="${n}" aria-label="${esc(nomA11y)}">
+    <button type="button" data-plus="${cle}" ${n < max ? '' : 'disabled'} aria-label="${t().plus}">${icone('plus', { taille: 16, epaisseur: 2.4 })}</button>
+  </span>`;
+const borne = (v, min, max) => Math.max(min, Math.min(max, Number.isFinite(v) ? v : min));
 
 // ---------- Rendu général ----------
 function enTete(etapeIci) {
   return `
     <div class="haut-ligne">
-      <p class="sur">${t().sur}</p>
+      <p class="marque"><img src="icons/demande.svg" alt="" width="26" height="26">${esc(MARQUE)}</p>
       <div class="haut-actions">
         ${MONTRER_INSTALLER ? `<button class="petit-bouton" id="installer">${icone('download', { taille: 15 })}<span>${t().installer}</span></button>` : ''}
-        <div class="langue" role="group" aria-label="Langue / Language">${['fr', 'en'].map((l) => `<button class="${d.langue === l ? 'choisi' : ''}" data-langue="${l}">${l.toUpperCase()}</button>`).join('')}</div>
+        <div class="langue" role="group" aria-label="Langue / Language">${['fr', 'en'].map((l) => `<button class="${d.langue === l ? 'choisi' : ''}" data-langue="${l}" lang="${l}">${l.toUpperCase()}</button>`).join('')}</div>
       </div>
     </div>
     ${etapeIci == null ? '' : `
-    <h1>${t().titres[etapeIci]}</h1>
-    <ol class="progres">${t().etapes.map((e, i) => `<li class="${i < etapeIci ? 'fait' : i === etapeIci ? 'ici' : ''}"><span>${i < etapeIci ? icone('check', { taille: 13, epaisseur: 3 }) : i + 1}</span>${e}</li>`).join('')}</ol>`}`;
+    <div class="progres" role="progressbar" aria-valuemin="1" aria-valuemax="${NB_ETAPES}" aria-valuenow="${etapeIci + 1}" aria-label="${esc(t().etapeSur(etapeIci + 1, NB_ETAPES))}">
+      ${t().etapes.map((e, i) => `<button type="button" class="${i < etapeIci ? 'fait' : i === etapeIci ? 'ici' : ''}" data-aller="${i}" ${i === etapeIci ? 'aria-current="step"' : ''}><i></i><span>${e}</span></button>`).join('')}
+    </div>
+    <p class="etape-sur">${t().etapeSur(etapeIci + 1, NB_ETAPES)}${etapeIci < 4 ? ` <span class="pastille-fac">${t().facultatif}</span>` : ''}</p>
+    <h1>${t().titres[etapeIci]}</h1>`}`;
 }
 
 function brancherEnTete(refaire) {
   fiche.querySelectorAll('[data-langue]').forEach((b) => { b.onclick = () => { d.langue = b.dataset.langue; garder(); refaire(); }; });
+  fiche.querySelectorAll('[data-aller]').forEach((b) => { b.onclick = () => allerA(+b.dataset.aller); });
   const inst = fiche.querySelector('#installer');
   if (inst) inst.onclick = async () => { if (!(await pwa.installer())) alert(pwa.EXPLICATION[d.langue] || pwa.EXPLICATION.fr); };
 }
 
+function majBas() {
+  const s = fiche.querySelector('#suivant');
+  if (!s || etape === 4) return;
+  const passer = etapeVide();
+  s.classList.toggle('passer', passer);
+  s.innerHTML = `${passer ? t().passer : t().continuer} ${icone('arrow-right', { taille: 18 })}`;
+}
+
 function rendre() {
   document.documentElement.lang = d.langue;
+  document.title = `${t().titres[etape].replace(/ \?$|\?$/, '')} · ${MARQUE}`;
   fiche.innerHTML = `
     <header class="haut">${enTete(etape)}</header>
     <section class="corps" id="corps"></section>
     <footer class="bas">
-      ${etape ? `<button class="bouton secondaire" id="retour">${icone('chevron-left', { taille: 18 })} ${t().retour}</button>` : '<span></span>'}
-      <button class="bouton" id="suivant">${etape === 3 ? t().envoyerDemande : t().continuer} ${icone('arrow-right', { taille: 18 })}</button>
+      ${etape ? `<button class="bouton secondaire" id="retour" aria-label="${t().retour}">${icone('chevron-left', { taille: 18 })}<span>${t().retour}</span></button>` : '<span></span>'}
+      <button class="bouton" id="suivant">${etape === 4 ? `${t().envoyerDemande} ${icone('send', { taille: 18 })}` : ''}</button>
     </footer>`;
   brancherEnTete(rendre);
-  [etapePays, etapeDates, etapeEnvies, etapeToi][etape](fiche.querySelector('#corps'));
+  [etapePays, etapeDates, etapeVoyageurs, etapeEnvies, etapeToi][etape](fiche.querySelector('#corps'));
   fiche.querySelector('#suivant').onclick = suivant;
   const r = fiche.querySelector('#retour');
-  if (r) r.onclick = () => { etape--; rendre(); window.scrollTo(0, 0); };
+  if (r) r.onclick = () => allerA(etape - 1);
+  majBas();
   majDecor();
 }
 
-function suivant() {
-  if (etape === 0 && !d.pays.length) return toast(t().choisisPays);
-  if (etape === 1) {
-    if (d.mode === 'total' && !d.duree) return toast(t().choisisDuree);
-    if (d.mode === 'pays') {
-      const sans = d.pays.find((p) => !p.debut || !p.fin);
-      if (sans) { paysActif = d.pays.indexOf(sans); moisAffiche = null; rendre(); return toast(t().datesPour(nomPays(sans.nom))); }
-    }
-  }
-  if (etape === 3) return envoyer();
-  etape++;
+function allerA(i) {
+  if (i === etape || i < 0 || i >= NB_ETAPES) return;
+  etape = i;
   if (etape === 1) { paysActif = Math.max(0, d.pays.findIndex((p) => !p.fin)); moisAffiche = null; }
   garder();
   rendre();
   window.scrollTo(0, 0);
+}
+
+function suivant() {
+  if (etape === 4) return envoyer();
+  allerA(etape + 1);
   return undefined;
 }
 
-// ---------- 1. Pays ----------
+// ---------- 1. Destination ----------
 function etapePays(zone) {
   let recherche = '';
-  const dessiner = () => {
+  zone.innerHTML = `
+    <p class="intro">${t().introPays}</p>
+    <label class="recherche">${icone('search', { taille: 18 })}<input id="cherche" type="search" placeholder="${t().chercher}" autocomplete="off" enterkeyhint="search"></label>
+    <div id="resultats"></div>
+    <div id="choix"></div>`;
+  const champ = zone.querySelector('#cherche');
+  const dessinerResultats = () => {
     const choisis = d.pays.map((p) => p.nom);
-    const q = sansAccents(recherche);
+    const q = sansAccents(recherche.trim());
     const resultats = q ? TOUS_PAYS.filter((p) => sansAccents(p).includes(q) || sansAccents(NOM_EN[p]).includes(q)).slice(0, 12) : POPULAIRES;
-    zone.innerHTML = `
-      <p class="intro">${t().introPays}</p>
-      <label class="recherche">${icone('search', { taille: 18 })}<input id="cherche" type="search" placeholder="${t().chercher}" value="${esc(recherche)}" autocomplete="off"></label>
+    zone.querySelector('#resultats').innerHTML = `
       <p class="petit-titre">${q ? t().resultats : t().populaires}</p>
-      <div class="puces">${resultats.map((p) => `<button class="puce ${choisis.includes(p) ? 'choisie' : ''}" data-pays="${esc(p)}">${choisis.includes(p) ? icone('check', { taille: 15, epaisseur: 2.6 }) : icone('plus', { taille: 15 })}${esc(nomPays(p))}</button>`).join('') || `<p class="doux">${t().aucunPays}</p>`}</div>
-      ${d.pays.length ? `
-        <p class="petit-titre">${t().trajet}</p>
-        <ol class="trajet">${d.pays.map((p, i) => `
-          <li style="--c:${coul(i)}">
-            <span class="num">${i + 1}</span><b>${esc(nomPays(p.nom))}</b>
-            <span class="actions">
-              <button data-monter="${i}" ${i ? '' : 'disabled'} aria-label="${t().plusTot}">${icone('arrow-up', { taille: 16 })}</button>
-              <button data-descendre="${i}" ${i < d.pays.length - 1 ? '' : 'disabled'} aria-label="${t().plusTard}">${icone('arrow-down', { taille: 16 })}</button>
-              <button data-retirer="${i}" aria-label="${t().retirer}">${icone('x', { taille: 16 })}</button>
-            </span>
-          </li>`).join('')}</ol>` : ''}`;
-    const champ = zone.querySelector('#cherche');
-    champ.oninput = () => { recherche = champ.value; dessiner(); const c = zone.querySelector('#cherche'); c.focus(); c.setSelectionRange(c.value.length, c.value.length); };
-    zone.onclick = (ev) => {
-      const b = ev.target.closest('button');
-      if (!b) return;
-      if (b.dataset.pays) {
-        const n = b.dataset.pays;
-        const i = d.pays.findIndex((p) => p.nom === n);
-        if (i >= 0) d.pays.splice(i, 1); else d.pays.push({ nom: n, debut: '', fin: '', incontournable: '' });
-        recherche = '';
-      } else if (b.dataset.monter) { const i = +b.dataset.monter; [d.pays[i - 1], d.pays[i]] = [d.pays[i], d.pays[i - 1]]; }
-      else if (b.dataset.descendre) { const i = +b.dataset.descendre; [d.pays[i + 1], d.pays[i]] = [d.pays[i], d.pays[i + 1]]; }
-      else if (b.dataset.retirer) d.pays.splice(+b.dataset.retirer, 1);
-      else return;
-      garder();
-      dessiner();
-      majDecor();
-    };
+      <div class="puces">${resultats.map((p) => `<button class="puce ${choisis.includes(p) ? 'choisie' : ''}" data-pays="${esc(p)}" aria-pressed="${choisis.includes(p)}">${choisis.includes(p) ? icone('check', { taille: 15, epaisseur: 2.6 }) : icone('plus', { taille: 15 })}${esc(nomPays(p))}</button>`).join('') || `<p class="doux">${t().aucunPays}</p>`}</div>`;
   };
-  dessiner();
+  const dessinerChoix = () => {
+    zone.querySelector('#choix').innerHTML = d.pays.length ? `
+      <p class="petit-titre">${t().trajet}</p>
+      <ol class="trajet">${d.pays.map((p, i) => `
+        <li style="--c:${coul(i)}">
+          <span class="num">${i + 1}</span><b>${esc(nomPays(p.nom))}</b>
+          <span class="actions">
+            ${d.pays.length > 1 ? `<button data-monter="${i}" ${i ? '' : 'disabled'} aria-label="${t().plusTot}">${icone('arrow-up', { taille: 16 })}</button>
+            <button data-descendre="${i}" ${i < d.pays.length - 1 ? '' : 'disabled'} aria-label="${t().plusTard}">${icone('arrow-down', { taille: 16 })}</button>` : ''}
+            <button data-retirer="${i}" aria-label="${t().retirer}">${icone('x', { taille: 16 })}</button>
+          </span>
+        </li>`).join('')}</ol>` : `
+      <div class="indecis">
+        <p class="petit-titre">${icone('compass', { taille: 17 })} ${t().pasDecide}</p>
+        <div class="puces">${REGIONS.map(([fr]) => `<button class="puce douce ${d.regions.includes(fr) ? 'choisie' : ''}" data-region="${esc(fr)}" aria-pressed="${d.regions.includes(fr)}">${esc(nomRegion(fr))}</button>`).join('')}</div>
+      </div>`;
+  };
+  dessinerResultats();
+  dessinerChoix();
+  // On ne redessine que la liste, pour garder le clavier ouvert pendant qu'on tape.
+  champ.oninput = () => { recherche = champ.value; dessinerResultats(); };
+  champ.onkeydown = (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const premier = zone.querySelector('#resultats [data-pays]');
+    if (premier && recherche.trim()) premier.click();
+  };
+  zone.onclick = (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.pays) {
+      const n = b.dataset.pays;
+      const i = d.pays.findIndex((p) => p.nom === n);
+      if (i >= 0) d.pays.splice(i, 1); else d.pays.push({ nom: n, debut: '', fin: '', incontournable: '' });
+      if (recherche) { recherche = ''; champ.value = ''; }
+    } else if (b.dataset.region) {
+      const r = b.dataset.region;
+      d.regions = d.regions.includes(r) ? d.regions.filter((x) => x !== r) : [...d.regions, r];
+    } else if (b.dataset.monter) { const i = +b.dataset.monter; [d.pays[i - 1], d.pays[i]] = [d.pays[i], d.pays[i - 1]]; }
+    else if (b.dataset.descendre) { const i = +b.dataset.descendre; [d.pays[i + 1], d.pays[i]] = [d.pays[i], d.pays[i + 1]]; }
+    else if (b.dataset.retirer) d.pays.splice(+b.dataset.retirer, 1);
+    else return;
+    if (d.mode === 'pays' && d.pays.length < 2) d.mode = 'total';
+    garder();
+    dessinerResultats();
+    dessinerChoix();
+    majBas();
+    majDecor();
+  };
 }
 
 // ---------- 2. Dates ----------
@@ -344,8 +462,8 @@ function calendrier(plages, actif) {
   for (let j = 1; j <= nb; j++) {
     const s = `${moisAffiche}-${String(j).padStart(2, '0')}`;
     const p = plages.find((x) => x.debut && s >= x.debut && s <= (x.fin || x.debut));
-    const classes = [s < aujourdhui ? 'passe' : '', p ? 'pris' : '', p && s === p.debut ? 'debut' : '', p && s === (p.fin || p.debut) ? 'fin' : '', p && p.i === actif ? 'actif' : ''].join(' ');
-    cases.push(`<button class="jour ${classes}" data-jour="${s}" ${s < aujourdhui ? 'disabled' : ''} style="${p ? `--c:${coul(p.i)}` : ''}">${j}</button>`);
+    const classes = [s < aujourdhui ? 'passe' : '', s === aujourdhui ? 'auj' : '', p ? 'pris' : '', p && s === p.debut ? 'debut' : '', p && s === (p.fin || p.debut) ? 'fin' : '', p && p.i === actif ? 'actif' : ''].join(' ');
+    cases.push(`<button class="jour ${classes}" data-jour="${s}" ${s < aujourdhui ? 'disabled' : ''} style="${p ? `--c:${coul(p.i)}` : ''}" aria-label="${esc(jolie(s, { weekday: 'long', day: 'numeric', month: 'long' }))}">${j}</button>`);
   }
   const auDebut = moisDe(aujourdhui) >= moisAffiche;
   return `
@@ -361,69 +479,87 @@ function calendrier(plages, actif) {
 }
 
 function etapeDates(zone) {
-  // Le choix « pays par pays » reste discret : un simple lien sous la durée.
-  const choixMode = d.mode === 'total'
-    ? (d.pays.length > 1 ? `<button class="lien-mode" data-mode="pays">${icone('route', { taille: 16 })} ${t().parPays}</button>` : '')
-    : `<button class="lien-mode" data-mode="total">${icone('chevron-left', { taille: 16 })} ${t().retourTotal}</button>`;
-  if (d.mode === 'total') datesTotal(zone, choixMode); else datesPays(zone, choixMode);
+  if (d.mode === 'total') datesTotal(zone); else datesPays(zone);
   zone.onclick = (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.mode) { d.mode = b.dataset.mode; moisAffiche = null; garder(); etapeDates(zone); return; }
+    if (b.dataset.mode) { d.mode = b.dataset.mode; moisAffiche = null; paysActif = 0; garder(); etapeDates(zone); majBas(); majDecor(); return; }
     if (b.dataset.mois) { moisAffiche = decalerMois(moisAffiche, +b.dataset.mois); etapeDates(zone); return; }
+    if (b.dataset.voirCal != null) { voirCalendrier = !voirCalendrier; if (!voirCalendrier) d.depart = ''; moisAffiche = null; garder(); etapeDates(zone); majBas(); return; }
     if (d.mode === 'total') clicTotal(b); else clicPays(b);
     garder();
     etapeDates(zone);
+    majBas();
     majDecor();
   };
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
-    if (ev.target.id === 'duree-libre') { const v = parseInt(ev.target.value, 10); if (v > 0) { d.duree = Math.min(365, v); d.plage = ''; garder(); const r = document.querySelector('.duree-resume'); if (r) r.textContent = `${t().jours(d.duree)}, ${t().semaines(Math.floor(d.duree / 7), d.duree % 7)}`; } }
+    if (ev.target.id === 'duree-libre') {
+      const v = parseInt(ev.target.value, 10);
+      if (v > 0) {
+        d.duree = Math.min(365, v); d.plage = ''; garder(); majBas();
+        const r = zone.querySelector('.duree-resume');
+        if (r) r.textContent = dureeTexte(d.duree, 'jours');
+      }
+    }
   };
   zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
 }
 
-// Le voyage au complet : juste la durée, et la date de départ si on la connaît.
-function datesTotal(zone, choixMode) {
-  if (!moisAffiche) moisAffiche = moisDe(d.depart || ajouterJours(iso(new Date()), 30));
+// Le voyage au complet : la durée, et le mois (ou la date exacte) du départ si on le connaît.
+function datesTotal(zone) {
   const n = d.duree;
-  const s = Math.floor(n / 7);
   const fin = finVoyage();
   const long = !d.plage && (n >= 21 || dureeLibre);
   const rapide = t().longs.some(([j]) => j === n);
+  const premierMois = moisDe(iso(new Date()));
+  const mois = Array.from({ length: 15 }, (_, i) => decalerMois(premierMois, i));
+  if (!moisAffiche) moisAffiche = moisDe(d.depart || (d.mois ? `${d.mois}-01` : ajouterJours(iso(new Date()), 30)));
+  const exemple = nomPays(d.pays[0]?.nom || (d.langue === 'en' ? 'Japan' : 'Japon'));
   zone.innerHTML = `
+    <p class="intro">${t().introDates}</p>
     <p class="petit-titre premier">${t().combien}</p>
-    <div class="grille-duree">${PLAGES.map(([a, z]) => `<button class="${d.plage === `${a}-${z}` && !long ? 'choisi' : ''}" data-plage="${a}-${z}">${t().plageTxt(a, z)}</button>`).join('')}<button class="${long ? 'choisi' : ''}" data-plus-long>${t().plusDe}</button></div>
+    <div class="grille-duree">${PLAGES.map(([a, z]) => `<button class="${d.plage === `${a}-${z}` && !long ? 'choisi' : ''}" data-plage="${a}-${z}"><b>${t().plageTxt(a, z)}</b><small>${t().joursMot(2)}</small></button>`).join('')}<button class="${long ? 'choisi' : ''}" data-plus-long><b>${t().plusDe}</b><small>${d.langue === 'en' ? 'long trip' : 'long voyage'}</small></button></div>
     ${long ? `
     <div class="durees-longues">
-      ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}" data-long>${nom}</button>`).join('')}
-      <label class="autre-duree ${rapide ? '' : 'choisi'}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="21" max="365" value="${rapide ? '' : n}" placeholder="${n}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
+      ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}">${nom}</button>`).join('')}
+      <label class="autre-duree ${n && !rapide ? 'choisi' : ''}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="1" max="365" value="${n && !rapide ? n : ''}" placeholder="${d.langue === 'en' ? 'e.g. 35' : 'ex. 35'}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
     </div>
-    ${s && !rapide ? `<p class="doux duree-resume">${t().jours(n)}, ${t().semaines(s, n % 7)}</p>` : ''}` : ''}
-    ${choixMode}
-    <p class="petit-titre">${t().quandPars} <small>${t().optionnel}</small></p>
+    <p class="doux duree-resume">${n && !rapide ? esc(dureeTexte(n, 'jours')) : ''}</p>` : ''}
+    <p class="petit-titre">${t().quand} <small>${voirCalendrier ? '' : t().quandAide}</small></p>
+    ${voirCalendrier ? `
     <div class="choix-dates une" style="--c:${coul(0)}">
       <div class="case-date ${d.depart ? '' : 'attend'}"><small>${t().depart}</small><b>${d.depart ? jolie(d.depart) : t().touchDepart}</b></div>
       ${d.depart && fin ? `${icone('arrow-right', { taille: 18 })}<div class="case-date"><small>${t().retourLe}</small><b>${jolie(fin)}</b></div>` : ''}
       ${d.depart ? `<button class="effacer" data-effacer aria-label="${t().effacer}">${icone('x', { taille: 16 })}</button>` : ''}
     </div>
     ${calendrier(d.depart ? [{ debut: d.depart, fin: fin || d.depart, i: 0 }] : [], 0)}
-    ${d.depart ? '' : `<p class="doux">${t().pasSur}</p>`}
-    ${d.pays.length > 1 ? `<label class="champ marge-haut"><span>${t().repartition} <small>${t().optionnel}</small></span><textarea id="repartition" rows="2" placeholder="${esc(t().repartitionEx)}">${esc(d.repartition)}</textarea></label>` : ''}`;
+    <button class="lien-mode" data-voir-cal>${icone('chevron-left', { taille: 16 })} ${t().sansDateExacte}</button>` : `
+    <div class="mois-rangee" role="group" aria-label="${t().quand}">${mois.map((m) => {
+      const [a] = m.split('-');
+      const choisi = d.mois === m;
+      return `<button class="mois-puce ${choisi ? 'choisi' : ''}" data-choix-mois="${m}" aria-pressed="${choisi}"><b>${esc(nomMois(m, { month: 'short' }).replace('.', ''))}</b><small>${a}</small></button>`;
+    }).join('')}</div>
+    <button class="lien-mode" data-voir-cal>${icone('calendar', { taille: 16 })} ${t().dateExacte}</button>`}
+    ${d.pays.length > 1 ? `
+    <label class="champ marge-haut"><span>${t().repartition} <small>${t().optionnel}</small></span><textarea id="repartition" rows="2" placeholder="${esc(t().repartitionEx(exemple))}">${esc(d.repartition)}</textarea></label>
+    <button class="lien-mode discret" data-mode="pays">${icone('route', { taille: 16 })} ${t().parPays}</button>` : ''}`;
 }
 
-let dureeLibre = false; // « 14+ » touché : on montre le champ pour écrire le nombre de jours
 function clicTotal(b) {
-  if (b.dataset.duree) d.duree = Math.max(15, Math.min(365, (d.duree || 14) + +b.dataset.duree));
-  else if (b.dataset.plage) { d.plage = b.dataset.plage; d.duree = +d.plage.split('-')[1]; dureeLibre = false; }
-  else if (b.dataset.fixe) { d.duree = +b.dataset.fixe; d.plage = ''; dureeLibre = b.dataset.long != null; }
-  else if (b.dataset.plusLong != null) { dureeLibre = true; d.plage = ''; if (d.duree < 21) d.duree = 21; }
+  if (b.dataset.plage) {
+    if (d.plage === b.dataset.plage) { d.plage = ''; d.duree = 0; } else { d.plage = b.dataset.plage; d.duree = +d.plage.split('-')[1]; }
+    dureeLibre = false;
+  } else if (b.dataset.fixe) { d.duree = d.duree === +b.dataset.fixe ? 0 : +b.dataset.fixe; d.plage = ''; dureeLibre = true; }
+  else if (b.dataset.plusLong != null) {
+    if (dureeLibre || (d.duree >= 21 && !d.plage)) { dureeLibre = false; if (!d.plage) d.duree = 0; } else { dureeLibre = true; d.plage = ''; d.duree = 0; }
+  } else if (b.dataset.choixMois) { d.mois = d.mois === b.dataset.choixMois ? '' : b.dataset.choixMois; d.depart = ''; }
   else if (b.dataset.effacer != null) d.depart = '';
-  else if (b.dataset.jour) d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour;
+  else if (b.dataset.jour) { d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour; d.mois = d.depart ? moisDe(d.depart) : d.mois; }
 }
 
 // Pays par pays : on touche l'arrivée puis le départ, comme pour un billet d'avion.
-function datesPays(zone, choixMode) {
+function datesPays(zone) {
   if (!d.pays[paysActif]) paysActif = 0;
   const p = d.pays[paysActif];
   if (!moisAffiche) moisAffiche = moisDe(p.debut || d.pays[paysActif - 1]?.fin || ajouterJours(iso(new Date()), 30));
@@ -431,7 +567,6 @@ function datesPays(zone, choixMode) {
   const fin = finVoyage();
   const total = nuits(debut, fin);
   zone.innerHTML = `
-    ${choixMode}
     <p class="intro">${t().introPays2}</p>
     <div class="onglets-pays">${d.pays.map((x, i) => `
       <button class="onglet-pays ${i === paysActif ? 'choisi' : ''}" data-pays-actif="${i}" style="--c:${coul(i)}">
@@ -440,11 +575,11 @@ function datesPays(zone, choixMode) {
     <div class="choix-dates" style="--c:${coul(paysActif)}">
       <div class="case-date ${!p.debut || p.fin ? 'attend' : ''}"><small>${t().arrivee}, ${esc(nomPays(p.nom))}</small><b>${p.debut ? jolie(p.debut) : t().choisisJour}</b></div>
       ${icone('arrow-right', { taille: 18 })}
-      <div class="case-date ${p.debut && !p.fin ? 'attend' : ''}"><small>${t().depart}</small><b>${p.fin ? jolie(p.fin) : '—'}</b></div>
+      <div class="case-date ${p.debut && !p.fin ? 'attend' : ''}"><small>${t().depart}</small><b>${p.fin ? jolie(p.fin) : t().choisisJour}</b></div>
       <div class="case-duree">${p.debut && p.fin ? dureeTexte(nuits(p.debut, p.fin)) : ''}</div>
     </div>
     ${calendrier(d.pays.map((x, i) => ({ debut: x.debut, fin: x.fin, i })), paysActif)}
-    ${debut && fin ? `
+    ${debut && fin && total ? `
       <div class="ligne-temps">
         <p class="petit-titre">${t().tonVoyage}, ${jolie(debut, { day: 'numeric', month: 'long' })} ${t().au} ${jolie(fin, { day: 'numeric', month: 'long' })}, ${dureeTexte(total)}</p>
         <div class="barre-temps">${d.pays.map((x, i) => {
@@ -454,7 +589,8 @@ function datesPays(zone, choixMode) {
           return `<span style="--c:${coul(i)};left:${gauche}%;width:${largeur}%"><b>${esc(nomPays(x.nom))}</b><small>${t().nuitsTxt(nuits(x.debut, x.fin))}</small></span>`;
         }).join('')}</div>
         <div class="semaines">${Array.from({ length: Math.ceil(total / 7) + 1 }, (_, k) => `<span style="left:${Math.min(100, (k * 7 / Math.max(1, total)) * 100)}%">${k ? `${t().sem}${k}` : ''}</span>`).join('')}</div>
-      </div>` : `<p class="doux">${t().astuce}</p>`}`;
+      </div>` : `<p class="doux">${t().astuce}</p>`}
+    <button class="lien-mode discret" data-mode="total">${icone('chevron-left', { taille: 16 })} ${t().retourTotal}</button>`;
 }
 
 function clicPays(b) {
@@ -470,59 +606,140 @@ function clicPays(b) {
   if (n && !n.fin) paysActif++;
 }
 
-// ---------- 3. Envies ----------
-function etapeEnvies(zone) {
-  const total = totalJours();
-  zone.innerHTML = `
-    <p class="intro">${t().introEnvies(total)}</p>
-    <div class="envies">${ENVIES.map(([k, nom, ico, ex]) => {
-      const n = d.envies[k] || 0;
-      return `
-      <div class="envie ${n ? 'oui' : ''}">
-        <span class="envie-ico">${icone(ico, { taille: 22 })}</span>
-        <span class="envie-txt"><b>${esc(nomEnvie(k, nom))}</b><small>${esc(exEnvie(k, ex))}</small></span>
-        <span class="compteur">
-          <button data-moins="${k}" ${n ? '' : 'disabled'} aria-label="${t().moins}">−</button>
-          <b>${n}</b>
-          <button data-plus="${k}" aria-label="${t().plus}">+</button>
-        </span>
-      </div>`;
-    }).join('')}</div>
-    <p class="petit-titre">${t().aVoir} <small>${t().optionnel}</small></p>
-    ${d.pays.map((x, i) => `<label class="champ"><span>${esc(nomPays(x.nom))}</span><textarea data-incontournable="${i}" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(x.incontournable)}</textarea></label>`).join('')}
-    <div class="deux">
-      <div>
-        <p class="petit-titre">${t().voyageurs}</p>
-        <span class="compteur grand"><button data-voyageurs="-1" ${d.voyageurs > 1 ? '' : 'disabled'} aria-label="${t().moins}">−</button><b>${d.voyageurs}</b><button data-voyageurs="1" aria-label="${t().plus}">+</button></span>
+// ---------- 3. Voyageurs ----------
+function etapeVoyageurs(zone) {
+  const dessiner = () => {
+    zone.innerHTML = `
+      <div class="voyageurs">
+        <div class="ligne-voyageur">
+          <span class="v-ico">${icone('user', { taille: 20 })}</span>
+          <span class="v-txt"><b>${t().adultes}</b><small>${t().adultesAide}</small></span>
+          ${compteur('adultes', d.adultes, 1, 30, t().adultes, 'grand')}
+        </div>
+        <div class="ligne-voyageur">
+          <span class="v-ico">${icone('baby', { taille: 20 })}</span>
+          <span class="v-txt"><b>${t().enfants}</b><small>${t().enfantsAide}</small></span>
+          ${compteur('enfants', d.enfants, 0, 20, t().enfants, 'grand')}
+        </div>
+        ${d.enfants ? `<label class="champ ages"><span>${t().agesEnfants} <small>${t().optionnel}</small></span><input id="ages" value="${esc(d.agesEnfants)}" placeholder="${esc(t().agesEx)}" autocomplete="off"></label>` : ''}
       </div>
-      <div>
-        <p class="petit-titre">${t().style}</p>
-        <div class="seg">${Object.entries(t().styles).map(([k, l]) => `<button class="${d.style === k ? 'choisi' : ''}" data-style="${k}">${l}</button>`).join('')}</div>
-      </div>
-    </div>`;
+      <p class="petit-titre">${t().style}</p>
+      <div class="styles">${STYLES.map(([k, ico, prix]) => `
+        <button class="style-carte ${d.style === k ? 'choisi' : ''}" data-style="${k}" aria-pressed="${d.style === k}">
+          ${icone(ico, { taille: 22 })}<b>${t().styles[k]}</b><small>${prix}</small>
+        </button>`).join('')}</div>
+      <button class="lien-mode" id="savoir" aria-expanded="${voirStyles}">${icone(voirStyles ? 'chevron-down' : 'info', { taille: 16 })} ${voirStyles ? t().masquer : t().enSavoirPlus}</button>
+      ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd>${t().stylesTxt[k]}</dd></div>`).join('')}</dl>` : ''}`;
+  };
+  dessiner();
+  const changer = (cle, v) => {
+    if (cle === 'adultes') d.adultes = borne(v, 1, 30);
+    if (cle === 'enfants') d.enfants = borne(v, 0, 20);
+    d.voyageurs = totalVoyageurs();
+    d.voyageursChoisis = true;
+    garder();
+  };
   zone.onclick = (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.plus) d.envies[b.dataset.plus] = Math.min(30, (d.envies[b.dataset.plus] || 0) + 1);
-    else if (b.dataset.moins) d.envies[b.dataset.moins] = Math.max(0, (d.envies[b.dataset.moins] || 0) - 1);
-    else if (b.dataset.voyageurs) d.voyageurs = Math.max(1, Math.min(30, d.voyageurs + +b.dataset.voyageurs));
-    else if (b.dataset.style) d.style = b.dataset.style;
+    if (b.dataset.plus) changer(b.dataset.plus, d[b.dataset.plus] + 1);
+    else if (b.dataset.moins) changer(b.dataset.moins, d[b.dataset.moins] - 1);
+    else if (b.dataset.style) { d.style = d.style === b.dataset.style ? '' : b.dataset.style; garder(); }
+    else if (b.id === 'savoir') voirStyles = !voirStyles;
     else return;
-    garder();
-    etapeEnvies(zone);
+    dessiner();
+    majBas();
   };
-  zone.oninput = (ev) => { const i = ev.target.dataset.incontournable; if (i != null) { d.pays[+i].incontournable = ev.target.value; garder(); } };
+  zone.oninput = (ev) => {
+    if (ev.target.id === 'ages') { d.agesEnfants = ev.target.value; garder(); }
+    const cle = ev.target.dataset.nombre;
+    if (cle && ev.target.value !== '') { changer(cle, parseInt(ev.target.value, 10)); majBas(); }
+  };
+  // On redessine seulement quand on quitte la case (sinon le clavier se fermerait à chaque chiffre).
+  zone.onchange = (ev) => { if (ev.target.dataset.nombre) { changer(ev.target.dataset.nombre, parseInt(ev.target.value, 10)); dessiner(); majBas(); } };
+  zone.onfocusin = (ev) => { if (ev.target.dataset.nombre) ev.target.select(); };
 }
 
-// ---------- 4. Coordonnées ----------
+// ---------- 4. Envies ----------
+// Les idées montrées sous une envie : un groupe par pays choisi (3 au plus), ou des idées générales.
+function groupesIdees(k) {
+  const avec = d.pays.map((p) => p.nom).filter(aDesIdees).slice(0, 3);
+  if (!avec.length) return [{ titre: d.pays.length === 1 ? nomPays(d.pays[0].nom) : '', idees: ideesPour('', k, d.langue) }];
+  return avec.map((p) => ({ titre: nomPays(p), idees: ideesPour(p, k, d.langue) }));
+}
+
+function etapeEnvies(zone) {
+  const dessiner = () => {
+    zone.innerHTML = `
+      <p class="intro">${t().introEnvies}</p>
+      <div class="envies">${ENVIES.map(([k, nom, ico, ex]) => {
+        const n = d.envies[k] || 0;
+        const choisies = d.idees[k] || [];
+        return `
+        <div class="envie ${n ? 'oui' : ''}">
+          <button class="envie-tete" data-envie="${k}" aria-expanded="${Boolean(n)}">
+            <span class="envie-ico">${icone(ico, { taille: 22 })}</span>
+            <span class="envie-txt"><b>${esc(nomEnvie(k, nom))}</b><small>${esc(exEnvie(k, ex))}</small></span>
+            <span class="coche">${n ? icone('check', { taille: 15, epaisseur: 3 }) : ''}</span>
+          </button>
+          ${n ? `
+          <div class="envie-plus">
+            ${groupesIdees(k).map((g) => `
+              <p class="idees-titre">${icone('lightbulb', { taille: 14 })} ${esc(t().ideesPour(g.titre))}</p>
+              <div class="idees">${g.idees.map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 14, epaisseur: 2.8 }) : icone('plus', { taille: 14 })}${esc(i.texte)}</button>`).join('')}</div>`).join('')}
+            <div class="combien"><span>${t().combienFois}</span>${compteur(k, n, 1, 30, t().combienFois)}</div>
+          </div>` : ''}
+        </div>`;
+      }).join('')}</div>
+      <label class="champ marge-haut"><span>${t().aVoir} <small>${t().optionnel}</small></span><textarea id="incontournable" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(d.incontournable)}</textarea></label>`;
+  };
+  dessiner();
+  zone.onclick = (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.envie) {
+      const k = b.dataset.envie;
+      d.envies[k] = d.envies[k] ? 0 : 2;
+      if (!d.envies[k]) delete d.idees[k];
+    } else if (b.dataset.idee) {
+      const k = b.dataset.idee;
+      const l = d.idees[k] || [];
+      d.idees[k] = l.includes(b.dataset.fr) ? l.filter((x) => x !== b.dataset.fr) : [...l, b.dataset.fr];
+    } else if (b.dataset.plus) d.envies[b.dataset.plus] = Math.min(30, (d.envies[b.dataset.plus] || 0) + 1);
+    else if (b.dataset.moins) d.envies[b.dataset.moins] = Math.max(1, (d.envies[b.dataset.moins] || 0) - 1);
+    else return;
+    garder();
+    // Le défilement reste en place : on redessine sans faire sauter la page.
+    const y = window.scrollY;
+    dessiner();
+    window.scrollTo(0, y);
+    majBas();
+  };
+  zone.oninput = (ev) => {
+    if (ev.target.id === 'incontournable') { d.incontournable = ev.target.value; garder(); majBas(); }
+    const cle = ev.target.dataset.nombre;
+    if (cle && ev.target.value !== '') { d.envies[cle] = borne(parseInt(ev.target.value, 10), 1, 30); garder(); }
+  };
+  zone.onchange = (ev) => { const cle = ev.target.dataset.nombre; if (cle) { d.envies[cle] = borne(parseInt(ev.target.value, 10), 1, 30); garder(); const y = window.scrollY; dessiner(); window.scrollTo(0, y); } };
+  zone.onfocusin = (ev) => { if (ev.target.dataset.nombre) ev.target.select(); };
+}
+
+// ---------- 5. Coordonnées ----------
 function etapeToi(zone) {
   zone.innerHTML = `
+    <p class="intro">${t().introToi}</p>
     <label class="champ"><span>${t().nom}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
-    <label class="champ"><span>${t().courriel}</span><input data-champ="courriel" type="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
+    <label class="champ"><span>${t().courriel}</span><input data-champ="courriel" type="email" inputmode="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
     <label class="champ"><span>${t().tel} <small>${t().optionnel}</small></span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
     <label class="champ"><span>${t().message} <small>${t().optionnel}</small></span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
     ${carteResume()}`;
-  zone.oninput = (ev) => { const k = ev.target.dataset.champ; if (k) { d[k] = ev.target.value; garder(); } };
+  zone.oninput = (ev) => {
+    const k = ev.target.dataset.champ;
+    if (!k) return;
+    d[k] = ev.target.value; garder();
+    ev.target.closest('.champ')?.classList.remove('erreur');
+    if (k === 'nom') { const s = zone.querySelector('.cr-sur'); if (s) s.textContent = `${t().monVoyage}${d.nom.trim() ? `, ${d.nom.trim()}` : ''}`; }
+  };
 }
 
 // ---------- Le résumé : une belle carte, qu'on peut enregistrer en image ----------
@@ -533,36 +750,54 @@ function lignesPays() {
     duree: d.mode === 'pays' ? nuits(x.debut, x.fin) : 0,
   }));
 }
+function titreDestination() {
+  if (d.pays.length) return d.pays.map((x) => nomPays(x.nom)).join(', ');
+  if (d.regions.length) return d.regions.map(nomRegion).join(', ');
+  return t().destinationAVoir;
+}
 function sousTitreDates() {
   const debut = debutVoyage();
   const fin = finVoyage();
-  return debut && fin ? plage(debut, fin, true) : t().datesAVoir;
+  if (debut && fin) return plage(debut, fin, true);
+  if (debut) return t().departLe(jolie(debut, { day: 'numeric', month: 'long', year: 'numeric' }));
+  if (d.mode === 'total' && d.mois) return t().departLe(nomMois(d.mois));
+  return t().datesAVoir;
 }
-const enviesChoisies = () => ENVIES.filter(([k]) => d.envies[k]).map(([k, nom, ico]) => ({ k, nom: nomEnvie(k, nom), ico, n: d.envies[k] }));
-const incontournables = () => d.pays.filter((x) => x.incontournable?.trim()).map((x) => ({ nom: nomPays(x.nom), txt: x.incontournable.trim() }));
+const texteVoyageurs = () => [t().adultesN(d.adultes), d.enfants ? t().enfantsN(d.enfants) : ''].filter(Boolean).join(', ');
+const enviesChoisies = () => ENVIES.filter(([k]) => d.envies[k]).map(([k, nom, ico]) => ({ k, nom: nomEnvie(k, nom), ico, n: d.envies[k], idees: (d.idees[k] || []).map((x) => traduireIdee(x, d.langue)) }));
+const incontournables = () => [
+  ...(d.incontournable.trim() ? [{ nom: '', txt: d.incontournable.trim() }] : []),
+  ...d.pays.filter((x) => x.incontournable?.trim()).map((x) => ({ nom: nomPays(x.nom), txt: x.incontournable.trim() })),
+];
+const statsResume = () => {
+  const total = totalJours();
+  return [
+    [String(totalVoyageurs()), t().voyageursN(totalVoyageurs())],
+    plageChoisie() || total ? [plageChoisie() ? t().plageTxt(...plageChoisie()) : String(total), t().joursMot(total || 2)] : [t().flexible, t().dureeMot],
+    [d.style ? t().styles[d.style] : t().aDefinir, t().styleMot],
+  ];
+};
 
 function carteResume() {
-  const total = totalJours();
   const envies = enviesChoisies();
   const inc = incontournables();
+  const ph = d.pays.map((p) => photoPays(p.nom)).find(Boolean);
   return `
     <article class="carte-resume">
-      <div class="cr-haut">
+      <div class="cr-haut ${ph ? 'photo' : ''}" ${ph ? `style="--photo:url('${photo(ph, 900)}')"` : ''}>
         <p class="cr-sur">${t().monVoyage}${d.nom.trim() ? `, ${esc(d.nom.trim())}` : ''}</p>
-        <h2>${d.pays.map((x) => esc(nomPays(x.nom))).join(', ')}</h2>
+        <h2>${esc(titreDestination())}</h2>
         <p class="cr-dates">${icone('calendar', { taille: 16 })} ${esc(sousTitreDates())}</p>
-        <div class="cr-stats">
-          <div><b>${d.voyageurs}</b><span>${t().voyageursN(d.voyageurs)}</span></div>
-          <div><b>${plageChoisie() ? t().plageTxt(...plageChoisie()) : total || '—'}</b><span>${t().joursMot(total)}</span></div>
-          <div><b class="mot">${esc(t().styles[d.style])}</b><span>style</span></div>
-        </div>
+        <div class="cr-stats">${statsResume().map(([v, l], i) => `<div><b class="${i === 2 || v.length > 6 ? 'mot' : ''}">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
       </div>
-      <ol class="cr-pays">${lignesPays().map((x) => `
+      ${d.pays.length ? `<ol class="cr-pays">${lignesPays().map((x) => `
         <li style="--c:${x.couleur}"><i></i><span><b>${esc(x.nom)}</b>${x.dates ? `<small>${esc(x.dates)}</small>` : ''}</span>${x.duree ? `<em>${esc(t().nuitsTxt(x.duree))}</em>` : ''}</li>`).join('')}
-      </ol>
+      </ol>` : ''}
       ${d.mode === 'total' && d.pays.length > 1 ? `<p class="cr-note">${esc(d.repartition.trim() || t().jeTeLaisse)}</p>` : ''}
-      ${envies.length ? `<div class="cr-bloc"><p class="cr-titre">${t().mesEnvies}</p><div class="cr-envies">${envies.map((e) => `<span>${icone(e.ico, { taille: 15 })}${esc(e.nom)}<b>${e.n}</b></span>`).join('')}</div></div>` : ''}
-      ${inc.length ? `<div class="cr-bloc"><p class="cr-titre">${t().aVoirCourt}</p>${inc.map((x) => `<p class="cr-inc"><b>${esc(x.nom)}</b> ${esc(x.txt)}</p>`).join('')}</div>` : ''}
+      <div class="cr-bloc"><p class="cr-titre">${t().etapes[2]}</p><p class="cr-inc">${esc(texteVoyageurs())}${d.enfants && d.agesEnfants.trim() ? ` (${esc(d.agesEnfants.trim())})` : ''}</p></div>
+      ${envies.length ? `<div class="cr-bloc"><p class="cr-titre">${t().mesEnvies}</p><div class="cr-envies">${envies.map((e) => `<span>${icone(e.ico, { taille: 15 })}${esc(e.nom)}<b>${e.n}</b></span>`).join('')}</div>
+        ${envies.some((e) => e.idees.length) ? `<ul class="cr-idees">${envies.flatMap((e) => e.idees).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>` : ''}
+      ${inc.length ? `<div class="cr-bloc"><p class="cr-titre">${t().aVoirCourt}</p>${inc.map((x) => `<p class="cr-inc">${x.nom ? `<b>${esc(x.nom)}</b> ` : ''}${esc(x.txt)}</p>`).join('')}</div>` : ''}
     </article>`;
 }
 
@@ -575,7 +810,7 @@ async function imageResume() {
   const L = W - 2 * M - 2 * P; // largeur du texte
   const gauche = M + P;
   const c = document.createElement('canvas');
-  c.width = W; c.height = 4000;
+  c.width = W; c.height = 5000;
   const x = c.getContext('2d');
   const police = (poids, taille) => { x.font = `${poids} ${taille}px Figtree, system-ui, sans-serif`; };
   const couper = (texte, largeur) => {
@@ -595,35 +830,36 @@ async function imageResume() {
   // On note tout ce qu'il faut dessiner, puis on dessine la carte (dont on connaît alors la hauteur) et le contenu.
   const actions = [];
   const texte = (t2, tx, ty, poids, taille, couleur, align = 'left') => actions.push(() => { police(poids, taille); x.fillStyle = couleur; x.textAlign = align; x.fillText(t2, tx, ty); x.textAlign = 'left'; });
-  const total = totalJours();
 
-  // En-tête corail
+  // En-tête foncé
   let y = M + P;
   police(800, 64);
-  // Le titre passe à la ligne entre deux pays, jamais au milieu d'un nom.
+  // Le titre passe à la ligne entre deux noms, jamais au milieu d'un nom.
+  const noms = d.pays.length ? d.pays.map((p) => nomPays(p.nom)) : d.regions.length ? d.regions.map(nomRegion) : [t().destinationAVoir];
   const titre = [];
-  for (const nomP of d.pays.map((p) => nomPays(p.nom))) {
+  for (const nomP of noms) {
     const essai = titre.length ? `${titre[titre.length - 1]}, ${nomP}` : nomP;
-    if (titre.length && x.measureText(essai).width <= L) titre[titre.length - 1] = essai; else titre.push(nomP);
+    if (titre.length && x.measureText(essai).width <= L) titre[titre.length - 1] = essai; else titre.push(...couper(nomP, L));
   }
-  y += 24; texte(`${t().monVoyage}${d.nom.trim() ? `, ${d.nom.trim()}` : ''}`.toUpperCase(), gauche, y, 700, 24, 'rgba(255,255,255,.85)');
+  y += 24; texte(`${t().monVoyage}${d.nom.trim() ? `, ${d.nom.trim()}` : ''}`.toUpperCase(), gauche, y, 700, 24, 'rgba(255,255,255,.75)');
   y += 8;
   for (const l of titre) { y += 72; texte(l, gauche, y, 800, 64, '#fff'); }
-  y += 52; texte(sousTitreDates(), gauche, y, 600, 32, 'rgba(255,255,255,.92)');
+  y += 52; texte(sousTitreDates(), gauche, y, 600, 32, 'rgba(255,255,255,.9)');
   y += 36;
   const yStats = y;
   const largeurStat = (L - 40) / 3;
-  [[String(d.voyageurs), t().voyageursN(d.voyageurs)], [plageChoisie() ? t().plageTxt(...plageChoisie()) : String(total || '—'), t().joursMot(total)], [t().styles[d.style], 'style']].forEach(([v, lbl], i) => {
+  statsResume().forEach(([v, lbl], i) => {
     const sx = gauche + i * (largeurStat + 20);
-    actions.push(() => { rond(sx, yStats, largeurStat, 132, 24); x.fillStyle = 'rgba(255,255,255,.18)'; x.fill(); });
-    texte(v, sx + 24, yStats + 68, 800, v.length > 7 ? 38 : 52, '#fff');
-    texte(lbl, sx + 24, yStats + 108, 600, 24, 'rgba(255,255,255,.85)');
+    actions.push(() => { rond(sx, yStats, largeurStat, 132, 24); x.fillStyle = 'rgba(255,255,255,.12)'; x.fill(); });
+    texte(v, sx + 24, yStats + 68, 800, v.length > 7 ? 34 : v.length > 4 ? 42 : 52, '#fff');
+    texte(lbl, sx + 24, yStats + 108, 600, 24, 'rgba(255,255,255,.75)');
   });
   const hautHeader = yStats + 132 + P - M;
   actions.unshift(() => {
     const g = x.createLinearGradient(M, M, W - M, M + hautHeader);
-    g.addColorStop(0, '#f0532f'); g.addColorStop(1, '#e8436f');
+    g.addColorStop(0, '#2b2622'); g.addColorStop(1, '#1d1b19');
     x.save(); rond(M, M, W - 2 * M, hautHeader, [40, 40, 0, 0]); x.fillStyle = g; x.fill(); x.restore();
+    x.fillStyle = '#f0532f'; x.fillRect(M, M + hautHeader - 6, W - 2 * M, 6);
   });
   y = M + hautHeader + 36;
 
@@ -637,17 +873,17 @@ async function imageResume() {
     y += p.dates ? 108 : 76;
     if (i < d.pays.length - 1) { const ly = y - 14; actions.push(() => { x.fillStyle = '#ebe6df'; x.fillRect(gauche, ly, L, 2); }); }
   });
-  if (d.mode === 'total' && d.pays.length > 1) {
-    police(500, 28);
-    y += 8;
-    for (const l of couper(d.repartition.trim() || t().jeTeLaisse, L)) { y += 38; texte(l, gauche, y, 500, 28, '#6b655f'); }
-    y += 24;
-  }
+  const paragraphe = (txt, couleur = '#6b655f') => { police(500, 28); for (const l of couper(txt, L)) { y += 40; texte(l, gauche, y, 500, 28, couleur); } };
+  const titreBloc = (txt) => { y += 46; texte(txt.toUpperCase(), gauche, y, 700, 24, '#a19a92'); y += 4; };
+  if (d.mode === 'total' && d.pays.length > 1) { paragraphe(d.repartition.trim() || t().jeTeLaisse); y += 16; }
+
+  titreBloc(t().etapes[2]);
+  paragraphe(`${texteVoyageurs()}${d.enfants && d.agesEnfants.trim() ? ` (${d.agesEnfants.trim()})` : ''}`, '#1d1b19');
 
   // Les envies, en petites étiquettes avec le nombre dans un rond
   const envies = enviesChoisies();
   if (envies.length) {
-    y += 34; texte(t().mesEnvies.toUpperCase(), gauche, y, 700, 24, '#a19a92'); y += 22;
+    titreBloc(t().mesEnvies); y += 18;
     let ex = gauche;
     for (const e of envies) {
       police(600, 28);
@@ -664,15 +900,13 @@ async function imageResume() {
       ex += w + 12;
     }
     y += 60;
+    const idees = envies.flatMap((e) => e.idees);
+    if (idees.length) { y += 6; idees.forEach((i2) => paragraphe(`·  ${i2}`, '#1d1b19')); }
   }
   const inc = incontournables();
   if (inc.length) {
-    y += 46; texte(t().aVoirCourt.toUpperCase(), gauche, y, 700, 24, '#a19a92'); y += 6;
-    for (const i2 of inc) {
-      police(500, 28);
-      couper(`${i2.nom}${d.langue === 'en' ? ':' : ' :'} ${i2.txt}`, L).forEach((l) => { y += 40; texte(l, gauche, y, 500, 28, '#1d1b19'); });
-      y += 8;
-    }
+    titreBloc(t().aVoirCourt);
+    for (const i2 of inc) { paragraphe(`${i2.nom ? `${i2.nom}${deuxPoints()} ` : ''}${i2.txt}`, '#1d1b19'); y += 6; }
   }
   const basCarte = y + P - 10;
 
@@ -682,7 +916,7 @@ async function imageResume() {
   actions.forEach((f) => f());
 
   const fin = document.createElement('canvas');
-  fin.width = W; fin.height = basCarte + M;
+  fin.width = W; fin.height = Math.min(c.height, basCarte + M);
   fin.getContext('2d').drawImage(c, 0, 0);
   return new Promise((ok) => fin.toBlob(ok, 'image/png'));
 }
@@ -690,7 +924,8 @@ async function imageResume() {
 async function partagerImage() {
   const blob = await imageResume();
   if (!blob) return;
-  const nom = `${d.langue === 'en' ? 'my-trip' : 'mon-voyage'}-${d.pays.map((p) => sansAccents(nomPays(p.nom)).replace(/[^a-z]+/g, '-')).join('-')}`.slice(0, 70) + '.png';
+  const base = d.pays.length ? d.pays.map((p) => sansAccents(nomPays(p.nom)).replace(/[^a-z]+/g, '-')).join('-') : 'demande';
+  const nom = `${`${d.langue === 'en' ? 'my-trip' : 'mon-voyage'}-${base}`.slice(0, 70)}.png`;
   const fichier = new File([blob], nom, { type: 'image/png' });
   if (navigator.canShare?.({ files: [fichier] })) {
     try { await navigator.share({ files: [fichier], title: t().monVoyage }); return; } catch (e) { if (e?.name === 'AbortError') return; }
@@ -706,24 +941,44 @@ async function partagerImage() {
 
 // ---------- Envoi ----------
 function texteMessage(lien) {
-  const lignes = d.mode === 'total'
-    ? `- ${d.pays.map((x) => nomPays(x.nom)).join(', ')}\n- ${t().dureeTotale}${d.langue === 'en' ? ':' : ' :'} ${dureeAffichee()}${d.depart ? `\n- ${t().departLe(jolie(d.depart, { day: 'numeric', month: 'long', year: 'numeric' }))}` : ''}`
-    : d.pays.map((x) => `- ${nomPays(x.nom)}${d.langue === 'en' ? ':' : ' :'} ${plage(x.debut, x.fin, true)} (${t().nuitsTxt(nuits(x.debut, x.fin))})`).join('\n');
-  return t().corps(lignes, d.voyageurs, lien, d.nom);
+  const dp = deuxPoints();
+  const lignes = [];
+  if (d.mode === 'pays' && d.pays.some((x) => x.debut)) {
+    d.pays.forEach((x) => lignes.push(`- ${nomPays(x.nom)}${dp} ${x.debut && x.fin ? `${plage(x.debut, x.fin, true)} (${t().nuitsTxt(nuits(x.debut, x.fin))})` : t().datesAVoir}`));
+  } else {
+    lignes.push(`- ${titreDestination()}`);
+    if (d.duree) lignes.push(`- ${t().dureeTotale}${dp} ${dureeAffichee()}`);
+    lignes.push(`- ${sousTitreDates()}`);
+  }
+  lignes.push(`- ${texteVoyageurs()}${d.enfants && d.agesEnfants.trim() ? ` (${d.agesEnfants.trim()})` : ''}`);
+  if (d.style) lignes.push(`- ${t().style}${dp} ${t().styles[d.style]}`);
+  const envies = enviesChoisies();
+  if (envies.length) lignes.push(`- ${t().mesEnvies}${dp} ${envies.map((e) => e.nom).join(', ')}`);
+  return t().corps(lignes.join('\n'), lien, d.nom);
+}
+
+function marquerErreur(champ, message) {
+  const el = fiche.querySelector(`[data-champ="${champ}"]`);
+  if (el) { el.closest('.champ')?.classList.add('erreur'); el.focus(); }
+  toast(message);
 }
 
 async function envoyer() {
-  if (!d.nom.trim()) return toast(t().ecrisNom);
-  if (!/.+@.+\..+/.test(d.courriel.trim()) && !d.telephone.trim()) return toast(t().ecrisCourriel);
+  if (!d.nom.trim()) return marquerErreur('nom', t().ecrisNom);
+  if (!/^\S+@\S+\.\S+$/.test(d.courriel.trim()) && d.telephone.replace(/\D/g, '').length < 7) return marquerErreur('courriel', t().ecrisCourriel);
+  d.voyageurs = totalVoyageurs();
   d.envoyeLe = new Date().toISOString();
-  garder();
   // On n'envoie que ce qui sert au mode choisi.
   const envoi = structuredClone(d);
+  delete envoi.voyageursChoisis;
+  if (envoi.pays.length) envoi.regions = [];
   if (envoi.mode !== 'total') envoi.plage = '';
   if (envoi.mode === 'total') envoi.pays.forEach((p) => { p.debut = ''; p.fin = ''; });
-  else { envoi.duree = totalJours(); envoi.depart = debutVoyage(); envoi.repartition = ''; }
+  else { envoi.duree = totalJours(); envoi.depart = debutVoyage(); envoi.mois = moisDe(envoi.depart || ''); envoi.repartition = ''; }
+  envoi.idees = Object.fromEntries(Object.entries(envoi.idees).filter(([k, l]) => envoi.envies[k] && l.length));
   const code = await encoder(envoi);
   const lien = `${new URL('studio/', location.href).href}#/demande/${code}`;
+  garder(); // le brouillon envoyé ne sera pas rouvert la prochaine fois
   // Envoi automatique : la demande part directement au courriel de Raph (FormSubmit, gratuit).
   let etat = POUR ? 'envoi' : 'manuel';
   const envoyerAuto = async () => {
@@ -732,9 +987,9 @@ async function envoyer() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
-          _subject: `Nouvelle demande de voyage : ${d.pays.map((x) => x.nom).join(', ')} (${d.nom.trim()})`,
+          _subject: `Nouvelle demande de voyage : ${d.pays.length ? d.pays.map((x) => x.nom).join(', ') : d.regions.join(', ') || 'destination à définir'} (${d.nom.trim()})`,
           _template: 'box', _captcha: 'false',
-          Nom: d.nom.trim(), email: d.courriel.trim() || undefined, Téléphone: d.telephone.trim() || '—',
+          Nom: d.nom.trim(), email: d.courriel.trim() || undefined, Téléphone: d.telephone.trim() || '-',
           Demande: texteMessage(lien), 'Ouvrir dans le Studio': lien,
         }),
       });
@@ -745,12 +1000,12 @@ async function envoyer() {
   };
   const dessiner = () => {
     document.documentElement.lang = d.langue;
-    const sujet = t().sujet(d.pays.map((x) => nomPays(x.nom)).join(', '), d.nom);
+    const sujet = t().sujet(titreDestination(), d.nom.trim());
     const texte = texteMessage(lien);
     fiche.innerHTML = `
       <header class="haut">${enTete(null)}</header>
-      <section class="merci">
-        <span class="merci-ico">${icone('check', { taille: 30, epaisseur: 2.6 })}</span>
+      <section class="merci ${etat}">
+        <span class="merci-ico">${etat === 'envoi' ? '<i class="roue"></i>' : icone(etat === 'ok' ? 'check' : 'send', { taille: 30, epaisseur: 2.4 })}</span>
         ${etat === 'envoi' ? `<h1>${t().envoiCours}</h1>` : etat === 'ok' ? `<h1>${t().envoyee}</h1><p>${t().envoyeeTxt}</p>` : `<h1>${t().presque}</h1><p>${POUR ? t().echec : t().presqueTxt}</p>`}
         ${etat === 'manuel' ? `        <div class="boutons-envoi">
           ${POUR ? `<a class="bouton" href="mailto:${encodeURIComponent(POUR)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(texte)}">${icone('mail', { taille: 18 })} ${t().parCourriel}</a>` : ''}
@@ -761,7 +1016,7 @@ async function envoyer() {
         ${carteResume()}
         <button class="bouton secondaire" id="image">${icone('image', { taille: 18 })} ${t().image}</button>
         <p class="doux">${t().imageAide}</p>
-        <button class="lien" id="modifier">${t().modifier}</button>
+        <div class="merci-liens"><button class="lien" id="modifier">${t().modifier}</button><button class="lien" id="nouvelle">${t().nouvelle}</button></div>
       </section>`;
     brancherEnTete(dessiner);
     const p = fiche.querySelector('#partager');
@@ -771,7 +1026,8 @@ async function envoyer() {
       try { await navigator.clipboard.writeText(texte); toast(t().copie); } catch (_) { prompt(t().copieCeTexte, texte); }
     };
     fiche.querySelector('#image').onclick = partagerImage;
-    fiche.querySelector('#modifier').onclick = () => { etape = 0; rendre(); };
+    fiche.querySelector('#modifier').onclick = () => { delete d.envoyeLe; garder(); etape = 0; rendre(); window.scrollTo(0, 0); };
+    fiche.querySelector('#nouvelle').onclick = () => { const l = d.langue; d = vide(); d.langue = l; garder(); etape = 0; voirCalendrier = false; rendre(); window.scrollTo(0, 0); };
   };
   dessiner();
   window.scrollTo(0, 0);
