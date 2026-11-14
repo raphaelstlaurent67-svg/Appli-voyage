@@ -573,9 +573,6 @@ body[data-page="reglages"] .section { gap: 12px; }
 .carte-interrupteur { padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
 .carnet-entete .bouton-secondaire { background: transparent; border-color: rgba(255, 255, 255, .35); color: #f4f0ea; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .carnet-entete .bouton-principal { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.apercu-soir { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
-.apercu-soir small { color: var(--doux); font-weight: 600; }
-.apercu-soir p { margin: 4px 0 0; font-style: italic; }
 .items-carnet { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .item-carnet { display: flex; align-items: flex-start; gap: 12px; padding: 8px; border-radius: 14px; border: 1px solid var(--bordure); }
 .item-vignette { flex: none; width: 58px; height: 58px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: var(--surface-2); color: var(--doux); }
@@ -601,3 +598,21 @@ body[data-page="reglages"] .section { gap: 12px; }
 .section-client textarea { background: rgba(255, 255, 255, .07); border-color: transparent; color: #f4f0ea; }
 .feuille-corps { padding: 0 20px 24px; display: flex; flex-direction: column; gap: 14px; }
 .zone-mot { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid var(--bordure-forte); background: var(--surface); color: var(--encre); font: inherit; }
+
+/* ---------- Mon voyage (client) ---------- */
+.nav-voyage { display: none !important; }
+body.a-un-voyage .nav-voyage { display: flex !important; }
+body[data-mode="client"] .nav-raph { display: none !important; }
+body[data-page="voyage"] { background: #0e0d12; }
+body[data-page="voyage"] .bouton-ajouter { display: none; }
+.cadre-voyage {
+  position: fixed; top: 0; left: 0; right: 0; bottom: calc(var(--nav) + env(safe-area-inset-bottom));
+  width: 100%; height: calc(100% - var(--nav) - env(safe-area-inset-bottom)); border: 0; background: #0e0d12;
+}
+body[data-page="voyage"] .nav { background: color-mix(in srgb, #15141a 94%, transparent); border-top-color: rgba(255, 255, 255, .08); }
+body[data-page="voyage"] .nav a { color: #79747e; }
+body[data-page="voyage"] .nav a.actif, body[data-page="voyage"] .nav a.actif > span:last-child { color: #f4c88f; }
+.compo-soir { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.compo-soir span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--surface-2); font-size: .82rem; font-weight: 650; color: var(--doux); }
+.compo-soir span.ok { background: var(--accent-pale); color: var(--accent); }
+.compo-soir .ico { display: inline-block; }

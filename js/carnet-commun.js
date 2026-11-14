@@ -1,7 +1,6 @@
 // Carnet « voyage sur mesure » en direct : ce qui sert à la fois
 //   - à l'appli de Raph (cellulaire) qui publie le carnet,
 //   - à la page du client (carnet.html) qui le lit,
-//   - à l'envoi automatique du soir (GitHub, chaque heure).
 // Aucun service payant : GitHub (gratuit) garde les fichiers, chiffrés.
 //
 // Comment seul le client peut voir son carnet :
@@ -74,9 +73,10 @@ export async function canalChoix(id, cle) {
 export const cheminPublic = (id, fichier = 'c') => `carnets/${id}/${fichier}.bin`;
 export const urlPublique = (id, fichier = 'c', depot = DEPOT_CARNETS) => `https://raw.githubusercontent.com/${depot}/${BRANCHE_CARNETS}/${cheminPublic(id, fichier)}`;
 
-// Lien à donner au client. La clé est après le « # » : elle ne quitte jamais son téléphone.
+// Lien à donner au client : il ouvre l'appli de voyage sur son onglet « Mon voyage ».
+// La clé est après le « # » : elle ne quitte jamais son téléphone.
 export function lienClient(base, id, cle) {
-  return `${base.replace(/[^/]*$/, '')}carnet.html?c=${encodeURIComponent(id)}#${cle}`;
+  return `${base.replace(/[^/]*$/, '')}index.html#/voyage/${encodeURIComponent(id)}/${cle}`;
 }
 
 // ---------- Heures et fuseaux ----------
@@ -123,81 +123,26 @@ export function jourLocal(date, fuseau = FUSEAU_PAR_DEFAUT) {
   return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
 
-// ---------- Le mot du soir (écrit tout seul, sans IA payante) ----------
-// Des phrases modèles, choisies selon ce que Raph a trouvé dans la journée.
-// Le même texte sert dans la page du client et dans le courriel de 19 h.
-
-const NOMS_CAT = {
-  hebergement: ['un endroit où dormir', 'endroits où dormir'],
-  restos: ['une table', 'tables'],
-  visites: ['une visite', 'visites'],
-  experiences: ['une expérience', 'expériences'],
-  sport: ['une activité', 'activités'],
-  nuit: ['un bar', 'bars'],
-  trajets: ['un trajet', 'trajets'],
-  autre: ['une trouvaille', 'trouvailles'],
+// ---------- Les choix du soir ----------
+// Chaque soir, le client choisit 1 hôtel, 1 resto et 1 activité parmi les trouvailles de Raph.
+export const GROUPES_CHOIX = {
+  dormir: { cats: ['hebergement'], titre: 'Où dormir', court: 'Hôtel', ico: 'bed-double' },
+  manger: { cats: ['restos'], titre: 'Où manger', court: 'Resto', ico: 'utensils' },
+  faire: { cats: ['visites', 'experiences', 'sport', 'nuit'], titre: 'Activités', court: 'Activité', ico: 'sparkles' },
 };
-const CHIFFRES = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
-const nombreEnLettres = (n, feminin) => (n === 1 ? (feminin ? 'une' : 'un') : CHIFFRES[n] || String(n));
-const FEMININ = { restos: true, visites: true, experiences: true, sport: true, autre: true, hebergement: false, nuit: false, trajets: false };
+export const groupeDeCategorie = (cat) => Object.keys(GROUPES_CHOIX).find((g) => GROUPES_CHOIX[g].cats.includes(cat)) || 'savoir';
 
-function morceauCat(cat, n) {
-  const [un, plusieurs] = NOMS_CAT[cat] || NOMS_CAT.autre;
-  if (n === 1) return un;
-  return `${nombreEnLettres(n, FEMININ[cat])} ${plusieurs}`;
+// Tous les choix du client, soir par soir : [{ quand, groupe, itemId }] (itemId = 'aucun' s'il n'a rien aimé).
+export function choixRetenus(carnet) {
+  const soirs = carnet?.choix?.soirs || {};
+  return Object.keys(soirs).sort().flatMap((quand) => Object.keys(GROUPES_CHOIX).filter((g) => soirs[quand][g]).map((g) => ({ quand, groupe: g, itemId: soirs[quand][g] })));
 }
-function joindre(liste) {
-  if (liste.length <= 1) return liste.join('');
-  return `${liste.slice(0, -1).join(', ')} et ${liste[liste.length - 1]}`;
-}
-// Petit hasard stable : le même soir donne toujours le même texte.
-function graine(texte) {
-  let h = 2166136261;
-  for (const c of String(texte)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
-  return Math.abs(h);
-}
-const choisir = (liste, g) => liste[g % liste.length];
-
-const ORDRE = ['hebergement', 'restos', 'visites', 'experiences', 'nuit', 'sport', 'trajets', 'autre'];
-
-// items : ceux livrés ce soir ; carnet : { prenom, raph, ville } ; numero : 1er soir, 2e soir…
-export function motDuSoir(items, { prenom = '', raph = 'Raph', ville = '', numero = 1, cle = '' } = {}) {
-  if (!items.length) return { titre: '', texte: '' };
-  const g = graine(`${cle}|${numero}|${items.map((i) => i.id).join(',')}`);
-  const compte = {};
-  for (const i of items) compte[i.categorie || 'autre'] = (compte[i.categorie || 'autre'] || 0) + 1;
-  const cats = ORDRE.filter((c) => compte[c]);
-  const liste = joindre(cats.map((c) => morceauCat(c, compte[c])));
-  const coeur = items.find((i) => i.coupDeCoeur);
-  const hotels = compte.hebergement || 0;
-  const salut = prenom ? `${prenom}, ` : '';
-  const ici = ville ? ` à ${ville}` : '';
-
-  const titres = numero === 1
-    ? ['Le premier soir de ton carnet', 'Ton carnet s’ouvre ce soir', 'Premières trouvailles']
-    : ['Les trouvailles de ce soir', 'Ce soir dans ton carnet', 'Livraison du soir', 'Nouvelles du terrain'];
-  const ouvertures = [
-    `${salut}aujourd’hui, ${raph} a marché${ici} pour toi.`,
-    `${salut}${raph} revient du terrain${ici}.`,
-    `${salut}nouvelle journée de repérage${ici}.`,
-    `${salut}${raph} a poussé quelques portes${ici} aujourd’hui.`,
-  ];
-  const milieux = [
-    `Au menu ce soir : ${liste}.`,
-    `Il te rapporte ${liste}.`,
-    `Dans ton carnet ce soir : ${liste}.`,
-  ];
-  let fin;
-  if (coeur) fin = choisir([`Son coup de cœur : ${coeur.nom}.`, `Un endroit l’a vraiment marqué : ${coeur.nom}.`, `Garde un œil sur ${coeur.nom} : c’est son coup de cœur.`], g >> 3);
-  else if (hotels > 1) fin = choisir(['Pour dormir, choisis ton préféré quand tu veux, rien ne presse.', 'Plusieurs options pour dormir : prends ton temps pour choisir.'], g >> 3);
-  else fin = choisir(['Regarde quand tu as le temps, et garde ce qui te fait envie.', 'Un ❤ sur ce qui te plaît, c’est tout. Rien ne presse.', 'Prends ton temps : tes ❤ aident à bâtir ton voyage.'], g >> 3);
-
-  return { titre: choisir(titres, g >> 5), texte: `${choisir(ouvertures, g)} ${choisir(milieux, g >> 2)} ${fin}` };
-}
-
-// Combien de choses, en mots (« 3 endroits où dormir, 2 tables »), pour l'aperçu « en route ».
-export function resumeCompte(items) {
-  const compte = {};
-  for (const i of items) compte[i.categorie || 'autre'] = (compte[i.categorie || 'autre'] || 0) + 1;
-  return joindre(ORDRE.filter((c) => compte[c]).map((c) => (compte[c] === 1 ? NOMS_CAT[c][0] : `${compte[c]} ${NOMS_CAT[c][1]}`)));
+// Les endroits choisis par le client : ils doivent être dans son voyage, à 100 %.
+export function endroitsChoisis(carnet) {
+  const ids = new Set();
+  for (const r of choixRetenus(carnet)) {
+    const it = carnet.items?.find((i) => i.id === r.itemId);
+    if (it) ids.add(it.endroitId);
+  }
+  return ids;
 }

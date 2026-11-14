@@ -785,3 +785,12 @@ input[type='date'] { color-scheme: dark; }
 .carnet-studio p { display: flex; align-items: center; gap: 7px; color: var(--dim); }
 .carnet-studio p .ico { color: var(--ac); }
 .carnet-studio .mot { font-style: italic; color: var(--tx); }
+.carnet-studio-tete .rangee-btn { margin-left: auto; display: flex; gap: 6px; }
+.carnet-studio-tete .btn { margin-left: 0; }
+.choix-studio { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.choix-studio li { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+.choix-studio li .ico { color: var(--ac); }
+.choix-studio li span { width: 62px; }
+.choix-studio li b { color: var(--tx); font-weight: 600; }
+.badge-client { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 2px 7px; border-radius: 99px; background: var(--ac-fond); color: var(--ac); font-size: 11px; font-weight: 700; flex: none; }
+.ico-btn.verrou { color: var(--ac); cursor: default; }

@@ -1,5 +1,5 @@
 // Côté Raph (cellulaire) : publier le carnet du client et récupérer ses choix.
-// Le carnet complet (avec la clé et le courriel du client) reste dans le dossier GitHub privé.
+// Le carnet complet (avec la clé) reste dans le dossier GitHub privé.
 // Ce qui va dans le dossier public est chiffré : seul le lien du client permet de le lire.
 
 import * as db from './db.js';
@@ -16,14 +16,13 @@ export function nouveauCarnet({ prenom = '', ville = '', pays = '' } = {}) {
   return {
     id: idCourt(),
     cle: nouvelleCle(),
-    client: { prenom, courriel: '' },
+    client: { prenom },
     raph: 'Raph',
     ville, pays,
     debut: '', fin: '',
     mot: '',
     heure: HEURE_PAR_DEFAUT,
     fuseau: FUSEAU_PAR_DEFAUT,
-    courrielSoir: true,
     actif: true,
     items: [],
     choix: null,
