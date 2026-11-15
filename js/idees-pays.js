@@ -1,7 +1,8 @@
 // Idées concrètes montrées au client quand il touche une envie (« Culture et visites », etc.),
 // selon le pays choisi. Chaque idée : « français|anglais ». Le client peut en cocher quelques-unes ;
 // elles arrivent dans le Studio avec sa demande.
-// Pour ajouter un pays : copier un bloc et changer les idées. Un pays absent reçoit les idées générales.
+// Les 3 premières idées de chaque envie sont celles montrées : mettre les meilleures en premier.
+// Pour ajouter un pays : copier un bloc et changer les idées. Un pays absent n'a pas d'idées.
 
 export const IDEES = {
   Japon: {
@@ -204,22 +205,11 @@ export const IDEES = {
   },
 };
 
-// Idées générales, quand le pays n'est pas encore choisi (ou pas dans la liste).
-export const IDEES_GENERALES = {
-  visites: ['Sites classés à l’UNESCO|UNESCO World Heritage sites', 'Musées incontournables|Must-see museums', 'Visite guidée de la vieille ville|Guided old town tour', 'Temples, églises et monuments|Temples, churches and monuments'],
-  restos: ['Street food et marchés|Street food and markets', 'Restos où mangent les gens du coin|Restaurants where locals eat', 'Une grande table pour une occasion|A fine dining night out', 'Cours de cuisine locale|Local cooking class'],
-  experiences: ['Spectacle traditionnel|Traditional show', 'Atelier avec un artisan|Workshop with an artisan', 'Séjour chez l’habitant|Homestay', 'Festival local|Local festival'],
-  sport: ['Randonnée d’une journée|Day hike', 'Plongée ou snorkeling|Diving or snorkelling', 'Surf ou kayak|Surfing or kayaking', 'Vélo|Cycling'],
-  nuit: ['Bars sur les toits|Rooftop bars', 'Musique live|Live music', 'Bars à cocktails|Cocktail bars', 'Boîte de nuit|Nightclub'],
-  nature: ['Parcs nationaux|National parks', 'Plages sauvages|Wild beaches', 'Volcans et montagnes|Volcanoes and mountains', 'Observation des animaux|Wildlife watching'],
-  detente: ['Journées à la plage|Beach days', 'Spa et massages|Spa and massages', 'Sources chaudes|Hot springs', 'Hôtel avec piscine|Hotel with a pool'],
-};
-
 const partie = (x, langue) => { const [fr, en] = x.split('|'); return langue === 'en' ? en || fr : fr; };
 
 // Les idées d'une envie pour un pays : [{ fr, texte }] (fr : ce qui est gardé ; texte : ce qu'on affiche).
 export function ideesPour(pays, envie, langue = 'fr') {
-  const liste = (pays && IDEES[pays]?.[envie]) || IDEES_GENERALES[envie] || [];
+  const liste = (pays && IDEES[pays]?.[envie]) || [];
   return liste.map((x) => ({ fr: partie(x, 'fr'), texte: partie(x, langue) }));
 }
 
@@ -228,7 +218,7 @@ export const aDesIdees = (pays) => Boolean(IDEES[pays]);
 // Traduit une idée gardée (en français) dans l'autre langue, pour l'affichage.
 export function traduireIdee(fr, langue) {
   if (langue !== 'en') return fr;
-  for (const bloc of [...Object.values(IDEES), IDEES_GENERALES]) {
+  for (const bloc of Object.values(IDEES)) {
     for (const liste of Object.values(bloc)) for (const x of liste) if (x.split('|')[0] === fr) return partie(x, 'en');
   }
   return fr;
