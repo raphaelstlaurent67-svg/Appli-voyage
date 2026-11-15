@@ -61,7 +61,7 @@ const TXT = {
     tonVoyage: 'Votre voyage', au: 'au', astuce: 'Le jour où vous quittez un pays peut être celui où vous arrivez dans le suivant.',
     moisPrec: 'Mois précédent', moisSuiv: 'Mois suivant', semaineJours: ['L', 'M', 'M', 'J', 'V', 'S', 'D'], sem: 'S',
     nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`,
-    adultes: 'Adultes', adultesAide: '13 ans et plus', enfants: 'Enfants', enfantsAide: '0 à 12 ans', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
+    adultes: 'Adultes', adultesAide: '18 ans et plus', enfants: 'Enfants', enfantsAide: '0 à 17 ans', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
     moins: 'Moins', plus: 'Plus', nombreDe: (x) => `Nombre : ${x}`,
     style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
     enSavoirPlus: 'En savoir plus sur les styles', masquer: 'Masquer',
@@ -70,7 +70,7 @@ const TXT = {
       moyen: 'Le juste milieu, choisi par la plupart des voyageurs. Hôtels de charme (3 à 4 étoiles), bonnes tables, et quelques transferts privés pour voyager l’esprit tranquille.',
       luxe: 'Le voyage de rêve, niveau lune de miel. Hôtels 5 étoiles et adresses d’exception, chauffeurs privés, expériences exclusives et service aux petits soins.',
     },
-    introEnvies: 'Touchez ce qui vous plaît. Des idées concrètes apparaîtront selon votre destination.',
+    introEnvies: 'Touchez ce qui vous plaît. Quelques idées sur place vous seront proposées, à cocher si elles vous tentent.', introEnviesSans: 'Touchez ce qui vous plaît. Nous vous ferons des suggestions adaptées.',
     ideesPour: (p) => (p ? `Idées : ${p}` : 'Quelques idées'), touchezIdees: 'Touchez celles qui vous tentent.',
     combienFois: 'Combien de fois pendant le voyage, environ ?',
     aVoir: 'Un lieu ou une activité à ne pas manquer ?', aVoirEx: 'Ex. : voir les cerisiers en fleurs, un resto en particulier',
@@ -115,7 +115,7 @@ const TXT = {
     tonVoyage: 'Your trip', au: 'to', astuce: 'The day you leave one country can be the day you arrive in the next.',
     moisPrec: 'Previous month', moisSuiv: 'Next month', semaineJours: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], sem: 'W',
     nuitsTxt: (n) => `${n} night${n > 1 ? 's' : ''}`,
-    adultes: 'Adults', adultesAide: '13 and over', enfants: 'Children', enfantsAide: 'Ages 0 to 12', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
+    adultes: 'Adults', adultesAide: '18 and over', enfants: 'Children', enfantsAide: 'Ages 0 to 17', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
     moins: 'Fewer', plus: 'More', nombreDe: (x) => `Number: ${x}`,
     style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
     enSavoirPlus: 'Learn more about the styles', masquer: 'Hide',
@@ -124,7 +124,7 @@ const TXT = {
       moyen: 'The sweet spot most travellers choose. Charming 3 to 4-star hotels, good restaurants, and a few private transfers so you can relax.',
       luxe: 'The dream trip, honeymoon level. 5-star hotels and exceptional addresses, private drivers, exclusive experiences and attentive service.',
     },
-    introEnvies: 'Tap what appeals to you. Concrete ideas will show up based on your destination.',
+    introEnvies: 'Tap what appeals to you. A few ideas for your destination will show up, tick the ones you like.', introEnviesSans: 'Tap what appeals to you. We’ll suggest ideas that fit.',
     ideesPour: (p) => (p ? `Ideas: ${p}` : 'A few ideas'), touchezIdees: 'Tap the ones you like.',
     combienFois: 'Roughly how many times during the trip?',
     aVoir: 'A place or activity you don’t want to miss?', aVoirEx: 'E.g. the cherry blossoms, a specific restaurant',
@@ -661,17 +661,17 @@ function etapeVoyageurs(zone) {
 }
 
 // ---------- 4. Envies ----------
-// Les idées montrées sous une envie : un groupe par pays choisi (3 au plus), ou des idées générales.
-function groupesIdees(k) {
-  const avec = d.pays.map((p) => p.nom).filter(aDesIdees).slice(0, 3);
-  if (!avec.length) return [{ titre: d.pays.length === 1 ? nomPays(d.pays[0].nom) : '', idees: ideesPour('', k, d.langue) }];
-  return avec.map((p) => ({ titre: nomPays(p), idees: ideesPour(p, k, d.langue) }));
+// Quelques idées précises sous une envie, seulement si un pays connu est choisi (3 par pays, 2 pays au plus).
+// Sans pays (ou « Surprenez-moi »), aucune idée : des idées générales ne servent à rien.
+function ideesEnvie(k) {
+  return d.pays.map((p) => p.nom).filter(aDesIdees).slice(0, 2)
+    .flatMap((p, i, liste) => ideesPour(p, k, d.langue).slice(0, 3).map((x) => ({ ...x, pays: liste.length > 1 ? nomPays(p) : '' })));
 }
 
 function etapeEnvies(zone) {
   const dessiner = () => {
     zone.innerHTML = `
-      <p class="intro">${t().introEnvies}</p>
+      <p class="intro">${d.pays.some((p) => aDesIdees(p.nom)) ? t().introEnvies : t().introEnviesSans}</p>
       <div class="envies">${ENVIES.map(([k, nom, ico, ex]) => {
         const n = d.envies[k] || 0;
         const choisies = d.idees[k] || [];
@@ -682,13 +682,8 @@ function etapeEnvies(zone) {
             <span class="envie-txt"><b>${esc(nomEnvie(k, nom))}</b><small>${esc(exEnvie(k, ex))}</small></span>
             <span class="coche">${n ? icone('check', { taille: 15, epaisseur: 3 }) : ''}</span>
           </button>
-          ${n ? `
-          <div class="envie-plus">
-            ${groupesIdees(k).map((g) => `
-              <p class="idees-titre">${icone('lightbulb', { taille: 14 })} ${esc(t().ideesPour(g.titre))}</p>
-              <div class="idees">${g.idees.map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 14, epaisseur: 2.8 }) : icone('plus', { taille: 14 })}${esc(i.texte)}</button>`).join('')}</div>`).join('')}
-            <div class="combien"><span>${t().combienFois}</span>${compteur(k, n, 1, 30, t().combienFois)}</div>
-          </div>` : ''}
+          ${n && ideesEnvie(k).length ? `
+          <div class="idees" aria-label="${esc(t().touchezIdees)}">${ideesEnvie(k).map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 13, epaisseur: 2.8 }) : icone('plus', { taille: 13 })}${i.pays ? `<em>${esc(i.pays)} ·</em>` : ''}${esc(i.texte)}</button>`).join('')}</div>` : ''}
         </div>`;
       }).join('')}</div>
       <label class="champ marge-haut"><span>${t().aVoir} <small>${t().optionnel}</small></span><textarea id="incontournable" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(d.incontournable)}</textarea></label>`;
