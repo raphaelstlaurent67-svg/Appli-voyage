@@ -345,6 +345,10 @@ button:disabled { cursor: default; }
 .styles-info dt .ico { color: var(--pale); }
 .styles-info .choisi dt .ico { color: var(--accent); }
 .styles-info dd { color: var(--doux); font-size: 14px; margin-top: 3px; text-wrap: pretty; }
+.styles-info dd ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 5px; }
+.styles-info dd li { display: grid; grid-template-columns: 104px 1fr; gap: 10px; font-size: 13.5px; line-height: 1.4; }
+.styles-info dd li span { color: var(--encre); font-weight: 600; }
+@media (max-width: 380px) { .styles-info dd li { grid-template-columns: 1fr; gap: 0; } }
 @keyframes ouvrir { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* ---------- 4. Envies ---------- */
