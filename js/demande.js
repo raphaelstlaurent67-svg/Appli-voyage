@@ -25,6 +25,11 @@ if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
 const MODE_TEST = params.has('test');
+// demande.html?client=Marie%20Tremblay : lien personnel fait dans le Studio. Chaque client a son propre
+// brouillon (rien n'est partagé entre appareils de toute façon), son nom est déjà rempli et on le salue.
+const CLIENT = (params.get('client') || '').trim().slice(0, 80);
+const CLE_BROUILLON = CLIENT ? `brouillonDemande:${CLIENT.toLowerCase()}` : 'brouillonDemande';
+const prenomClient = CLIENT.split(/\s+/)[0] || '';
 const REQUIS = '<span class="requis" aria-hidden="true">*</span>';
 // Les destinations les plus demandées ; les autres se trouvent avec la recherche.
 const POPULAIRES = ['Japon', 'Italie', 'Thaïlande', 'France', 'Grèce', 'Portugal', 'Espagne', 'Islande', 'Mexique', 'Costa Rica', 'Pérou', 'Vietnam', 'Corée du Sud', 'Indonésie', 'Maroc', 'Cuba', 'République dominicaine', 'États-Unis'];
@@ -48,6 +53,7 @@ const TXT = {
     errDestination: 'Choisissez au moins un pays ou une région.', errDuree: 'Indiquez la durée approximative du voyage.', errDatesPays: 'Choisissez les dates de chaque pays.', errStyle: 'Choisissez un style de voyage.', errNom: 'Indiquez votre nom.', errCourriel: 'Indiquez une adresse courriel valide.',
     etapeSur: (i, n) => `Étape ${i} sur ${n}`, facultatif: 'Facultatif', optionnel: 'facultatif',
     retour: 'Retour', continuer: 'Continuer', passer: 'Passer cette étape', envoyerDemande: 'Envoyer la demande', installer: 'Installer sur mon ordi',
+    bonjour: (n) => `Bonjour ${n}, voici votre demande de voyage personnalisée.`,
     introPays: 'Un ou plusieurs pays, dans l’ordre souhaité. Vous hésitez encore ? Indiquez plutôt une région.',
     chercher: 'Chercher un pays', resultats: 'Résultats', populaires: 'Les plus demandés', aucunPays: 'Aucun pays trouvé. Vérifiez l’orthographe ou choisissez une région.',
     trajet: 'Votre itinéraire', plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer',
@@ -109,6 +115,7 @@ const TXT = {
     errDestination: 'Choose at least one country or region.', errDuree: 'Enter the approximate length of your trip.', errDatesPays: 'Choose the dates for each country.', errStyle: 'Choose a travel style.', errNom: 'Enter your name.', errCourriel: 'Enter a valid email address.',
     etapeSur: (i, n) => `Step ${i} of ${n}`, facultatif: 'Optional', optionnel: 'optional',
     retour: 'Back', continuer: 'Continue', passer: 'Skip this step', envoyerDemande: 'Send request', installer: 'Install on my computer',
+    bonjour: (n) => `Hello ${n}, here is your personal trip request.`,
     introPays: 'One or more countries, in the order you’d like. Still deciding? Choose a region instead.',
     chercher: 'Search a country', resultats: 'Results', populaires: 'Most requested', aucunPays: 'No country found. Check the spelling or choose a region.',
     trajet: 'Your route', plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove',
@@ -205,7 +212,7 @@ const vide = () => ({
 let d = vide();
 // Un brouillon commencé est gardé une journée ; après (ou une fois la demande envoyée), on repart à zéro.
 try {
-  const b = JSON.parse(localStorage.getItem('brouillonDemande') || 'null');
+  const b = MODE_TEST ? null : JSON.parse(localStorage.getItem(CLE_BROUILLON) || 'null');
   if (b?.f === 'demande' && !b.envoyeLe && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000) {
     d = { ...vide(), ...b, v: 3 };
     if (!b.v || b.v < 3) {
@@ -218,7 +225,8 @@ try {
 } catch (_) { /* rien */ }
 if (langueParam) d.langue = langueParam;
 d.plage = ''; // les anciennes tranches « 3 à 6 » sont remplacées par un nombre de jours
-const garder = () => { try { localStorage.setItem('brouillonDemande', JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
+if (CLIENT) { d.client = CLIENT; if (!d.nom) d.nom = CLIENT; }
+const garder = () => { try { localStorage.setItem(CLE_BROUILLON, JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
 let etape = 0;
 let paysActif = 0;
 let moisAffiche = null;
@@ -342,6 +350,7 @@ function enTete(etapeIci) {
     <div class="progres" role="progressbar" aria-valuemin="1" aria-valuemax="${NB_ETAPES}" aria-valuenow="${etapeIci + 1}" aria-label="${esc(t().etapeSur(etapeIci + 1, NB_ETAPES))}">
       ${t().etapes.map((e, i) => `<button type="button" class="${i < etapeIci ? 'fait' : i === etapeIci ? 'ici' : ''}" data-aller="${i}" ${i === etapeIci ? 'aria-current="step"' : ''}><i></i><span>${e}</span></button>`).join('')}
     </div>
+    ${prenomClient && etapeIci === 0 ? `<p class="bonjour">${t().bonjour(esc(prenomClient))}</p>` : ''}
     <p class="etape-sur">${t().etapeSur(etapeIci + 1, NB_ETAPES)}</p>
     <h1>${t().titres[etapeIci]}</h1>`}`;
 }
@@ -720,11 +729,13 @@ function etapeStyle(zone) {
 }
 
 // ---------- 4. Envies ----------
-// Quelques idées précises sous une envie, seulement si un pays connu est choisi (3 par pays, 2 pays au plus).
+// Idées précises sous une envie, seulement si un pays connu est choisi : toutes (7) pour un pays,
+// 4 par pays s'il y en a plusieurs (2 pays au plus). Elles vont à la ligne : aucune n'est cachée.
 // Sans pays (ou « Surprenez-moi »), aucune idée : des idées générales ne servent à rien.
 function ideesEnvie(k) {
   return d.pays.map((p) => p.nom).filter(aDesIdees).slice(0, 2)
-    .flatMap((p, i, liste) => ideesPour(p, k, d.langue).slice(0, 3).map((x) => ({ ...x, pays: liste.length > 1 ? nomPays(p) : '' })));
+    .map((p, i, liste) => ({ pays: liste.length > 1 ? nomPays(p) : '', idees: ideesPour(p, k, d.langue).slice(0, liste.length > 1 ? 4 : 8) }))
+    .filter((g) => g.idees.length);
 }
 
 function etapeEnvies(zone) {
@@ -744,7 +755,7 @@ function etapeEnvies(zone) {
             ${n ? compteur(k, n, 0, 30, `${nomEnvie(k, nom)} : ${t().combienFois}`) : `<button class="ajouter-envie" data-envie="${k}" aria-label="${esc(nomEnvie(k, nom))}">${icone('plus', { taille: 18, epaisseur: 2.2 })}</button>`}
           </div>
           ${n && ideesEnvie(k).length ? `
-          <div class="idees" aria-label="${esc(t().touchezIdees)}">${ideesEnvie(k).map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 13, epaisseur: 2.8 }) : icone('plus', { taille: 13 })}${i.pays ? `<em>${esc(i.pays)} ·</em>` : ''}${esc(i.texte)}</button>`).join('')}</div>` : ''}
+          <div class="idees" aria-label="${esc(t().touchezIdees)}">${ideesEnvie(k).map((g) => `${g.pays ? `<p class="idees-pays">${esc(g.pays)}</p>` : ''}<div class="idees-liste">${g.idees.map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 13, epaisseur: 2.8 }) : icone('plus', { taille: 13 })}${esc(i.texte)}</button>`).join('')}</div>`).join('')}</div>` : ''}
         </div>`;
       }).join('')}</div>
       <label class="champ marge-haut"><span>${t().aVoir}</span><textarea id="incontournable" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(d.incontournable)}</textarea></label>`;
@@ -1089,7 +1100,7 @@ async function envoyer() {
     };
     fiche.querySelector('#image').onclick = partagerImage;
     fiche.querySelector('#modifier').onclick = () => { delete d.envoyeLe; garder(); etape = 0; rendre(); window.scrollTo(0, 0); };
-    fiche.querySelector('#nouvelle').onclick = () => { const l = d.langue; d = vide(); d.langue = l; garder(); etape = 0; voirCalendrier = false; rendre(); window.scrollTo(0, 0); };
+    fiche.querySelector('#nouvelle').onclick = () => { const l = d.langue; d = vide(); d.langue = l; if (CLIENT) { d.client = CLIENT; d.nom = CLIENT; } garder(); etape = 0; voirCalendrier = false; rendre(); window.scrollTo(0, 0); };
   };
   dessiner();
   window.scrollTo(0, 0);

@@ -408,8 +408,9 @@ async function installerAppli(nom) {
 // ---------- Fiche client : la demande remplie par le client ----------
 const NOM_STYLE = { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' };
 const jolieDate = (s, opts = { day: 'numeric', month: 'short' }) => (s ? new Date(`${s}T12:00:00`).toLocaleDateString('fr-CA', opts) : '');
-const lienFiche = (courriel, langue = '', tel = '') => {
+const lienFiche = (courriel, langue = '', tel = '', client = '') => {
   const u = new URL('../demande.html', location.href);
+  if (client) u.searchParams.set('client', client);
   if (courriel) u.searchParams.set('pour', courriel);
   if (tel) u.searchParams.set('tel', tel.replace(/[^\d+]/g, ''));
   if (langue) u.searchParams.set('lang', langue);
@@ -562,6 +563,7 @@ async function pageDemandes() {
     <div class="grille-2">
       <section class="panel">
         <div class="etape-titre"><span class="gros-num">1</span><div><h3>Envoie la fiche au client</h3><p>Copie ce lien et envoie-le par Messenger, texto ou courriel.</p></div></div>
+        <label class="champ"><span>Nom du client <small>optionnel : un lien à son nom, déjà rempli avec son nom, qui le salue</small></span><input id="client-fiche" type="text" placeholder="Ex. : Marie Tremblay" autocomplete="off"></label>
         <label class="champ"><span>Ton courriel <small>optionnel : le client pourra te répondre en un clic</small></span><input id="courriel" type="email" value="${esc(courriel)}" placeholder="toi@exemple.com"></label>
         <label class="champ"><span>Ton numéro de cell <small>optionnel : le client pourra te l'envoyer par texto en un clic</small></span><input id="tel-fiche" type="tel" value="${esc(telFiche)}" placeholder="514 555-1234"></label>
         <label class="champ"><span>Langue de la fiche <small>le client peut aussi changer en haut de la fiche</small></span><select id="langue-fiche">
@@ -587,11 +589,13 @@ async function pageDemandes() {
   const champ = app.querySelector('#courriel');
   const langue = app.querySelector('#langue-fiche');
   const champTel = app.querySelector('#tel-fiche');
-  const lienActuel = () => lienFiche(champ.value.trim(), langue.value, champTel.value.trim());
+  const champClient = app.querySelector('#client-fiche');
+  const lienActuel = () => lienFiche(champ.value.trim(), langue.value, champTel.value.trim(), champClient.value.trim());
   champTel.oninput = () => maj();
   champTel.onchange = () => db.ecrireReglage('telFiche', champTel.value.trim());
   const maj = () => { const l = lienActuel(); app.querySelector('#lien').textContent = l; app.querySelector('#voir').href = l; };
   champ.oninput = maj;
+  champClient.oninput = () => maj();
   langue.onchange = maj;
   champ.onchange = () => db.ecrireReglage('courrielFiche', champ.value.trim());
   app.querySelector('#copier').onclick = async () => {
