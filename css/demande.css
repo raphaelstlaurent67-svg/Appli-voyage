@@ -178,6 +178,23 @@ button:disabled { cursor: default; }
 .autre-duree input::-webkit-inner-spin-button, .nombre::-webkit-inner-spin-button, .nombre::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .duree-resume { margin-top: 8px; }
 
+.duree-boite {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 420px;
+  background: var(--carte); border: 1px solid var(--ligne); border-radius: var(--rayon); padding: 6px 8px 6px 6px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.duree-boite:focus-within { border-color: var(--encre); box-shadow: 0 0 0 3px rgba(29, 27, 25, .06); }
+.duree-champ { flex: 1; display: flex; align-items: baseline; gap: 8px; min-width: 0; cursor: text; }
+.duree-champ input {
+  width: 2.6ch; min-width: 0; border: 0; outline: 0; background: none; padding: 6px 0 6px 12px;
+  box-sizing: content-box; font-size: 26px; font-weight: 800; color: var(--encre); -moz-appearance: textfield; appearance: textfield;
+}
+.duree-champ input::placeholder { color: #c9c2b9; }
+.duree-champ input::-webkit-inner-spin-button, .duree-champ input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.duree-champ span { font-size: 17px; font-weight: 600; color: var(--pale); }
+.duree-boite.remplie .duree-champ span { color: var(--encre); }
+.duree-boite .compteur { gap: 8px; }
+
 .mois-rangee {
   display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
   margin: 0 -18px; padding: 2px 18px 4px;

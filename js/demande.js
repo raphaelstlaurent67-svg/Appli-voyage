@@ -48,7 +48,7 @@ const TXT = {
     trajet: 'Votre itinéraire', plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer',
     pasDecide: 'Pas encore décidé ? Une région qui vous attire', regionsChoisies: 'Régions qui vous attirent',
     introDates: 'Une idée approximative nous suffit. Vous pourrez tout préciser avec nous plus tard.',
-    combien: 'Durée du voyage', plusDe: '3 sem. et +', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre durée',
+    combien: 'Durée du voyage', moinsJours: 'Un jour de moins', plusJours: 'Un jour de plus', plusDe: '3 sem. et +', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre durée',
     longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']],
     jours: (n) => `${n} jour${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
@@ -102,7 +102,7 @@ const TXT = {
     trajet: 'Your route', plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove',
     pasDecide: 'Not sure yet? A region you’re drawn to', regionsChoisies: 'Regions you’re drawn to',
     introDates: 'A rough idea is all we need. You can fine-tune everything with us later.',
-    combien: 'Trip length', plusDe: '3 wks +', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other length',
+    combien: 'Trip length', moinsJours: 'One day less', plusJours: 'One day more', plusDe: '3 wks +', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other length',
     longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']],
     jours: (n) => `${n} day${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'days' : 'day'),
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
@@ -200,13 +200,15 @@ try {
   }
 } catch (_) { /* rien */ }
 if (langueParam) d.langue = langueParam;
+d.plage = ''; // les anciennes tranches « 3 à 6 » sont remplacées par un nombre de jours
 const garder = () => { try { localStorage.setItem('brouillonDemande', JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
 let etape = 0;
 let paysActif = 0;
 let moisAffiche = null;
 let voirCalendrier = Boolean(d.depart);
 let voirStyles = false;
-let dureeLibre = false; // « 3 sem. et + » touché : on montre les durées longues
+const DUREE_DEFAUT = 10; // montré en gris pâle dans la case de la durée
+const semainesTxt = (n) => `${d.langue === 'en' ? 'That is' : 'Soit'} ${TXT[d.langue === 'en' ? 'en' : 'fr'].semaines(Math.floor(n / 7), n % 7)}`;
 
 const t = () => TXT[d.langue] || TXT.fr;
 const loc = () => (d.langue === 'en' ? 'en-CA' : 'fr-CA');
@@ -239,7 +241,6 @@ function dureeTexte(n, unite = 'nuits') {
 }
 
 // Les durées courtes se choisissent par tranche (« 3 à 6 ») ; d.duree garde alors le plus grand nombre.
-const PLAGES = [[3, 6], [7, 13], [14, 20]];
 const plageChoisie = () => (d.mode === 'total' && d.plage ? d.plage.split('-').map(Number) : null);
 const dureeAffichee = () => { const p = plageChoisie(); return p ? t().plageJours(p[0], p[1]) : dureeTexte(d.duree, 'jours'); };
 
@@ -495,37 +496,39 @@ function etapeDates(zone) {
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
     if (ev.target.id === 'duree-libre') {
+      // On garde le champ tel quel pendant qu'on tape (pas de redessin, le clavier reste ouvert).
       const v = parseInt(ev.target.value, 10);
-      if (v > 0) {
-        d.duree = Math.min(365, v); d.plage = ''; garder(); majBas();
-        const r = zone.querySelector('.duree-resume');
-        if (r) r.textContent = dureeTexte(d.duree, 'jours');
-      }
+      d.duree = v > 0 ? Math.min(365, v) : 0; d.plage = ''; garder(); majBas();
+      zone.querySelector('.duree-boite')?.classList.toggle('remplie', Boolean(d.duree));
+      const moins = zone.querySelector('[data-duree="-1"]'); if (moins) moins.disabled = d.duree === 1;
+      const plus = zone.querySelector('[data-duree="1"]'); if (plus) plus.disabled = d.duree >= 365;
+      const r = zone.querySelector('.duree-resume');
+      if (r) r.textContent = d.duree >= 7 ? semainesTxt(d.duree) : '';
     }
   };
-  zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') etapeDates(zone); };
+  // Pas de redessin ici : il ferait rater le toucher sur + ou − juste après avoir tapé.
+  zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') ev.target.value = d.duree || ''; };
 }
 
 // Le voyage au complet : la durée, et le mois (ou la date exacte) du départ si on le connaît.
 function datesTotal(zone) {
   const n = d.duree;
   const fin = finVoyage();
-  const long = !d.plage && (n >= 21 || dureeLibre);
-  const rapide = t().longs.some(([j]) => j === n);
   const premierMois = moisDe(iso(new Date()));
   const mois = Array.from({ length: 15 }, (_, i) => decalerMois(premierMois, i));
   if (!moisAffiche) moisAffiche = moisDe(d.depart || (d.mois ? `${d.mois}-01` : ajouterJours(iso(new Date()), 30)));
   const exemple = nomPays(d.pays[0]?.nom || (d.langue === 'en' ? 'Japan' : 'Japon'));
   zone.innerHTML = `
     <p class="intro">${t().introDates}</p>
-    <p class="petit-titre premier">${t().combien}</p>
-    <div class="grille-duree">${PLAGES.map(([a, z]) => `<button class="${d.plage === `${a}-${z}` && !long ? 'choisi' : ''}" data-plage="${a}-${z}"><b>${t().plageTxt(a, z)}</b><small>${t().joursMot(2)}</small></button>`).join('')}<button class="${long ? 'choisi' : ''}" data-plus-long><b>${t().plusDe}</b><small>${d.langue === 'en' ? 'long trip' : 'long voyage'}</small></button></div>
-    ${long ? `
-    <div class="durees-longues">
-      ${t().longs.map(([j, nom]) => `<button class="${n === j ? 'choisi' : ''}" data-fixe="${j}">${nom}</button>`).join('')}
-      <label class="autre-duree ${n && !rapide ? 'choisi' : ''}"><span>${t().autre}</span><input id="duree-libre" type="number" inputmode="numeric" min="1" max="365" value="${n && !rapide ? n : ''}" placeholder="${d.langue === 'en' ? 'e.g. 35' : 'ex. 35'}" aria-label="${t().autreDuree}"><span>${t().joursMot(2)}</span></label>
+    <label class="petit-titre premier" for="duree-libre">${t().combien}</label>
+    <div class="duree-boite ${n ? 'remplie' : ''}">
+      <label class="duree-champ"><input id="duree-libre" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="365" value="${n || ''}" placeholder="${DUREE_DEFAUT}"><span>${t().joursMot(2)}</span></label>
+      <span class="compteur grand">
+        <button type="button" data-duree="-1" ${n === 1 ? 'disabled' : ''} aria-label="${t().moinsJours}">${icone('minus', { taille: 16, epaisseur: 2.4 })}</button>
+        <button type="button" data-duree="1" ${n >= 365 ? 'disabled' : ''} aria-label="${t().plusJours}">${icone('plus', { taille: 16, epaisseur: 2.4 })}</button>
+      </span>
     </div>
-    <p class="doux duree-resume">${n && !rapide ? esc(dureeTexte(n, 'jours')) : ''}</p>` : ''}
+    <p class="doux duree-resume">${n >= 7 ? esc(semainesTxt(n)) : ''}</p>
     <p class="petit-titre">${t().quand} <small>${voirCalendrier ? '' : t().quandAide}</small></p>
     ${voirCalendrier ? `
     <div class="choix-dates une" style="--c:${coul(0)}">
@@ -547,13 +550,9 @@ function datesTotal(zone) {
 }
 
 function clicTotal(b) {
-  if (b.dataset.plage) {
-    if (d.plage === b.dataset.plage) { d.plage = ''; d.duree = 0; } else { d.plage = b.dataset.plage; d.duree = +d.plage.split('-')[1]; }
-    dureeLibre = false;
-  } else if (b.dataset.fixe) { d.duree = d.duree === +b.dataset.fixe ? 0 : +b.dataset.fixe; d.plage = ''; dureeLibre = true; }
-  else if (b.dataset.plusLong != null) {
-    if (dureeLibre || (d.duree >= 21 && !d.plage)) { dureeLibre = false; if (!d.plage) d.duree = 0; } else { dureeLibre = true; d.plage = ''; d.duree = 0; }
-  } else if (b.dataset.choixMois) { d.mois = d.mois === b.dataset.choixMois ? '' : b.dataset.choixMois; d.depart = ''; }
+  // + et − partent de 10 jours (montré en pâle tant que rien n'est choisi) : + donne 11, − donne 9.
+  if (b.dataset.duree) { d.duree = borne((d.duree || DUREE_DEFAUT) + +b.dataset.duree, 1, 365); d.plage = ''; }
+  else if (b.dataset.choixMois) { d.mois = d.mois === b.dataset.choixMois ? '' : b.dataset.choixMois; d.depart = ''; }
   else if (b.dataset.effacer != null) d.depart = '';
   else if (b.dataset.jour) { d.depart = d.depart === b.dataset.jour ? '' : b.dataset.jour; d.mois = d.depart ? moisDe(d.depart) : d.mois; }
 }
