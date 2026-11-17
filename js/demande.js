@@ -39,8 +39,8 @@ const NB_ETAPES = 5;
 // ---------- Textes (français / anglais) ----------
 const TXT = {
   fr: {
-    etapes: ['Destination', 'Dates', 'Voyageurs', 'Envies', 'Coordonnées'],
-    titres: ['Où aimeriez-vous aller ?', 'Quand, et pour combien de temps ?', 'Qui part en voyage ?', 'Qu’aimeriez-vous vivre là-bas ?', 'Où pouvons-nous vous répondre ?'],
+    etapes: ['Destination', 'Dates', 'Style', 'Envies', 'Coordonnées'], voyageurs: 'Voyageurs',
+    titres: ['Où aimeriez-vous aller ?', 'Quand, combien de temps, et à combien ?', 'Quel style de voyage ?', 'Qu’aimeriez-vous vivre là-bas ?', 'Où pouvons-nous vous répondre ?'],
     etapeSur: (i, n) => `Étape ${i} sur ${n}`, facultatif: 'Facultatif', optionnel: 'facultatif',
     retour: 'Retour', continuer: 'Continuer', passer: 'Passer cette étape', envoyerDemande: 'Envoyer ma demande', installer: 'Installer sur mon ordi',
     introPays: 'Un ou plusieurs pays, dans l’ordre du voyage. Rien de décidé ? Choisissez une région, ou passez simplement à la suite.',
@@ -61,7 +61,7 @@ const TXT = {
     tonVoyage: 'Votre voyage', au: 'au', astuce: 'Le jour où vous quittez un pays peut être celui où vous arrivez dans le suivant.',
     moisPrec: 'Mois précédent', moisSuiv: 'Mois suivant', semaineJours: ['L', 'M', 'M', 'J', 'V', 'S', 'D'], sem: 'S',
     nuitsTxt: (n) => `${n} nuit${n > 1 ? 's' : ''}`,
-    adultes: 'Adultes', adultesAide: '18 ans et plus', enfants: 'Enfants', enfantsAide: '0 à 17 ans', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
+    adultes: 'Adultes', enfants: 'Enfants', enfantsAide: '12 ans et moins', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
     moins: 'Moins', plus: 'Plus', nombreDe: (x) => `Nombre : ${x}`,
     style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
     enSavoirPlus: 'En savoir plus sur les styles', masquer: 'Masquer',
@@ -93,8 +93,8 @@ const TXT = {
     imagePrete: 'Image enregistrée',
   },
   en: {
-    etapes: ['Destination', 'Dates', 'Travellers', 'Interests', 'Contact'],
-    titres: ['Where would you like to go?', 'When, and for how long?', 'Who’s travelling?', 'What would you love to do there?', 'Where can we reach you?'],
+    etapes: ['Destination', 'Dates', 'Style', 'Interests', 'Contact'], voyageurs: 'Travellers',
+    titres: ['Where would you like to go?', 'When, how long, and how many?', 'What style of trip?', 'What would you love to do there?', 'Where can we reach you?'],
     etapeSur: (i, n) => `Step ${i} of ${n}`, facultatif: 'Optional', optionnel: 'optional',
     retour: 'Back', continuer: 'Continue', passer: 'Skip this step', envoyerDemande: 'Send my request', installer: 'Install on my computer',
     introPays: 'One or more countries, in travel order. Nothing decided yet? Pick a region, or simply skip ahead.',
@@ -115,7 +115,7 @@ const TXT = {
     tonVoyage: 'Your trip', au: 'to', astuce: 'The day you leave one country can be the day you arrive in the next.',
     moisPrec: 'Previous month', moisSuiv: 'Next month', semaineJours: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], sem: 'W',
     nuitsTxt: (n) => `${n} night${n > 1 ? 's' : ''}`,
-    adultes: 'Adults', adultesAide: '18 and over', enfants: 'Children', enfantsAide: 'Ages 0 to 17', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
+    adultes: 'Adults', enfants: 'Children', enfantsAide: '12 and under', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
     moins: 'Fewer', plus: 'More', nombreDe: (x) => `Number: ${x}`,
     style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
     enSavoirPlus: 'Learn more about the styles', masquer: 'Hide',
@@ -252,8 +252,8 @@ const finVoyage = () => (d.mode === 'total' ? (d.depart && d.duree && !d.plage ?
 // Une étape est « vide » si le client n'y a rien indiqué : le bouton devient alors « Passer cette étape ».
 function etapeVide(i = etape) {
   if (i === 0) return !d.pays.length && !d.regions.length;
-  if (i === 1) return d.mode === 'total' ? !d.duree && !d.depart && !d.mois : !d.pays.some((p) => p.debut);
-  if (i === 2) return !d.style && !d.voyageursChoisis;
+  if (i === 1) return !d.voyageursChoisis && (d.mode === 'total' ? !d.duree && !d.depart && !d.mois : !d.pays.some((p) => p.debut));
+  if (i === 2) return !d.style;
   if (i === 3) return !Object.values(d.envies).some(Boolean) && !d.incontournable.trim() && !d.pays.some((p) => p.incontournable?.trim());
   return false;
 }
@@ -355,7 +355,7 @@ function rendre() {
       <button class="bouton" id="suivant">${etape === 4 ? `${t().envoyerDemande} ${icone('send', { taille: 18 })}` : ''}</button>
     </footer>`;
   brancherEnTete(rendre);
-  [etapePays, etapeDates, etapeVoyageurs, etapeEnvies, etapeToi][etape](fiche.querySelector('#corps'));
+  [etapePays, etapeDates, etapeStyle, etapeEnvies, etapeToi][etape](fiche.querySelector('#corps'));
   fiche.querySelector('#suivant').onclick = suivant;
   const r = fiche.querySelector('#retour');
   if (r) r.onclick = () => allerA(etape - 1);
@@ -486,6 +486,11 @@ function etapeDates(zone) {
     if (!b) return;
     if (b.dataset.mode) { d.mode = b.dataset.mode; moisAffiche = null; paysActif = 0; garder(); etapeDates(zone); majBas(); majDecor(); return; }
     if (b.dataset.mois) { moisAffiche = decalerMois(moisAffiche, +b.dataset.mois); etapeDates(zone); return; }
+    if (b.dataset.plus || b.dataset.moins) {
+      const cle = b.dataset.plus || b.dataset.moins;
+      changerVoyageurs(cle, d[cle] + (b.dataset.plus ? 1 : -1));
+      etapeDates(zone); majBas(); return;
+    }
     if (b.dataset.voirCal != null) { voirCalendrier = !voirCalendrier; if (!voirCalendrier) d.depart = ''; moisAffiche = null; garder(); etapeDates(zone); majBas(); return; }
     if (d.mode === 'total') clicTotal(b); else clicPays(b);
     garder();
@@ -495,6 +500,8 @@ function etapeDates(zone) {
   };
   zone.oninput = (ev) => {
     if (ev.target.id === 'repartition') { d.repartition = ev.target.value; garder(); }
+    const cle = ev.target.dataset.nombre;
+    if (cle && ev.target.value !== '') { changerVoyageurs(cle, parseInt(ev.target.value, 10)); majBas(); }
     if (ev.target.id === 'duree-libre') {
       // On garde le champ tel quel pendant qu'on tape (pas de redessin, le clavier reste ouvert).
       const v = parseInt(ev.target.value, 10);
@@ -507,7 +514,12 @@ function etapeDates(zone) {
     }
   };
   // Pas de redessin ici : il ferait rater le toucher sur + ou − juste après avoir tapé.
-  zone.onchange = (ev) => { if (ev.target.id === 'duree-libre') ev.target.value = d.duree || ''; };
+  zone.onchange = (ev) => {
+    if (ev.target.id === 'duree-libre') ev.target.value = d.duree || '';
+    const cle = ev.target.dataset.nombre;
+    if (cle) { changerVoyageurs(cle, parseInt(ev.target.value, 10)); ev.target.value = d[cle]; }
+  };
+  zone.onfocusin = (ev) => { if (ev.target.dataset.nombre) ev.target.select(); };
 }
 
 // Le voyage au complet : la durée, et le mois (ou la date exacte) du départ si on le connaît.
@@ -520,6 +532,8 @@ function datesTotal(zone) {
   const exemple = nomPays(d.pays[0]?.nom || (d.langue === 'en' ? 'Japan' : 'Japon'));
   zone.innerHTML = `
     <p class="intro">${t().introDates}</p>
+    <div class="duree-voyageurs">
+    <div>
     <label class="petit-titre premier" for="duree-libre">${t().combien}</label>
     <div class="duree-boite ${n ? 'remplie' : ''}">
       <label class="duree-champ"><input id="duree-libre" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="365" value="${n || ''}" placeholder="${DUREE_DEFAUT}"><span>${t().joursMot(2)}</span></label>
@@ -529,6 +543,9 @@ function datesTotal(zone) {
       </span>
     </div>
     <p class="doux duree-resume">${n >= 7 ? esc(semainesTxt(n)) : ''}</p>
+    </div>
+    <div><p class="petit-titre premier">${t().voyageurs}</p>${blocVoyageurs()}</div>
+    </div>
     <p class="petit-titre">${t().quand} <small>${voirCalendrier ? '' : t().quandAide}</small></p>
     ${voirCalendrier ? `
     <div class="choix-dates une" style="--c:${coul(0)}">
@@ -589,6 +606,7 @@ function datesPays(zone) {
         }).join('')}</div>
         <div class="semaines">${Array.from({ length: Math.ceil(total / 7) + 1 }, (_, k) => `<span style="left:${Math.min(100, (k * 7 / Math.max(1, total)) * 100)}%">${k ? `${t().sem}${k}` : ''}</span>`).join('')}</div>
       </div>` : `<p class="doux">${t().astuce}</p>`}
+    <p class="petit-titre">${t().voyageurs}</p>${blocVoyageurs()}
     <button class="lien-mode discret" data-mode="total">${icone('chevron-left', { taille: 16 })} ${t().retourTotal}</button>`;
 }
 
@@ -605,24 +623,26 @@ function clicPays(b) {
   if (n && !n.fin) paysActif++;
 }
 
-// ---------- 3. Voyageurs ----------
-function etapeVoyageurs(zone) {
+// Les voyageurs, en petit, à côté de la durée (étape des dates).
+const blocVoyageurs = () => `
+  <div class="voyageurs-mini">
+    <div class="vm-ligne"><span>${t().adultes}</span>${compteur('adultes', d.adultes, 1, 30, t().adultes)}</div>
+    <div class="vm-ligne"><span>${t().enfants}<small>${t().enfantsAide}</small></span>${compteur('enfants', d.enfants, 0, 20, t().enfants)}</div>
+  </div>`;
+function changerVoyageurs(cle, v) {
+  if (cle === 'adultes') d.adultes = borne(v, 1, 30);
+  else if (cle === 'enfants') d.enfants = borne(v, 0, 20);
+  else return false;
+  d.voyageurs = totalVoyageurs();
+  d.voyageursChoisis = true;
+  garder();
+  return true;
+}
+
+// ---------- 3. Style de voyage ----------
+function etapeStyle(zone) {
   const dessiner = () => {
     zone.innerHTML = `
-      <div class="voyageurs">
-        <div class="ligne-voyageur">
-          <span class="v-ico">${icone('user', { taille: 20 })}</span>
-          <span class="v-txt"><b>${t().adultes}</b><small>${t().adultesAide}</small></span>
-          ${compteur('adultes', d.adultes, 1, 30, t().adultes, 'grand')}
-        </div>
-        <div class="ligne-voyageur">
-          <span class="v-ico">${icone('baby', { taille: 20 })}</span>
-          <span class="v-txt"><b>${t().enfants}</b><small>${t().enfantsAide}</small></span>
-          ${compteur('enfants', d.enfants, 0, 20, t().enfants, 'grand')}
-        </div>
-        ${d.enfants ? `<label class="champ ages"><span>${t().agesEnfants} <small>${t().optionnel}</small></span><input id="ages" value="${esc(d.agesEnfants)}" placeholder="${esc(t().agesEx)}" autocomplete="off"></label>` : ''}
-      </div>
-      <p class="petit-titre">${t().style}</p>
       <div class="styles">${STYLES.map(([k, ico, prix]) => `
         <button class="style-carte ${d.style === k ? 'choisi' : ''}" data-style="${k}" aria-pressed="${d.style === k}">
           ${icone(ico, { taille: 22 })}<b>${t().styles[k]}</b><small>${prix}</small>
@@ -631,32 +651,15 @@ function etapeVoyageurs(zone) {
       ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd>${t().stylesTxt[k]}</dd></div>`).join('')}</dl>` : ''}`;
   };
   dessiner();
-  const changer = (cle, v) => {
-    if (cle === 'adultes') d.adultes = borne(v, 1, 30);
-    if (cle === 'enfants') d.enfants = borne(v, 0, 20);
-    d.voyageurs = totalVoyageurs();
-    d.voyageursChoisis = true;
-    garder();
-  };
   zone.onclick = (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
-    if (b.dataset.plus) changer(b.dataset.plus, d[b.dataset.plus] + 1);
-    else if (b.dataset.moins) changer(b.dataset.moins, d[b.dataset.moins] - 1);
-    else if (b.dataset.style) { d.style = d.style === b.dataset.style ? '' : b.dataset.style; garder(); }
+    if (b.dataset.style) { d.style = d.style === b.dataset.style ? '' : b.dataset.style; garder(); }
     else if (b.id === 'savoir') voirStyles = !voirStyles;
     else return;
     dessiner();
     majBas();
   };
-  zone.oninput = (ev) => {
-    if (ev.target.id === 'ages') { d.agesEnfants = ev.target.value; garder(); }
-    const cle = ev.target.dataset.nombre;
-    if (cle && ev.target.value !== '') { changer(cle, parseInt(ev.target.value, 10)); majBas(); }
-  };
-  // On redessine seulement quand on quitte la case (sinon le clavier se fermerait à chaque chiffre).
-  zone.onchange = (ev) => { if (ev.target.dataset.nombre) { changer(ev.target.dataset.nombre, parseInt(ev.target.value, 10)); dessiner(); majBas(); } };
-  zone.onfocusin = (ev) => { if (ev.target.dataset.nombre) ev.target.select(); };
 }
 
 // ---------- 4. Envies ----------
@@ -788,7 +791,7 @@ function carteResume() {
         <li style="--c:${x.couleur}"><i></i><span><b>${esc(x.nom)}</b>${x.dates ? `<small>${esc(x.dates)}</small>` : ''}</span>${x.duree ? `<em>${esc(t().nuitsTxt(x.duree))}</em>` : ''}</li>`).join('')}
       </ol>` : ''}
       ${d.mode === 'total' && d.pays.length > 1 ? `<p class="cr-note">${esc(d.repartition.trim() || t().jeTeLaisse)}</p>` : ''}
-      <div class="cr-bloc"><p class="cr-titre">${t().etapes[2]}</p><p class="cr-inc">${esc(texteVoyageurs())}${d.enfants && d.agesEnfants.trim() ? ` (${esc(d.agesEnfants.trim())})` : ''}</p></div>
+      <div class="cr-bloc"><p class="cr-titre">${t().voyageurs}</p><p class="cr-inc">${esc(texteVoyageurs())}${d.enfants && d.agesEnfants.trim() ? ` (${esc(d.agesEnfants.trim())})` : ''}</p></div>
       ${envies.length ? `<div class="cr-bloc"><p class="cr-titre">${t().mesEnvies}</p><div class="cr-envies">${envies.map((e) => `<span>${icone(e.ico, { taille: 15 })}${esc(e.nom)}<b>${e.n}</b></span>`).join('')}</div>
         ${envies.some((e) => e.idees.length) ? `<ul class="cr-idees">${envies.flatMap((e) => e.idees).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>` : ''}
       ${inc.length ? `<div class="cr-bloc"><p class="cr-titre">${t().aVoirCourt}</p>${inc.map((x) => `<p class="cr-inc">${x.nom ? `<b>${esc(x.nom)}</b> ` : ''}${esc(x.txt)}</p>`).join('')}</div>` : ''}
@@ -871,7 +874,7 @@ async function imageResume() {
   const titreBloc = (txt) => { y += 46; texte(txt.toUpperCase(), gauche, y, 700, 24, '#a19a92'); y += 4; };
   if (d.mode === 'total' && d.pays.length > 1) { paragraphe(d.repartition.trim() || t().jeTeLaisse); y += 16; }
 
-  titreBloc(t().etapes[2]);
+  titreBloc(t().voyageurs);
   paragraphe(`${texteVoyageurs()}${d.enfants && d.agesEnfants.trim() ? ` (${d.agesEnfants.trim()})` : ''}`, '#1d1b19');
 
   // Les envies, en petites étiquettes avec le nombre dans un rond

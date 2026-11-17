@@ -195,6 +195,26 @@ button:disabled { cursor: default; }
 .duree-boite.remplie .duree-champ span { color: var(--encre); }
 .duree-boite .compteur { gap: 8px; }
 
+/* Durée et voyageurs côte à côte */
+.duree-voyageurs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.duree-voyageurs .petit-titre { margin-top: 0; }
+.voyageurs-mini { background: var(--carte); border: 1px solid var(--ligne); border-radius: var(--rayon); padding: 2px 8px 2px 12px; max-width: 420px; }
+.vm-ligne { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 50px; }
+.vm-ligne + .vm-ligne { border-top: 1px solid var(--ligne); }
+.vm-ligne > span:first-child { display: grid; line-height: 1.2; font-weight: 600; font-size: 15px; min-width: 0; }
+.vm-ligne small { color: var(--doux); font-weight: 500; font-size: 12px; }
+.voyageurs-mini .compteur button { width: 30px; height: 30px; }
+.voyageurs-mini .nombre { width: 30px; height: 30px; font-size: 16px; }
+@media (max-width: 559px) {
+  .duree-voyageurs .duree-boite { padding: 4px 6px 4px 2px; gap: 4px; }
+  .duree-voyageurs .duree-champ { flex-direction: column; gap: 0; align-items: flex-start; }
+  .duree-voyageurs .duree-champ input { font-size: 24px; padding: 2px 0 0 10px; }
+  .duree-voyageurs .duree-champ span { font-size: 13px; padding: 0 0 4px 10px; }
+  .duree-voyageurs .duree-boite .compteur { gap: 4px; }
+  .duree-voyageurs .duree-boite .compteur button { width: 34px; height: 34px; }
+}
+@media (max-width: 359px) { .duree-voyageurs { grid-template-columns: 1fr; } }
+
 .mois-rangee {
   display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
   margin: 0 -18px; padding: 2px 18px 4px;
