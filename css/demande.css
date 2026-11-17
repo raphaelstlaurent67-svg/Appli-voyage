@@ -70,6 +70,8 @@ button:disabled { cursor: default; }
 .progres .ici i { background: var(--accent); }
 .progres .ici { color: var(--encre); }
 @media (max-width: 520px) { .progres span { display: none; } .progres { gap: 4px; } }
+.bonjour { margin-top: 20px; padding: 12px 14px; background: var(--accent-fond); border-radius: 12px; font-size: 15px; color: var(--encre); line-height: 1.45; }
+.bonjour + .etape-sur { margin-top: 14px; }
 .etape-sur { display: flex; align-items: center; gap: 8px; margin-top: 22px; font-size: 13px; font-weight: 600; color: var(--doux); }
 .pastille-fac { background: var(--creux); color: var(--doux); border-radius: 6px; padding: 1px 7px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
 .haut h1 { font-family: var(--titre); font-size: clamp(30px, 7.4vw, 38px); line-height: 1.1; font-weight: 500; margin: 4px 0 0; letter-spacing: -.015em; text-wrap: balance; }
@@ -371,14 +373,15 @@ button:disabled { cursor: default; }
 .envie-txt b { font-size: 15.5px; }
 .envie-txt small { color: var(--doux); font-size: 13.5px; }
 
-.idees {
-  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 0 12px 12px 66px;
-  animation: ouvrir .2s ease-out;
-}
+.idees { padding: 2px 12px 12px 66px; animation: ouvrir .2s ease-out; }
+.idees-liste { display: flex; flex-wrap: wrap; gap: 6px; }
+.idees-pays { font-size: 12px; font-weight: 700; color: var(--doux); margin: 4px 0 6px; }
+.idees-liste + .idees-pays { margin-top: 12px; }
+@media (max-width: 480px) { .idees { padding-left: 12px; } }
 .idees::-webkit-scrollbar { display: none; }
 .idee {
   flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px 5px 8px; border-radius: 999px;
-  border: 1px solid var(--ligne); background: var(--fond); font-size: 13px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+  border: 1px solid var(--ligne); background: var(--fond); font-size: 13px; font-weight: 600; line-height: 1.3; text-align: left; max-width: 100%;
   transition: background .15s, border-color .15s, color .15s;
 }
 .idee em { font-style: normal; color: var(--pale); font-weight: 600; }
