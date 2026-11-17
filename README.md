@@ -144,3 +144,9 @@ Comment c'est privé : le voyage et ses photos sont chiffrés (AES-256) avec une
 Fichiers : `carnet.html`, `js/carnet.js`, `css/carnet.css` (l'appli « Mon voyage » du client) · `js/carnets.js` (publication, côté Raph) · `js/carnet-commun.js` (chiffrement, heures, choix) · `js/carnet-demo.js` (démo).
 
 À faire une fois : la clé GitHub de l'appli doit aussi pouvoir écrire dans `Appli-voyage` (Fine-grained token > Repository access > ajouter Appli-voyage, Contents : Read and write).
+
+### Réglages d'envoi et « À venir »
+- Chaque client a ses réglages : combien d'hôtels, de restos, d'activités et de bars à chaque envoi (0 = pas envoyé), quels jours, quelle heure.
+- Les endroits sauvegardés pendant le repérage entrent dans sa file. À chaque envoi, on prend les suivants selon les réglages (`planifier` dans `js/carnet-commun.js`). Un endroit déjà envoyé ne bouge plus.
+- « À venir » (téléphone : Clients > le client ; Studio : Accueil > À venir) montre chaque envoi. Raph peut monter, descendre, remplacer ou retirer un endroit, ou envoyer tout de suite. Code partagé : `js/a-venir.js`, `css/a-venir.css`.
+- Onglet Clients du téléphone : « Formulaire de demande », pour copier ou envoyer un lien personnel (même lien que Studio > Fiche client).

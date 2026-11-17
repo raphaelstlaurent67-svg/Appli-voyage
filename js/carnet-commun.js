@@ -129,6 +129,8 @@ export const GROUPES_CHOIX = {
   dormir: { cats: ['hebergement'], titre: 'Où dormir', court: 'Hôtel', ico: 'bed-double' },
   manger: { cats: ['restos'], titre: 'Où manger', court: 'Resto', ico: 'utensils' },
   faire: { cats: ['visites', 'experiences', 'sport', 'nuit'], titre: 'Activités', court: 'Activité', ico: 'sparkles' },
+  // Les bars : avec les activités, sauf si Raph leur donne leur propre section dans les réglages du client.
+  sortir: { cats: ['nuit'], titre: 'Où sortir', court: 'Bar', ico: 'martini' },
 };
 export const groupeDeCategorie = (cat) => Object.keys(GROUPES_CHOIX).find((g) => GROUPES_CHOIX[g].cats.includes(cat)) || 'savoir';
 
@@ -145,4 +147,64 @@ export function endroitsChoisis(carnet) {
     if (it) ids.add(it.endroitId);
   }
   return ids;
+}
+
+// ---------- L'envoi automatique, selon les réglages du client ----------
+// Raph sauvegarde ses endroits pendant le repérage ; ils attendent dans une file, dans l'ordre.
+// À chaque envoi (19 h par défaut, les jours choisis), on prend les suivants de la file :
+// tant d'hôtels, tant de restos, tant d'activités (3 par défaut). Le reste part aux envois suivants.
+// Un endroit déjà envoyé ne bouge plus jamais.
+export const QUOTAS_DEFAUT = { dormir: 3, manger: 3, faire: 3, sortir: 0 };
+export const TOUS_LES_JOURS = [0, 1, 2, 3, 4, 5, 6]; // 0 = dimanche
+export const NOMS_JOURS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+export function reglagesEnvoi(c) {
+  const jours = (c?.envoi?.jours || []).filter((j) => TOUS_LES_JOURS.includes(j));
+  return {
+    quotas: { ...QUOTAS_DEFAUT, ...(c?.envoi?.quotas || {}) },
+    jours: jours.length ? jours : TOUS_LES_JOURS,
+    heure: c?.heure ?? HEURE_PAR_DEFAUT,
+    fuseau: c?.fuseau || FUSEAU_PAR_DEFAUT,
+  };
+}
+// Le groupe d'un endroit pour ce client (les bars ont leur section seulement si Raph l'a demandé).
+export function groupePour(cat, quotas = QUOTAS_DEFAUT) {
+  if (cat === 'nuit' && quotas.sortir > 0) return 'sortir';
+  return groupeDeCategorie(cat);
+}
+// Envoyé = son heure est passée. Un endroit sans heure attend dans la réserve.
+export const estEnvoye = (i, maintenant = Date.now()) => !!i.livraison && new Date(i.livraison).getTime() <= +maintenant;
+
+// Les prochaines heures d'envoi, en sautant les jours non choisis.
+export function prochainsEnvois(apres, reglages, combien) {
+  const liste = [];
+  let t = new Date(apres);
+  for (let k = 0; liste.length < combien && k < 400; k++) {
+    const l = prochaineLivraison(t, reglages.heure, reglages.fuseau);
+    const p = partiesLocales(l, reglages.fuseau);
+    if (reglages.jours.includes(new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay())) liste.push(l);
+    t = new Date(l.getTime() + 60000);
+  }
+  return liste;
+}
+
+// Donne à chaque endroit pas encore envoyé son heure d'envoi. catDe(item) → catégorie de l'endroit.
+export function planifier(c, catDe, maintenant = new Date()) {
+  const r = reglagesEnvoi(c);
+  const parGroupe = {};
+  const savoir = [];
+  for (const i of c.items) {
+    if (estEnvoye(i, maintenant)) continue;
+    const g = groupePour(catDe(i), r.quotas);
+    if (g === 'savoir') savoir.push(i); else (parGroupe[g] ||= []).push(i);
+  }
+  let besoin = 1;
+  for (const [g, liste] of Object.entries(parGroupe)) if (r.quotas[g] > 0) besoin = Math.max(besoin, Math.ceil(liste.length / r.quotas[g]));
+  const envois = prochainsEnvois(maintenant, r, Math.min(besoin, 120));
+  for (const [g, liste] of Object.entries(parGroupe)) {
+    const q = r.quotas[g];
+    liste.forEach((i, k) => { i.livraison = q > 0 && envois[Math.floor(k / q)] ? envois[Math.floor(k / q)].toISOString() : null; });
+  }
+  for (const i of savoir) i.livraison = envois[0] ? envois[0].toISOString() : null;
+  return envois;
 }

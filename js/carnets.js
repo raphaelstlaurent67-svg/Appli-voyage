@@ -6,7 +6,7 @@ import * as db from './db.js';
 import * as sync from './sync.js';
 import {
   DEPOT_CARNETS, BRANCHE_CARNETS, RELAIS, HEURE_PAR_DEFAUT, FUSEAU_PAR_DEFAUT,
-  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, prochaineLivraison, lienClient,
+  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, lienClient, planifier, reglagesEnvoi, groupePour, QUOTAS_DEFAUT, TOUS_LES_JOURS,
 } from './carnet-commun.js';
 
 const API = 'https://api.github.com';
@@ -24,6 +24,7 @@ export function nouveauCarnet({ prenom = '', ville = '', pays = '' } = {}) {
     heure: HEURE_PAR_DEFAUT,
     fuseau: FUSEAU_PAR_DEFAUT,
     actif: true,
+    envoi: { quotas: { ...QUOTAS_DEFAUT }, jours: [...TOUS_LES_JOURS] },
     items: [],
     choix: null,
     publication: { photos: {}, publieLe: null, erreur: null },
@@ -39,17 +40,24 @@ export const carnetActif = async () => {
   return c && c.actif ? c : null;
 };
 
-// Ajoute un endroit au carnet. Il sera livré au client à la prochaine heure de livraison.
+// Ajoute un endroit à la fin de la file du client. Son heure d'envoi est calculée à l'enregistrement,
+// selon les réglages du client (combien par catégorie, quels jours, quelle heure).
 export function ajouterItem(c, endroitId, mot = '') {
   const deja = c.items.find((i) => i.endroitId === endroitId);
   if (deja) { deja.mot = mot || deja.mot; return deja; }
-  const maintenant = new Date();
-  const item = { id: idCourt(), endroitId, mot, ajouteLe: maintenant.toISOString(), livraison: prochaineLivraison(maintenant, c.heure, c.fuseau).toISOString() };
+  const item = { id: idCourt(), endroitId, mot, ajouteLe: new Date().toISOString(), livraison: null };
   c.items.push(item);
   return item;
 }
 
+// Recalcule l'heure d'envoi de tout ce qui n'est pas encore parti.
+export async function replanifier(c) {
+  const parId = new Map((await db.tous('endroits')).map((e) => [e.id, e]));
+  return planifier(c, (i) => parId.get(i.endroitId)?.categorie);
+}
+
 export async function enregistrer(c) {
+  await replanifier(c);
   c.modifieLe = new Date().toISOString();
   await db.ecrire('carnets', c);
   sync.marquer(sync.cheminCarnet(c.id));
@@ -60,11 +68,13 @@ export async function enregistrer(c) {
 // Ce que le client reçoit : jamais les notes privées, jamais le téléphone perso de Raph.
 function versClient(c, endroits) {
   const items = [];
+  const { quotas } = reglagesEnvoi(c);
   for (const it of c.items) {
     const e = endroits.find((x) => x.id === it.endroitId);
-    if (!e) continue;
+    if (!e || !it.livraison) continue; // dans la réserve : pas envoyé
     items.push({
       id: it.id,
+      groupe: groupePour(e.categorie, quotas),
       categorie: e.categorie, type: e.type, sousType: e.sousType,
       nom: e.nom, ville: e.ville, pays: e.pays, adresse: e.adresse,
       description: e.description, mot: it.mot,
@@ -148,6 +158,7 @@ export async function publier(id) {
     if (!navigator.onLine) { c.publication.erreur = 'hors-ligne'; await db.ecrire('carnets', c); prevenir(c); return c; }
     try {
       await assurerBranche(cfg.jeton);
+      await replanifier(c);
       const endroits = await db.tous('endroits');
       const donnees = versClient(c, endroits);
       // Les photos d'abord (une seule fois chacune), puis le carnet.
@@ -170,6 +181,7 @@ export async function publier(id) {
     // On relit avant d'écrire : Raph a pu changer le carnet pendant l'envoi.
     const frais = (await db.lire('carnets', id)) || c;
     frais.publication = c.publication;
+    if (frais.modifieLe === c.modifieLe) frais.items = c.items;
     await db.ecrire('carnets', frais);
     prevenir(frais);
     return frais;
