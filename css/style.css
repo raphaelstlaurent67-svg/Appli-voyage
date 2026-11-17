@@ -618,3 +618,15 @@ body[data-page="reglages"] .section { gap: 12px; }
 .fiche-plus summary { cursor: pointer; font-weight: 600; color: var(--doux); font-size: .9rem; }
 .fiche-plus[open] { display: flex; flex-direction: column; gap: 8px; }
 #envoi-carnet summary small, #reglages-carnet summary small { display: block; }
+
+/* Onglet Clients, plus épuré */
+.entete-clients { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lien-exemple { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; font-weight: 600; color: var(--doux); text-decoration: none; padding: 8px 12px; border-radius: 99px; background: var(--surface-2); }
+.vide-clients { text-align: center; margin: 18px 0 0; }
+body[data-page="clients"] .bouton-ajouter { display: none; }
+.rond-supprimer { color: var(--doux); }
+.rond-supprimer.confirmer, .bouton-danger.confirmer { background: #d93025; color: #fff; }
+.mot-du-client small { display: block; margin-top: 4px; font-style: normal; color: var(--doux); font-size: .78rem; }
+.fiche-plus summary::after { content: none; }
+.fiche-plus summary { list-style: none; position: static; padding: 0; }
+.fiche-plus summary::-webkit-details-marker { display: none; }

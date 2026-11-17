@@ -91,7 +91,7 @@ function versClient(c, endroits) {
     v: 1, id: c.id,
     prenom: c.client?.prenom || '', raph: c.raph || 'Raph',
     ville: c.ville, pays: c.pays, debut: c.debut, fin: c.fin, mot: c.mot,
-    heure: c.heure, fuseau: c.fuseau, actif: c.actif,
+    heure: c.heure, fuseau: c.fuseau, actif: c.actif, raphTel: c.tel || '',
     misAJour: new Date().toISOString(),
     items,
   };

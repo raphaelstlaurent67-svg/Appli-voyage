@@ -47,7 +47,7 @@ const cleLocale = DEMO ? 'demo-montreal' : id;
 
 const lireChoixLocaux = () => {
   const c = memoire.lire(`choix-${cleLocale}`, {});
-  return { soirs: c.soirs || {}, mot: c.mot || '' };
+  return { soirs: c.soirs || {}, mot: c.mot || '', messages: c.messages || [] };
 };
 const etat = {
   donnees: null,
@@ -120,7 +120,8 @@ async function envoyerChoix() {
   try {
     const canal = await commun.canalChoix(id, cle);
     const maintenant = new Date().toISOString();
-    const paquet = { soirs: etat.choix.soirs, mot: etat.choix.mot || '', vuLe: maintenant, envoyeLe: maintenant };
+    const messages = etat.choix.messages || [];
+    const paquet = { soirs: etat.choix.soirs, mot: messages.length ? messages[messages.length - 1].texte : etat.choix.mot || '', messages, vuLe: maintenant, envoyeLe: maintenant };
     await fetch(`${commun.RELAIS}/${canal}`, { method: 'POST', body: commun.enBase64Url(await commun.chiffrerJson(cle, paquet)) });
     memoire.ecrire(`ping-${cleLocale}`, Date.now());
   } catch (_) { /* réessayé à la prochaine visite */ }
@@ -178,18 +179,11 @@ function periode(d) {
   const debut = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear() ? String(a.getDate()) : f(d.debut);
   return `${debut} au ${f(d.fin, true)}`;
 }
-// « 3 hôtels · 3 restos · 3 activités »
-function composition(items) {
-  return groupesDuSoir(items).map((g) => { const n = items.filter((i) => groupeDe(i) === g).length; return pluriel(n, GROUPES[g].court.toLowerCase()); }).join(' · ');
-}
 function compteARebours(date) {
-  const ms = new Date(date) - Date.now();
-  if (ms <= 0) return 'Ça arrive…';
-  const min = Math.ceil(ms / 60000);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h >= 24) return `dans ${Math.round(h / 24)} jour${h >= 36 ? 's' : ''}`;
-  return h ? `dans ${h} h ${String(m).padStart(2, '0')}` : `dans ${m} min`;
+  const s = Math.max(0, Math.floor((new Date(date) - Date.now()) / 1000));
+  if (s >= 48 * 3600) return `${Math.round(s / 86400)} jours`;
+  const deux = (n) => String(n).padStart(2, '0');
+  return `${deux(Math.floor(s / 3600))}:${deux(Math.floor(s / 60) % 60)}:${deux(s % 60)}`;
 }
 
 // ---------- Les soirées ----------
@@ -217,62 +211,58 @@ function rendre() {
   const prochaine = enRoute.length
     ? enRoute.map((i) => i.livraison).sort()[0]
     : d.actif ? commun.prochaineLivraison(new Date(), d.heure ?? commun.HEURE_PAR_DEFAUT, d.fuseau || commun.FUSEAU_PAR_DEFAUT).toISOString() : null;
-  const enRouteBientot = enRoute.filter((i) => i.livraison === prochaine);
   const couverture = d.couverture || [...livres].reverse().find((i) => i.photos?.length)?.photos[0];
 
+  const destination = [d.ville, d.pays].filter(Boolean).join(' · ');
   racine.innerHTML = `
     <header class="couv">
       ${couverture ? `<img class="couv-img" data-p="${esc(couverture)}" alt="">` : ''}
       <div class="couv-haut">
-        <span class="marque">${icone('moon', { taille: 15 })} Voyage sur mesure</span>
+        <span class="marque">Voyage sur mesure</span>
         ${d.actif ? '<span class="direct"><i></i> En repérage</span>' : '<span class="direct fini">Repérage terminé</span>'}
       </div>
       <div class="couv-bas">
-        <p class="surtitre">${d.prenom ? `Le voyage de ${esc(d.prenom)}` : 'Ton voyage'}</p>
-        <h1>${esc(d.ville || 'Ton voyage')}</h1>
+        <h1>Votre voyage</h1>
+        ${destination ? `<p class="destination">${esc(destination)}</p>` : ''}
         ${periode(d) ? `<p class="periode">${esc(periode(d))}</p>` : ''}
-        <p class="par"><span class="avatar">${initiale(d.raph)}</span><span>Repéré sur place par <b>${esc(d.raph)}</b></span></p>
       </div>
     </header>
 
-    <section class="chiffres">
-      <div><b>${d.items.length}</b><span>${d.items.length > 1 ? 'endroits repérés' : 'endroit repéré'}</span></div>
-      <div><b>${liste.length}</b><span>${liste.length > 1 ? 'soirées' : 'soirée'}</span></div>
-      <div><b>${completes}</b><span>${completes > 1 ? 'complétées' : 'complétée'}</span></div>
+    <section class="etat">
+      <div class="etat-compte"><b>${d.items.length}</b><span>${d.items.length > 1 ? 'endroits repérés' : 'endroit repéré'}</span></div>
+      ${prochaine ? `
+      <div class="etat-rebours">
+        <span>Prochain envoi</span>
+        <b id="rebours">${esc(compteARebours(prochaine))}</b>
+        <small>${esc(quandLivraison(prochaine))}</small>
+      </div>` : ''}
     </section>
 
-    ${prochaine ? `
-    <section class="rdv">
-      <div class="rdv-lune">${icone('moon', { taille: 22 })}</div>
-      <div class="rdv-texte">
-        <p class="rdv-etiquette">Prochaine sélection</p>
-        <p class="rdv-quand">${esc(quandLivraison(prochaine))}</p>
-        <p class="rdv-sous">${enRouteBientot.length ? esc(composition(enRouteBientot)) : 'Hôtels, restos et activités, chaque soir'}</p>
-      </div>
-    </section>` : ''}
-
-
-
     <nav class="onglets" role="tablist">
-      <button role="tab" data-onglet="soirees" class="${etat.onglet === 'soirees' ? 'on' : ''}">${icone('moon', { taille: 16 })} Choix du soir</button>
-      <button role="tab" data-onglet="choix" class="${etat.onglet === 'choix' ? 'on' : ''}">${icone('check', { taille: 16 })} Mon voyage</button>
+      <button role="tab" data-onglet="soirees" class="${etat.onglet === 'soirees' ? 'on' : ''}">Sélections</button>
+      <button role="tab" data-onglet="choix" class="${etat.onglet === 'choix' ? 'on' : ''}">Mes choix</button>
+      <button role="tab" data-onglet="message" class="${etat.onglet === 'message' ? 'on' : ''}">Message</button>
     </nav>
 
-    <div id="contenu">${etat.onglet === 'choix' ? pageResume(liste) : pageSoirees(liste)}</div>
+    <div id="contenu">${contenuOnglet(liste)}</div>
 
     <footer class="pied">
       ${pwa.dejaInstallee() || DANS_APPLI ? '' : `
       <section class="carte-douce" id="installer">
         <span class="rond-ico">${icone('download', { taille: 18 })}</span>
-        <div><b>Garde ton voyage sur ton écran d’accueil</b><p id="aide-installer">Il s’ouvrira d’un seul geste, comme une appli.</p></div>
+        <div><b>Gardez votre voyage à portée de main</b><p id="aide-installer">Ajoutez-le à votre écran d’accueil : il s’ouvrira comme une appli.</p></div>
         <button class="btn-doux" id="bouton-installer">Ajouter</button>
       </section>`}
-      <section class="carte-douce">
-        <span class="rond-ico">${icone('send', { taille: 18 })}</span>
-        <div><b>Un ami rêve de partir&nbsp;?</b><p>${esc(d.raph)} peut lui préparer son voyage, sur place, comme pour toi.</p></div>
-        <button class="btn-doux" id="partager">En parler</button>
-      </section>
-      <p class="signature">${icone('lock', { taille: 13 })} Voyage privé : seul ton lien l’ouvre.${DEMO ? ' <br>Démo : photos d’illustration.' : ''}</p>
+      <details class="comment">
+        <summary>Comment ça marche</summary>
+        <ol>
+          <li><b>${esc(d.raph)} repère pour vous.</b> Sur place, il visite, photographie et garde seulement le meilleur.</li>
+          <li><b>Chaque soir, vos sélections arrivent.</b> Quelques hôtels, restaurants et activités, à ${commun.formatHeure(d.heure ?? 19)}.</li>
+          <li><b>Vous choisissez.</b> Touchez votre préféré dans chaque section. Rien n’est obligatoire.</li>
+          <li><b>Votre itinéraire prend forme.</b> Vos choix sont réservés dans votre voyage, jour par jour.</li>
+        </ol>
+      </details>
+      <p class="signature">${icone('lock', { taille: 13 })} Voyage privé : seul votre lien l’ouvre.${DEMO ? ' <br>Démo : photos d’illustration.' : ''}</p>
     </footer>`;
 
   afficherPhotos(racine);
@@ -280,17 +270,19 @@ function rendre() {
   demarrerRebours(prochaine);
 }
 
+const contenuOnglet = (liste) => (etat.onglet === 'choix' ? pageResume(liste) : etat.onglet === 'message' ? pageMessage() : pageSoirees(liste));
+
 function pageSoirees(liste) {
   const d = etat.donnees;
   if (!liste.length) {
     return `
       <div class="vide">
         <div class="vide-lune">${icone('moon', { taille: 34, epaisseur: 1.4 })}</div>
-        <h2>Tes premiers choix arrivent bientôt</h2>
-        <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)} : où dormir, où manger, quoi faire.</p>
+        <h2>Vos premières sélections arrivent bientôt</h2>
+        <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)}, les meilleures trouvailles de la journée : où dormir, où manger, quoi faire.</p>
       </div>`;
   }
-  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touche ton préféré dans chaque section. Rien n’est obligatoire.</p>';
+  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré dans chaque section. Rien n’est obligatoire.</p>';
   return aide + liste.map((s, n) => {
     const gs = groupesDuSoir(s.items);
     const complet = soirComplet(s);
@@ -352,16 +344,36 @@ function pageResume(liste) {
   return `
     <div class="choix">
       <div class="choix-tete">
-        <h2>Ton voyage prend forme</h2>
-        <p>${parSoir.length ? `${esc(d.raph)} voit tes choix tout seul. Rien à envoyer.` : 'Tes choix du soir apparaîtront ici, soirée après soirée.'}</p>
+        <h2>Votre voyage prend forme</h2>
+        <p>${parSoir.length ? `${esc(d.raph)} reçoit vos choix automatiquement : rien à envoyer.` : 'Les endroits que vous choisissez chaque soir s’ajoutent ici, et deviennent votre itinéraire.'}</p>
       </div>
       ${parSoir.map(({ s, gs }) => `
         <h4>Soir ${s.numero} <small>${esc(commun.dateLongue(s.quand, d.fuseau))}</small></h4>
         <ul class="lignes">${gs.map((g) => ligne(s, g)).join('')}</ul>`).join('')}
-      <label class="mot-client">
-        <span>Un mot pour ${esc(d.raph)} <small>si tu veux</small></span>
-        <textarea id="mot-client" rows="3" placeholder="Ex. : J’aimerais un resto avec terrasse pour notre anniversaire.">${esc(etat.choix.mot)}</textarea>
-      </label>
+    </div>`;
+}
+
+// « Message » : écrire à Raph, dans l'appli (chiffré, comme les choix) ou par texto.
+function pageMessage() {
+  const d = etat.donnees;
+  const messages = etat.choix.messages || [];
+  const tel = String(d.raphTel || '').replace(/[^\d+]/g, '');
+  const heure = (iso) => new Date(iso).toLocaleString('fr-CA', { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+  return `
+    <div class="contact">
+      <div class="contact-tete">
+        <span class="avatar grand">${initiale(d.raph)}</span>
+        <div><b>${esc(d.raph)}</b><small>Votre conseiller voyage</small></div>
+        ${tel || DEMO ? `<a class="btn-doux" ${DEMO ? 'href="#" data-demo-sms' : `href="sms:${esc(tel)}"`}>${icone('message-circle', { taille: 16 })} Texto</a>` : ''}
+      </div>
+      <div class="fil">
+        ${messages.length ? messages.map((m) => `<div class="bulle"><p>${esc(m.texte)}</p><small>${esc(heure(m.le))} · ${icone('check', { taille: 12, epaisseur: 2.6 })} Envoyé</small></div>`).join('') : `
+        <p class="fil-vide">Une question, une envie particulière, une allergie, un anniversaire à souligner ? Écrivez à ${esc(d.raph)} ici : il reçoit votre message directement${tel || DEMO ? ', ou par texto' : ''}.</p>`}
+      </div>
+      <form class="ecrire" id="ecrire">
+        <textarea id="texte-message" rows="1" placeholder="Votre message à ${esc(d.raph)}…" enterkeyhint="send"></textarea>
+        <button type="submit" class="envoyer" aria-label="Envoyer">${icone('send', { taille: 18 })}</button>
+      </form>
     </div>`;
 }
 
@@ -425,11 +437,9 @@ function confettis(zone) {
 function redessinerContenu() {
   const { liste } = soirees();
   const zone = racine.querySelector('#contenu');
-  zone.innerHTML = etat.onglet === 'choix' ? pageResume(liste) : pageSoirees(liste);
+  zone.innerHTML = contenuOnglet(liste);
   afficherPhotos(zone);
-  brancherMot();
-  const chiffres = racine.querySelector('.chiffres div:last-child b');
-  if (chiffres) chiffres.textContent = liste.filter(soirComplet).length;
+  brancherMessage();
 }
 
 document.addEventListener('click', (ev) => {
@@ -457,9 +467,26 @@ document.addEventListener('click', (ev) => {
   }
 });
 
-function brancherMot() {
-  const t = racine.querySelector('#mot-client');
-  if (t) t.oninput = () => { etat.choix.mot = t.value; sauverChoix(); };
+function brancherMessage() {
+  const f = racine.querySelector('#ecrire');
+  if (!f) return;
+  const t = f.querySelector('textarea');
+  const ajuster = () => { t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight, 160)}px`; };
+  t.oninput = ajuster;
+  f.onsubmit = (ev) => {
+    ev.preventDefault();
+    const texte = t.value.trim();
+    if (!texte) return;
+    etat.choix.messages = [...(etat.choix.messages || []), { id: Date.now().toString(36), texte, le: new Date().toISOString() }];
+    memoire.ecrire(`choix-${cleLocale}`, etat.choix);
+    clearTimeout(minuterieEnvoi);
+    envoyerChoix();
+    vibrer();
+    toast(`${icone('check', { taille: 16 })} Message envoyé à ${esc(etat.donnees.raph)}`);
+    redessinerContenu();
+  };
+  const demo = racine.querySelector('[data-demo-sms]');
+  if (demo) demo.onclick = (ev) => { ev.preventDefault(); toast('Démo : ouvre un texto vers le cell de Raph'); };
 }
 
 function brancher() {
@@ -473,27 +500,18 @@ function brancher() {
       zone.classList.remove('fondu'); void zone.offsetWidth; zone.classList.add('fondu');
     };
   });
-  brancherMot();
+  brancherMessage();
   const inst = racine.querySelector('#bouton-installer');
   if (inst) {
     inst.onclick = async () => {
       if (await pwa.installer()) return;
       const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
       racine.querySelector('#aide-installer').textContent = ios
-        ? 'Touche le bouton Partager (le carré avec une flèche), puis « Sur l’écran d’accueil ».'
-        : 'Dans le menu du navigateur (les 3 points), choisis « Ajouter à l’écran d’accueil ».';
+        ? 'Touchez le bouton Partager (le carré avec une flèche), puis « Sur l’écran d’accueil ».'
+        : 'Dans le menu du navigateur (les 3 points), choisissez « Ajouter à l’écran d’accueil ».';
       inst.hidden = true;
     };
   }
-  racine.querySelector('#partager').onclick = async () => {
-    const d = etat.donnees;
-    const site = new URL('site/', location.href.split('?')[0]).href;
-    const texte = `${d.raph} prépare mon voyage${d.ville ? ` à ${d.ville}` : ''} en allant sur place pour moi. Chaque soir à ${commun.formatHeure(d.heure ?? 19)}, je choisis mon hôtel, mon resto et mon activité parmi ses trouvailles. Regarde :`;
-    try {
-      if (navigator.share) await navigator.share({ text: texte, url: site });
-      else { await navigator.clipboard.writeText(`${texte} ${site}`); toast('Texte copié : colle-le à ton ami'); }
-    } catch (_) { /* annulé */ }
-  };
 }
 
 // Le compte à rebours. À l'heure de la livraison, la page se recharge toute seule.
@@ -508,7 +526,7 @@ function demarrerRebours(prochaine) {
       clearInterval(minuterieRebours);
       await rafraichir(true);
     }
-  }, 20000);
+  }, 1000);
 }
 
 async function rafraichir(livraison = false) {
@@ -517,7 +535,7 @@ async function rafraichir(livraison = false) {
     etat.donnees = await chargerDonnees();
     if (feuille.hidden && !['TEXTAREA', 'INPUT'].includes(document.activeElement?.tagName)) rendre();
     const apres = soirees().livres.length;
-    if (livraison && apres > avant) toast(`${icone('sparkles', { taille: 16 })} Tes choix du soir sont arrivés`);
+    if (livraison && apres > avant) toast(`${icone('sparkles', { taille: 16 })} Vos sélections du soir sont arrivées`);
   } catch (_) { /* on garde ce qui est affiché */ }
 }
 
@@ -534,14 +552,14 @@ function erreur(titre, texte) {
 // ---------- Démarrage ----------
 (async () => {
   if (!DEMO && (!id || !cle)) {
-    erreur('Ce voyage est privé', 'Il s’ouvre seulement avec le lien complet reçu de ton conseiller. Ouvre-le directement depuis son message.');
+    erreur('Ce voyage est privé', 'Il s’ouvre seulement avec le lien complet reçu de votre conseiller. Ouvrez-le directement depuis son message.');
     return;
   }
   try {
     etat.donnees = await chargerDonnees();
   } catch (err) {
-    if (err?.name === 'OperationError') erreur('Ce lien ne fonctionne pas', 'Le lien semble incomplet. Ouvre-le directement depuis le message reçu, sans le modifier.');
-    else erreur('Ton voyage arrive bientôt', 'Il n’est pas encore en ligne, ou internet manque. Réessaie dans quelques minutes.');
+    if (err?.name === 'OperationError') erreur('Ce lien ne fonctionne pas', 'Le lien semble incomplet. Ouvrez-le directement depuis le message reçu, sans le modifier.');
+    else erreur('Votre voyage arrive bientôt', 'Il n’est pas encore en ligne, ou internet manque. Réessayez dans quelques minutes.');
     return;
   }
   // Démo : les soirées passées sont déjà complétées ; les choix faits à la main restent par-dessus.
@@ -550,7 +568,7 @@ function erreur(titre, texte) {
     const encoreLa = Object.fromEntries(Object.entries(etat.choix.soirs).filter(([, s]) => Object.values(s).every((v) => v === 'aucun' || ids.has(v))));
     etat.choix.soirs = { ...etat.donnees.choixDemo.soirs, ...encoreLa };
   }
-  document.title = `${etat.donnees.ville || 'Mon voyage'} · voyage de ${etat.donnees.prenom || 'toi'}`;
+  document.title = `Votre voyage${etat.donnees.ville ? ` · ${etat.donnees.ville}` : ''}`;
   rendre();
   signalerVisite();
   // Quand le client revient sur la page : on regarde s'il y a du nouveau, et on renvoie ses choix.

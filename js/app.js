@@ -1026,9 +1026,9 @@ async function pageClients() {
   const tous = (await db.tous('carnets')).sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const actif = await db.lireReglage('carnetActif', null);
   app.innerHTML = `
-    <header class="entete-page">
+    <header class="entete-page entete-clients">
       <h1>Clients</h1>
-      <p>Voyage sur mesure : tu repères sur place, et ton client choisit parmi tes trouvailles, à l’heure et au rythme que tu règles pour lui.</p>
+      <a class="lien-exemple" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 16 })} Exemple</a>
     </header>
     <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau voyage sur mesure</button>
     <ul class="carnets">
@@ -1043,12 +1043,10 @@ async function pageClients() {
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`).join('')}
     </ul>
-    ${tous.length ? '' : `<p class="vide"><span class="vide-icone">${icone('moon', { taille: 28 })}</span><b>Aucun client pour l’instant</b><span>Crée un voyage sur mesure : ton client aura sa page privée, livrée chaque soir.</span></p>`}
-    <a class="bouton-secondaire bouton-bloc lien-demo" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Voir l’exemple : Montréal</a>
+    ${tous.length ? '' : '<p class="petit vide-clients">Aucun client pour l’instant.</p>'}
 
     <section class="section carte-fiche">
       <h2 class="section-titre">${icone('file-text', { taille: 20 })} Formulaire de demande</h2>
-      <p class="petit">Le questionnaire pour un nouveau client : ses pays, ses dates, ses envies. Mets son nom pour lui faire un lien personnel, déjà rempli à son nom.</p>
       <label class="champ"><span>Nom du client <small>optionnel</small></span><input id="fiche-nom" placeholder="Ex. : Marie Tremblay" autocapitalize="words" autocomplete="off"></label>
       <p class="carte-lien-url fiche-url" id="fiche-url"></p>
       <div class="trois">
@@ -1058,10 +1056,10 @@ async function pageClients() {
       </div>
       <details class="fiche-plus">
         <summary>Où arrivent les réponses</summary>
-        <label class="champ"><span>Ton courriel <small>la demande t’arrive toute seule</small></span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
-        <label class="champ"><span>Ton cell <small>le client peut aussi te l’envoyer par texto</small></span><input id="fiche-tel" type="tel" value="${esc(await db.lireReglage('telFiche', ''))}" placeholder="514 555-1234"></label>
+        <label class="champ"><span>Ton courriel</span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
+        <label class="champ"><span>Ton cell</span><input id="fiche-tel" type="tel" value="${esc(await db.lireReglage('telFiche', ''))}" placeholder="514 555-1234"></label>
       </details>
-      <a class="lien lien-icone" href="demande.html?installer=1" target="_blank" rel="noopener">${icone('download', { taille: 14 })} Mettre le formulaire sur mon écran d’accueil</a>
+      <a class="lien lien-icone" href="demande.html?installer=1" target="_blank" rel="noopener">${icone('download', { taille: 14 })} Sur mon écran d’accueil</a>
     </section>`;
   // Le lien du formulaire, personnel si on met un nom (même lien que dans le Studio).
   const lienFiche = () => {
@@ -1130,12 +1128,13 @@ async function pageCarnet(id, sous) {
   const ch = c.choix || {};
   const reglagesOuverts = sous === 'reglages' || !c.client?.prenom;
   const aAjouter = aVenir.endroitsAAjouter(c, parId);
+  const telDefaut = await db.lireReglage('telFiche', '');
 
   app.innerHTML = `
     <header class="entete-form">
       <a class="rond" href="#/clients" aria-label="Retour">${icone('chevron-left')}</a>
       <h1>${esc(c.client?.prenom ? `Voyage de ${c.client.prenom}` : 'Nouveau voyage sur mesure')}</h1>
-      <span class="rond vide-rond"></span>
+      <button type="button" class="rond rond-supprimer" id="supprimer-haut" aria-label="Supprimer ce client" title="Supprimer ce client">${icone('trash-2', { taille: 19 })}</button>
     </header>
 
     <section class="carnet-entete">
@@ -1160,12 +1159,12 @@ async function pageCarnet(id, sous) {
 
     ${ch.envoyeLe || nbChoix(c) ? `
     <section class="section">
-      <h2 class="section-titre">${icone('check', { taille: 20 })} Ses choix</h2>
+      <h2 class="section-titre">${icone('check', { taille: 20 })} Ses choix et messages</h2>
       <p class="petit">${ch.vuLe ? `${esc(prenom)} a ouvert son voyage ${esc(depuis(ch.vuLe))}. ` : ''}Ses choix arrivent tout seuls et vont dans son voyage du Studio.</p>
       ${[...new Set(choixRetenus(c).map((r) => r.quand))].map((q) => `
         <p class="soir-titre">${esc(dateLongue(q, c.fuseau))}</p>
         ${choixRetenus(c).filter((r) => r.quand === q).map((r) => { const i = c.items.find((y) => y.id === r.itemId); const e = i && parId.get(i.endroitId); return `<p class="choix-ligne">${icone(GROUPES_CHOIX[r.groupe].ico, { taille: 16 })}<span>${GROUPES_CHOIX[r.groupe].court} : <b>${e ? esc(e.nom) : 'aucun ne lui plaisait'}</b></span></p>`; }).join('')}`).join('')}
-      ${ch.mot ? `<blockquote class="mot-du-client">« ${esc(ch.mot)} »</blockquote>` : ''}
+      ${(ch.messages?.length ? ch.messages : ch.mot ? [{ texte: ch.mot }] : []).map((m) => `<blockquote class="mot-du-client">« ${esc(m.texte)} »${m.le ? `<small>${esc(depuis(m.le))}</small>` : ''}</blockquote>`).join('')}
       <button class="lien lien-icone" id="rafraichir-choix">${icone('refresh-cw', { taille: 14 })} Regarder s’il y a du nouveau</button>
     </section>` : ''}
 
@@ -1197,6 +1196,7 @@ async function pageCarnet(id, sous) {
         <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" placeholder="Ex. : Montréal"></label>
         <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" placeholder="Ex. : Canada"></label>
       </div>
+      <label class="champ"><span>Ton cell <small>pour qu’il t’écrive par texto depuis sa page</small></span><input id="c-tel" type="tel" value="${esc(c.tel ?? telDefaut)}" placeholder="514 555-1234"></label>
       <label class="interrupteur">
         <span><b>Repérage terminé</b><small>Sa page reste ouverte, sans le « En repérage »</small></span>
         <input type="checkbox" id="c-fini" ${c.actif ? '' : 'checked'}>
@@ -1308,17 +1308,27 @@ async function pageCarnet(id, sous) {
   surChange('#c-prenom', (el) => { c.client = { ...c.client, prenom: el.value.trim() }; });
   surChange('#c-ville', (el) => { c.ville = el.value.trim(); });
   surChange('#c-pays', (el) => { c.pays = el.value.trim(); });
+  surChange('#c-tel', (el) => { c.tel = el.value.trim(); if (c.tel) db.ecrireReglage('telFiche', c.tel); });
   surChange('#c-fini', (el) => { c.actif = !el.checked; });
   ['#c-fini', '#c-ville'].forEach((s) => champ(s).addEventListener('change', () => setTimeout(recharger, 50)));
-  app.querySelector('#supprimer-carnet').onclick = async (ev) => {
-    const b = ev.currentTarget;
-    if (!b.dataset.confirmer) { b.dataset.confirmer = '1'; b.textContent = `Toucher encore pour supprimer (la page de ${prenom} ne s’ouvrira plus)`; return; }
+  // Supprimer : deux touchers, pour ne pas le faire par erreur.
+  const supprimer = async (b, texte) => {
+    if (!b.dataset.confirmer) {
+      b.dataset.confirmer = '1'; b.classList.add('confirmer');
+      if (texte) b.textContent = texte;
+      toast(`Touche encore pour supprimer ${prenom} (sa page ne s’ouvrira plus)`);
+      setTimeout(() => { delete b.dataset.confirmer; b.classList.remove('confirmer'); }, 5000);
+      return;
+    }
     await db.effacer('carnets', c.id);
     if (actifId === c.id) await db.ecrireReglage('carnetActif', null);
     sync.marquer(sync.cheminCarnet(c.id));
-    toast('Voyage supprimé');
+    toast('Client supprimé');
     aller('#/clients');
   };
+  app.querySelector('#supprimer-haut').onclick = (ev) => supprimer(ev.currentTarget);
+  app.querySelector('#supprimer-carnet').onclick = (ev) => supprimer(ev.currentTarget, `Toucher encore pour supprimer`);
+
 
   // Les choix du client : on regarde en arrivant, puis chaque minute tant que la page est ouverte.
   const avant = JSON.stringify(c.choix || null);
