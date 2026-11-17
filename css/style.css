@@ -590,7 +590,7 @@ body[data-page="reglages"] .section { gap: 12px; }
 .choix-ligne { display: flex; align-items: center; gap: 8px; margin: 0; }
 .choix-ligne .ico { color: var(--accent); }
 .mot-du-client { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-pale); font-style: italic; }
-#reglages-carnet summary { font-weight: 700; cursor: pointer; }
+#reglages-carnet summary, #envoi-carnet summary { font-weight: 700; cursor: pointer; }
 #reglages-carnet summary small { font-weight: 500; color: var(--doux); }
 .section-client { background: linear-gradient(140deg, #1d1b22, #2a2027); color: #f4f0ea; border-radius: var(--rayon); padding: 16px; margin: 14px 0; border: 0; }
 .section-client .interrupteur small, .section-client .champ small { color: #aba5ad; }
@@ -611,3 +611,10 @@ body[data-page="reglages"] .section { gap: 12px; }
 .carte-lien .petit { margin: 0; color: #aba5ad; }
 .trois { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .trois > * { min-width: 0; padding-left: 6px; padding-right: 6px; }
+
+/* Formulaire de demande (onglet Clients) */
+.carte-fiche { display: flex; flex-direction: column; gap: 10px; }
+.carte-fiche .fiche-url { background: var(--surface-2); color: var(--doux); }
+.fiche-plus summary { cursor: pointer; font-weight: 600; color: var(--doux); font-size: .9rem; }
+.fiche-plus[open] { display: flex; flex-direction: column; gap: 8px; }
+#envoi-carnet summary small, #reglages-carnet summary small { display: block; }

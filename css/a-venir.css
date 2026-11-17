@@ -1,0 +1,64 @@
+/* « À venir » et « Réglages d'envoi » d'un voyage sur mesure : même bloc dans l'appli et dans le Studio.
+   Les couleurs viennent de la page qui l'accueille (--av-*), avec des valeurs par défaut sobres. */
+.av, .av-reglages {
+  --av-carte: var(--surface, var(--p1, #fff));
+  --av-fond: var(--surface-2, var(--p2, #f4f3ef));
+  --av-ligne: var(--bordure, var(--ln, rgba(0, 0, 0, .1)));
+  --av-doux: var(--doux, var(--dim, #6b6b70));
+  --av-accent: var(--accent, var(--ac, #f0532f));
+  display: flex; flex-direction: column; gap: 12px;
+}
+.av-etiquette { margin: 6px 0 0; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--av-doux); }
+.av-aide { margin: -4px 0 0; font-size: .82rem; color: var(--av-doux); }
+
+/* Réglages */
+.av-quota { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--av-fond); }
+.av-quota-nom { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.av-quota-nom > span { display: flex; flex-direction: column; min-width: 0; }
+.av-quota-nom small { color: var(--av-doux); font-size: .8rem; }
+.av-pas { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.av-pas b { min-width: 26px; text-align: center; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.av-pas button, .av-actions button, .av-jours button {
+  border: 1px solid var(--av-ligne); background: var(--av-carte); color: inherit; font: inherit; cursor: pointer;
+  display: inline-grid; place-items: center;
+}
+.av-pas button { width: 34px; height: 34px; border-radius: 50%; }
+.av-pas button:disabled, .av-actions button:disabled { opacity: .3; cursor: default; }
+.av-jours { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.av-jours button { height: 40px; border-radius: 10px; font-weight: 650; font-size: .86rem; }
+.av-jours button.on { background: var(--av-accent); border-color: var(--av-accent); color: #fff; }
+.av-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.av-champ { display: flex; flex-direction: column; gap: 4px; font-size: .86rem; font-weight: 600; min-width: 0; }
+.av-champ select { font: inherit; font-weight: 500; padding: 10px; border-radius: 10px; border: 1px solid var(--av-ligne); background: var(--av-carte); color: inherit; min-width: 0; }
+
+/* À venir */
+.av-resume { margin: 0; display: flex; align-items: center; gap: 6px; font-size: .86rem; color: var(--av-doux); }
+.av-envoi { border: 1px solid var(--av-ligne); border-radius: 14px; padding: 12px; background: var(--av-carte); display: flex; flex-direction: column; gap: 6px; }
+.av-envoi.prochain { border-color: var(--av-accent); box-shadow: 0 0 0 1px var(--av-accent) inset; }
+.av-envoi.reserve { background: var(--av-fond); border-style: dashed; }
+.av-envoi-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.av-envoi-tete > span { display: flex; flex-direction: column; }
+.av-envoi-tete b { font-size: 1.02rem; }
+.av-envoi-tete small { color: var(--av-doux); font-size: .82rem; }
+.av-maintenant { border: 0; background: var(--av-fond); color: inherit; font: inherit; font-size: .8rem; font-weight: 650; padding: 7px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; flex: none; }
+.av-groupe { margin: 6px 0 0; font-size: .78rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--av-doux); display: flex; align-items: center; gap: 6px; }
+.av-groupe em { font-style: normal; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--av-fond); letter-spacing: 0; }
+.av-groupe em.plein { color: var(--av-accent); }
+.av-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.av-item { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 10px; background: var(--av-fond); }
+.av-vignette { flex: none; width: 48px; height: 48px; border-radius: 9px; overflow: hidden; display: grid; place-items: center; background: var(--av-carte); color: var(--av-doux); }
+.av-vignette img { width: 100%; height: 100%; object-fit: cover; }
+.av-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.av-txt b { font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-txt small { color: var(--av-doux); font-size: .78rem; }
+.av-mot { all: unset; cursor: pointer; font-size: .8rem; font-style: italic; color: var(--av-accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-actions { display: flex; gap: 4px; flex: none; }
+.av-actions button { width: 30px; height: 30px; border-radius: 8px; }
+.av-vide { margin: 0; display: flex; gap: 10px; align-items: flex-start; padding: 14px; border-radius: 14px; background: var(--av-fond); color: var(--av-doux); }
+.av-vide span { display: flex; flex-direction: column; gap: 2px; }
+.av-vide b { color: inherit; filter: brightness(.6); }
+.av-suite { margin: 0; font-size: .86rem; color: var(--av-doux); }
+@media (max-width: 380px) {
+  .av-actions button { width: 27px; height: 27px; }
+  .av-vignette { width: 40px; height: 40px; }
+}

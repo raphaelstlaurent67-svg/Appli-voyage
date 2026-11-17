@@ -11,7 +11,9 @@ import * as pwa from './installer.js';
 import { ENVIES, decoder, extraireCode, nuits } from './code-demande.js';
 import { distanceM } from './exif.js';
 import * as verif from './verification.js';
-import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX } from './carnet-commun.js';
+import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
+import * as carnets from './carnets.js';
+import * as aVenir from './a-venir.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -390,6 +392,7 @@ async function router() {
   if (page === 'a-valider') return pageAValider();
   if (page === 'demande') return pageDemande(id);
   if (page === 'demandes') return pageDemandes();
+  if (page === 'carnet') return pageCarnetStudio(id);
   if (page === 'ventes') return pageVentes(id || '30j');
   if (page === 'donnees') return pageDonnees();
   return pageAccueil();
@@ -698,7 +701,7 @@ function panneauCarnets() {
     <section class="panel carnets-direct">
       <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3><span class="aide">Les choix du client entrent tout seuls dans son voyage</span></div>
       ${tries.map((c) => {
-        const livres = c.items.filter((i) => new Date(i.livraison) <= maintenant).length;
+        const livres = c.items.filter((i) => estEnvoye(i, maintenant)).length;
         const attente = c.items.length - livres;
         const ch = c.choix || {};
         const retenus = choixRetenus(c);
@@ -707,8 +710,9 @@ function panneauCarnets() {
           <div class="carnet-studio">
             <div class="carnet-studio-tete">
               <b>${esc(c.client?.prenom || 'Client')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
-              <span class="aide">${pluriel(livres, 'endroit proposé', 'endroits proposés')}${attente ? `, ${attente} pour ${formatHeure(c.heure)}` : ''}${ch.vuLe ? `, vu le ${esc(new Date(ch.vuLe).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</span>
+              <span class="aide">${pluriel(livres, 'endroit proposé', 'endroits proposés')}${attente ? `, ${attente} à venir` : ''}${ch.vuLe ? `, vu le ${esc(new Date(ch.vuLe).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}` : ''}</span>
               <span class="rangee-btn">
+                <a class="btn sm" href="#/carnet/${esc(c.id)}">${icone('clock', { taille: 14 })} À venir</a>
                 ${v ? `<a class="btn sm" href="#/voyage/${esc(v.id)}">${icone('route', { taille: 14 })} Son voyage</a>` : ''}
                 <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>
               </span>
@@ -718,6 +722,74 @@ function panneauCarnets() {
           </div>`;
       }).join('')}
     </section>`;
+}
+
+// ---------- Un voyage sur mesure en direct : ce qui part au client, et ses réglages ----------
+async function pageCarnetStudio(id) {
+  const c = await db.lire('carnets', id);
+  if (!c) { location.hash = '#/'; return; }
+  const prenom = c.client?.prenom || 'ton client';
+  const parId = new Map(etat.endroits.map((e) => [e.id, e]));
+  const lien = lienClient(new URL('../', location.href).href, c.id, c.cle);
+  const aAjouter = aVenir.endroitsAAjouter(c, parId);
+  app.innerHTML = `
+    ${entete(`Voyage de ${esc(prenom)}`, `${esc(c.ville || 'Ville à choisir')} · ${esc(aVenir.resumeReglages(c))}`, `<a class="btn ghost sm" href="#/">${icone('chevron-left', { taille: 14 })} Accueil</a>`)}
+    <div class="grille-2 carnet-studio-page">
+      <section class="panel" id="a-venir">
+        <div class="panel-tete"><h3>${icone('clock', { taille: 15 })} À venir</h3><span class="aide">Ce qui part à ${esc(prenom)}, et quand</span></div>
+        ${aVenir.blocAVenir(c, parId, { prenom, montrer: 6 })}
+        <div class="rangee-btn" style="margin-top:12px">
+          ${aAjouter.length ? `<button class="btn" id="ajouter-tous">${icone('plus', { taille: 15 })} Ajouter mes ${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''}${c.ville ? ` de ${esc(c.ville)}` : ''}</button>` : ''}
+          <button class="btn ghost" id="ajouter-un">${icone('plus', { taille: 15 })} Ajouter un endroit</button>
+        </div>
+      </section>
+      <div class="av-colonne">
+        <section class="panel" id="envoi">
+          <div class="panel-tete"><h3>${icone('settings', { taille: 15 })} Réglages d'envoi</h3></div>
+          ${aVenir.blocReglages(c)}
+        </section>
+        <section class="panel">
+          <div class="panel-tete"><h3>${icone('lock', { taille: 15 })} Le lien privé de ${esc(prenom)}</h3></div>
+          <div class="lien-fiche"><code>${esc(lien.replace(/#.*/, '#…'))}</code></div>
+          <div class="rangee-btn">
+            <button class="btn" id="copier-lien">${icone('copy', { taille: 15 })} Copier son lien</button>
+            <a class="btn ghost" href="${esc(lien)}" target="_blank" rel="noopener">${icone('eye', { taille: 15 })} Voir sa page</a>
+          </div>
+        </section>
+      </div>
+    </div>`;
+  afficherPhotos(app);
+  const recharger = () => { if (location.hash === `#/carnet/${id}`) pageCarnetStudio(id); };
+  const sauver = async () => {
+    await carnets.enregistrer(c);
+    etat.carnets = etat.carnets.filter((x) => x.id !== c.id).concat(c);
+  };
+  const editerMot = (i) => new Promise((ok) => {
+    ouvrirModale('Petit conseil pour le client', `<p>Une phrase courte et pratique. Ex. : « Vas-y au coucher du soleil. »</p><textarea name="mot" rows="3">${esc(i.mot)}</textarea>`, (v) => { ok(v.mot || ''); });
+  });
+  const choisirEndroit = ({ titre, options }) => new Promise((ok) => {
+    ouvrirModale(esc(titre), `
+      <input type="search" class="chercher-av" placeholder="Chercher un endroit" autocomplete="off">
+      <div class="choix-av">${options.map((o) => `<button type="button" class="ligne-av" data-v="${esc(o.id)}" data-nom="${esc(`${o.nom} ${o.detail}`.toLowerCase())}"><b>${esc(o.nom)}</b><span>${esc(o.detail)}</span></button>`).join('')}</div>`, () => { ok(null); }, { ok: 'Fermer' });
+    const m = modale;
+    m.querySelector('.chercher-av').oninput = (ev) => { const q = ev.target.value.trim().toLowerCase(); m.querySelectorAll('.ligne-av').forEach((b) => { b.hidden = q && !b.dataset.nom.includes(q); }); };
+    m.querySelectorAll('.ligne-av').forEach((b) => { b.onclick = () => { fermerModale(); ok(b.dataset.v); }; });
+  });
+  aVenir.brancherAVenir(app.querySelector('#a-venir'), c, parId, { sauver, recharger, choisirEndroit, editerMot, ajouterItem: carnets.ajouterItem, toast });
+  aVenir.brancherReglages(app.querySelector('#envoi'), c, { sauver, recharger });
+  const tous = app.querySelector('#ajouter-tous');
+  if (tous) tous.onclick = async () => { for (const e of aAjouter) carnets.ajouterItem(c, e.id); await sauver(); toast('Ajoutés à sa file'); recharger(); };
+  app.querySelector('#ajouter-un').onclick = async () => {
+    const dans = new Set(c.items.map((i) => i.endroitId));
+    const libres = etat.endroits.filter((e) => !dans.has(e.id) && !e.contributeurId).sort((a, b) => ((b.ville || '') === c.ville) - ((a.ville || '') === c.ville) || (b.creeLe || '').localeCompare(a.creeLe || ''));
+    if (!libres.length) { toast('Tous tes endroits sont déjà dans ce voyage'); return; }
+    const x = await choisirEndroit({ titre: `Ajouter pour ${prenom}`, options: libres.map((e) => ({ id: e.id, nom: e.nom, detail: [e.sousType || e.type, e.ville].filter(Boolean).join(', ') })) });
+    if (!x) return;
+    carnets.ajouterItem(c, x); await sauver(); toast('Ajouté à sa file'); recharger();
+  };
+  app.querySelector('#copier-lien').onclick = async () => {
+    try { await navigator.clipboard.writeText(lien); toast('Son lien est copié'); } catch (_) { prompt('Copie son lien :', lien); }
+  };
 }
 
 // ---------- Un voyage ----------

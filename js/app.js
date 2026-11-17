@@ -7,7 +7,8 @@ import { rouvrirALAccueil } from './accueil.js';
 import * as db from './db.js';
 import { icone, iconeCat } from './icones.js';
 import * as carnets from './carnets.js';
-import { prochaineLivraison, dateLongue, formatHeure, HEURE_PAR_DEFAUT, choixRetenus, GROUPES_CHOIX, groupeDeCategorie } from './carnet-commun.js';
+import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
+import * as aVenir from './a-venir.js';
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -1001,19 +1002,6 @@ function pageMonVoyage(id, cle) {
 // Raph repère sur place pour un client. Chaque endroit envoyé au client part dans son carnet,
 // et lui est livré tous les soirs à la même heure (19 h par défaut), avec un petit mot écrit tout seul.
 
-const FUSEAUX = [
-  ['America/Toronto', 'Montréal, Toronto, New York'],
-  ['America/Vancouver', 'Vancouver, Los Angeles'],
-  ['Europe/Paris', 'Paris, Bruxelles, Genève'],
-  ['Europe/London', 'Londres'],
-  ['America/Mexico_City', 'Mexico'],
-  ['Asia/Tokyo', 'Tokyo, Séoul'],
-  ['Asia/Bangkok', 'Bangkok, Hanoï'],
-  ['Asia/Singapore', 'Singapour, Manille, Bali'],
-  ['Asia/Kathmandu', 'Katmandou'],
-  ['Australia/Sydney', 'Sydney'],
-];
-const HEURES = [7, 8, 9, 12, 17, 18, 19, 20, 21, 22];
 
 function etatPublication(c) {
   const p = c.publication || {};
@@ -1022,8 +1010,8 @@ function etatPublication(c) {
   if (p.publieLe) return { classe: 'ok', texte: `En ligne, à jour (${new Date(p.publieLe).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit' })})` };
   return { classe: 'attente', texte: 'Mise en ligne…' };
 }
-const enAttente = (c) => c.items.filter((i) => new Date(i.livraison) > Date.now());
-const livres = (c) => c.items.filter((i) => new Date(i.livraison) <= Date.now());
+const enAttente = (c) => c.items.filter((i) => !estEnvoye(i));
+const livres = (c) => c.items.filter((i) => estEnvoye(i));
 const nbChoix = (c) => choixRetenus(c).filter((r) => r.itemId !== 'aucun').length;
 const depuis = (iso) => {
   if (!iso) return '';
@@ -1040,7 +1028,7 @@ async function pageClients() {
   app.innerHTML = `
     <header class="entete-page">
       <h1>Clients</h1>
-      <p>Voyage sur mesure : tu repères sur place, et chaque soir ton client choisit 1 hôtel, 1 resto et 1 activité parmi tes trouvailles.</p>
+      <p>Voyage sur mesure : tu repères sur place, et ton client choisit parmi tes trouvailles, à l’heure et au rythme que tu règles pour lui.</p>
     </header>
     <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau voyage sur mesure</button>
     <ul class="carnets">
@@ -1049,14 +1037,59 @@ async function pageClients() {
           <span class="carnet-avatar">${esc((c.client?.prenom || '?').charAt(0).toUpperCase())}</span>
           <span class="carnet-txt">
             <b>${esc(c.client?.prenom || 'Client sans nom')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
-            <small>${livres(c).length} livré${livres(c).length > 1 ? 's' : ''}${enAttente(c).length ? `, ${enAttente(c).length} pour ce soir` : ''}${nbChoix(c) ? ` · ${icone('check', { taille: 12 })} ${nbChoix(c)} choisi${nbChoix(c) > 1 ? 's' : ''}` : ''}${c.choix?.vuLe ? ` · vu ${esc(depuis(c.choix.vuLe))}` : ''}</small>
+            <small>${livres(c).length} livré${livres(c).length > 1 ? 's' : ''}${enAttente(c).length ? `, ${enAttente(c).length} en attente` : ''}${nbChoix(c) ? ` · ${icone('check', { taille: 12 })} ${nbChoix(c)} choisi${nbChoix(c) > 1 ? 's' : ''}` : ''}${c.choix?.vuLe ? ` · vu ${esc(depuis(c.choix.vuLe))}` : ''}</small>
           </span>
           ${c.id === actif && c.actif ? '<span class="pastille-direct">En repérage</span>' : !c.actif ? '<span class="pastille-fini">Terminé</span>' : ''}
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`).join('')}
     </ul>
     ${tous.length ? '' : `<p class="vide"><span class="vide-icone">${icone('moon', { taille: 28 })}</span><b>Aucun client pour l’instant</b><span>Crée un voyage sur mesure : ton client aura sa page privée, livrée chaque soir.</span></p>`}
-    <a class="bouton-secondaire bouton-bloc lien-demo" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Voir l’exemple : Montréal</a>`;
+    <a class="bouton-secondaire bouton-bloc lien-demo" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 18 })} Voir l’exemple : Montréal</a>
+
+    <section class="section carte-fiche">
+      <h2 class="section-titre">${icone('file-text', { taille: 20 })} Formulaire de demande</h2>
+      <p class="petit">Le questionnaire pour un nouveau client : ses pays, ses dates, ses envies. Mets son nom pour lui faire un lien personnel, déjà rempli à son nom.</p>
+      <label class="champ"><span>Nom du client <small>optionnel</small></span><input id="fiche-nom" placeholder="Ex. : Marie Tremblay" autocapitalize="words" autocomplete="off"></label>
+      <p class="carte-lien-url fiche-url" id="fiche-url"></p>
+      <div class="trois">
+        <button class="bouton-principal" id="fiche-copier">${icone('copy', { taille: 17 })} Copier</button>
+        <button class="bouton-secondaire" id="fiche-envoyer">${icone('send', { taille: 17 })} Envoyer</button>
+        <a class="bouton-secondaire" id="fiche-voir" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
+      </div>
+      <details class="fiche-plus">
+        <summary>Où arrivent les réponses</summary>
+        <label class="champ"><span>Ton courriel <small>la demande t’arrive toute seule</small></span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
+        <label class="champ"><span>Ton cell <small>le client peut aussi te l’envoyer par texto</small></span><input id="fiche-tel" type="tel" value="${esc(await db.lireReglage('telFiche', ''))}" placeholder="514 555-1234"></label>
+      </details>
+      <a class="lien lien-icone" href="demande.html?installer=1" target="_blank" rel="noopener">${icone('download', { taille: 14 })} Mettre le formulaire sur mon écran d’accueil</a>
+    </section>`;
+  // Le lien du formulaire, personnel si on met un nom (même lien que dans le Studio).
+  const lienFiche = () => {
+    const u = new URL('demande.html', location.href);
+    const nom = app.querySelector('#fiche-nom').value.trim();
+    const courriel = app.querySelector('#fiche-courriel').value.trim();
+    const tel = app.querySelector('#fiche-tel').value.replace(/[^\d+]/g, '');
+    if (nom) u.searchParams.set('client', nom);
+    if (courriel) u.searchParams.set('pour', courriel);
+    if (tel) u.searchParams.set('tel', tel);
+    return u.href;
+  };
+  const majFiche = () => { const l = lienFiche(); app.querySelector('#fiche-url').textContent = l.replace(/^https?:\/\//, ''); app.querySelector('#fiche-voir').href = l; };
+  majFiche();
+  ['#fiche-nom', '#fiche-courriel', '#fiche-tel'].forEach((sel) => { app.querySelector(sel).oninput = majFiche; });
+  app.querySelector('#fiche-courriel').onchange = (ev) => db.ecrireReglage('courrielFiche', ev.target.value.trim());
+  app.querySelector('#fiche-tel').onchange = (ev) => db.ecrireReglage('telFiche', ev.target.value.trim());
+  app.querySelector('#fiche-copier').onclick = async () => {
+    const l = lienFiche();
+    try { await navigator.clipboard.writeText(l); toast('Lien du formulaire copié'); } catch (_) { window.prompt('Copie ce lien :', l); }
+  };
+  app.querySelector('#fiche-envoyer').onclick = async () => {
+    const l = lienFiche();
+    try {
+      if (navigator.share) await navigator.share({ title: 'Ton voyage sur mesure', url: l });
+      else { await navigator.clipboard.writeText(l); toast('Lien du formulaire copié'); }
+    } catch (_) { /* annulé */ }
+  };
   app.querySelector('#nouveau-carnet').onclick = async () => {
     const dernier = await db.lireReglage('dernierLieu', {});
     const c = carnets.nouveauCarnet({ ville: dernier.ville || '', pays: dernier.pays || etat.region.pays || '' });
@@ -1091,14 +1124,12 @@ async function pageCarnet(id, sous) {
   const prenom = c.client?.prenom || 'ton client';
   const lienClient = carnets.lien(c);
   const parId = new Map(etat.endroits.map((e) => [e.id, e]));
-  const items = c.items.filter((i) => parId.has(i.endroitId));
-  const attente = items.filter((i) => new Date(i.livraison) > Date.now());
-  const faits = items.filter((i) => new Date(i.livraison) <= Date.now());
+  const faits = c.items.filter((i) => parId.has(i.endroitId) && estEnvoye(i));
   const soirs = [...new Set(faits.map((i) => i.livraison))].sort().reverse();
   const pub = etatPublication(c);
-  const prochaine = prochaineLivraison(new Date(), c.heure, c.fuseau);
   const ch = c.choix || {};
   const reglagesOuverts = sous === 'reglages' || !c.client?.prenom;
+  const aAjouter = aVenir.endroitsAAjouter(c, parId);
 
   app.innerHTML = `
     <header class="entete-form">
@@ -1108,10 +1139,10 @@ async function pageCarnet(id, sous) {
     </header>
 
     <section class="carnet-entete">
-      <p class="carnet-sur">${icone('moon', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')} · livraison chaque soir à ${formatHeure(c.heure)}</p>
+      <p class="carnet-sur">${icone('moon', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')} · ${esc(aVenir.resumeReglages(c))}</p>
       <p class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</p>
       <label class="interrupteur carte-interrupteur">
-        <span><b>Je repère pour ${esc(prenom)}</b><small>Chaque nouvel endroit te propose de l’ajouter à ses choix du soir</small></span>
+        <span><b>Je repère pour ${esc(prenom)}</b><small>Chaque endroit que tu sauvegardes entre tout seul dans sa file d’envoi</small></span>
         <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
         <i aria-hidden="true"></i>
       </label>
@@ -1138,36 +1169,34 @@ async function pageCarnet(id, sous) {
       <button class="lien lien-icone" id="rafraichir-choix">${icone('refresh-cw', { taille: 14 })} Regarder s’il y a du nouveau</button>
     </section>` : ''}
 
-    <section class="section">
-      <h2 class="section-titre">${icone('clock', { taille: 20 })} ${esc(dateLongue(prochaine, c.fuseau).replace(/^./, (x) => x.toUpperCase()))}, ${formatHeure(c.heure)}</h2>
-      ${attente.length ? `
-        <p class="compo-soir">${Object.keys(GROUPES_CHOIX).map((g) => { const n = attente.filter((i) => groupeDeCategorie(parId.get(i.endroitId)?.categorie) === g).length; return `<span class="${n >= 3 ? 'ok' : ''}">${icone(GROUPES_CHOIX[g].ico, { taille: 14 })} ${n}/3 ${GROUPES_CHOIX[g].court.toLowerCase()}${n > 1 ? 's' : ''}</span>`; }).join('')}</p>
-        <ul class="items-carnet">${attente.map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: true })).join('')}</ul>
-        <button class="bouton-secondaire bouton-bloc" id="livrer-tout">${icone('send', { taille: 18 })} Tout livrer maintenant</button>` : `
-        <p class="petit">Rien pour ce soir encore. Ajoute un endroit avec le bouton +${actifId === c.id ? '' : ' (active « Je repère » plus haut)'}, ou ajoute un endroit déjà noté.</p>`}
+    <section class="section" id="a-venir">
+      <h2 class="section-titre">${icone('clock', { taille: 20 })} À venir</h2>
+      <p class="petit">Ce qui part à ${esc(prenom)}, et quand. Tu peux changer l’ordre, remplacer ou retirer jusqu’à la dernière minute.</p>
+      ${aVenir.blocAVenir(c, parId, { prenom })}
+      ${aAjouter.length ? `<button class="bouton-principal bouton-bloc" id="ajouter-tous">${icone('plus', { taille: 18 })} Ajouter mes ${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''}${c.ville ? ` de ${esc(c.ville)}` : ''}</button>` : ''}
       <button class="bouton-secondaire bouton-bloc" id="ajouter-existant">${icone('plus', { taille: 18 })} Ajouter un endroit déjà noté</button>
     </section>
 
+    <details class="section" id="envoi-carnet" ${sous === 'envoi' ? 'open' : ''}>
+      <summary>Réglages d’envoi <small>${esc(aVenir.resumeReglages(c))}</small></summary>
+      ${aVenir.blocReglages(c)}
+    </details>
+
     ${soirs.length ? `
-    <section class="section">
-      <h2 class="section-titre">${icone('book-open', { taille: 20 })} Déjà livré</h2>
+    <section class="section" id="deja-livre">
+      <h2 class="section-titre">${icone('book-open', { taille: 20 })} Déjà envoyé</h2>
       ${soirs.map((s) => `
         <p class="soir-titre">${esc(dateLongue(s, c.fuseau))}</p>
         <ul class="items-carnet">${faits.filter((i) => i.livraison === s).map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: false })).join('')}</ul>`).join('')}
     </section>` : ''}
 
     <details class="section" id="reglages-carnet" ${reglagesOuverts ? 'open' : ''}>
-      <summary>Réglages du voyage <small>prénom, ville, heure…</small></summary>
+      <summary>Infos du voyage <small>prénom, ville…</small></summary>
       <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" placeholder="Ex. : Marc" autocapitalize="words"></label>
       <div class="deux">
         <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" placeholder="Ex. : Montréal"></label>
         <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" placeholder="Ex. : Canada"></label>
       </div>
-      <div class="deux">
-        <label class="champ"><span>Heure de livraison</span><select id="c-heure">${HEURES.map((h) => `<option value="${h}" ${h === c.heure ? 'selected' : ''}>${formatHeure(h)}${h === HEURE_PAR_DEFAUT ? ' (conseillé)' : ''}</option>`).join('')}</select></label>
-        <label class="champ"><span>Heure de chez lui</span><select id="c-fuseau">${FUSEAUX.map(([f, nom]) => `<option value="${f}" ${f === c.fuseau ? 'selected' : ''}>${esc(nom)}</option>`).join('')}</select></label>
-      </div>
-      <p class="aide">19 h, c’est après le souper : le moment où on a le temps de rêver. L’heure est celle de chez ton client.</p>
       <label class="interrupteur">
         <span><b>Repérage terminé</b><small>Sa page reste ouverte, sans le « En repérage »</small></span>
         <input type="checkbox" id="c-fini" ${c.actif ? '' : 'checked'}>
@@ -1177,7 +1206,8 @@ async function pageCarnet(id, sous) {
     </details>`;
 
   afficherPhotos(app);
-  const recharger = () => pageCarnet(id, reglagesOuverts && app.querySelector('#reglages-carnet')?.open ? 'reglages' : '');
+  const ouvert = () => (app.querySelector('#envoi-carnet')?.open ? 'envoi' : reglagesOuverts && app.querySelector('#reglages-carnet')?.open ? 'reglages' : '');
+  const recharger = () => pageCarnet(id, ouvert());
   const sauver = async () => { await carnets.enregistrer(c); };
 
   const arret = carnets.surPublication((x) => {
@@ -1205,80 +1235,81 @@ async function pageCarnet(id, sous) {
   const rafraichir = app.querySelector('#rafraichir-choix');
   if (rafraichir) rafraichir.onclick = async () => { await carnets.lireChoix(c); toast('À jour'); recharger(); };
 
+  // Le mot pour le client, dans une feuille.
+  const editerMot = (i) => new Promise((ok) => {
+    ouvrirFeuille(`
+      ${enteteFeuille('Petit conseil pour le client')}
+      <div class="feuille-corps">
+        <p class="petit">Une phrase courte et pratique. Ex. : « Vas-y au coucher du soleil. »</p>
+        <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(i.mot)}</textarea>
+        <button type="button" class="bouton-principal" id="ok-mot">Enregistrer</button>
+      </div>`, (ev) => {
+      if (!ev.target.closest('#ok-mot')) return;
+      const t = feuille.querySelector('#mot-item').value;
+      fermerFeuille();
+      ok(t);
+    });
+    feuille.querySelector('#mot-item').focus();
+  });
+  const choisirEndroit = ({ titre, options }) => new Promise((ok) => {
+    const parCle = new Map(options.map((o) => [o.id, o]));
+    choisirDansListe({
+      titre,
+      valeurs: options.map((o) => o.id),
+      etiquette: (x) => { const o = parCle.get(x); return `${o.nom}${o.detail ? ` (${o.detail})` : ''}`; },
+      placeholder: 'Chercher un endroit',
+      quandChoisi: ok,
+    });
+  });
+
+  const zoneAVenir = app.querySelector('#a-venir');
+  aVenir.brancherAVenir(zoneAVenir, c, parId, { sauver, recharger, choisirEndroit, editerMot, ajouterItem: carnets.ajouterItem, toast });
+  aVenir.brancherReglages(app.querySelector('#envoi-carnet'), c, { sauver, recharger });
+
+  const tous = app.querySelector('#ajouter-tous');
+  if (tous) {
+    tous.onclick = async () => {
+      for (const e of aAjouter) carnets.ajouterItem(c, e.id);
+      await sauver();
+      toast(`${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''} dans sa file`);
+      recharger();
+    };
+  }
   app.querySelector('#ajouter-existant').onclick = () => {
     const deja = new Set(c.items.map((i) => i.endroitId));
     const proposes = [...etat.endroits].filter((e) => !deja.has(e.id) && !e.contributeurId).sort((a, b) => (b.creeLe || '').localeCompare(a.creeLe || ''));
-    if (!proposes.length) { toast('Tous tes endroits sont déjà dans ce carnet'); return; }
+    if (!proposes.length) { toast('Tous tes endroits sont déjà dans ce voyage'); return; }
     choisirDansListe({
       titre: `Pour ${prenom}`,
       valeurs: proposes.map((e) => e.id),
       etiquette: (x) => { const e = parId.get(x); return [e.nom, e.ville].filter(Boolean).join(', '); },
       placeholder: 'Chercher un endroit',
-      quandChoisi: async (x) => { carnets.ajouterItem(c, x); await sauver(); toast(`Ajouté pour ce soir, ${formatHeure(c.heure)}`); recharger(); },
+      quandChoisi: async (x) => { carnets.ajouterItem(c, x); await sauver(); toast('Ajouté à sa file'); recharger(); },
     });
   };
 
-  app.querySelectorAll('[data-livrer]').forEach((b) => {
-    b.onclick = async () => {
-      const i = c.items.find((x) => x.id === b.dataset.livrer);
-      i.livraison = new Date().toISOString();
-      await sauver();
-      toast('Livré : il le voit déjà');
-      recharger();
-    };
+  // Déjà envoyé : on peut encore retirer ou changer le conseil (sa page se met à jour).
+  const deja = app.querySelector('#deja-livre');
+  deja?.querySelectorAll('[data-retirer]').forEach((b) => {
+    b.onclick = async () => { c.items = c.items.filter((x) => x.id !== b.dataset.retirer); await sauver(); toast('Retiré de sa page'); recharger(); };
   });
-  const toutLivrer = app.querySelector('#livrer-tout');
-  if (toutLivrer) {
-    toutLivrer.onclick = async () => {
-      const t = new Date().toISOString();
-      for (const i of c.items) if (new Date(i.livraison) > Date.now()) i.livraison = t;
-      await sauver();
-      toast('Tout est livré');
-      recharger();
-    };
-  }
-  app.querySelectorAll('[data-retirer]').forEach((b) => {
+  deja?.querySelectorAll('[data-mot]').forEach((b) => {
     b.onclick = async () => {
-      c.items = c.items.filter((x) => x.id !== b.dataset.retirer);
-      await sauver();
-      toast('Retiré du carnet');
-      recharger();
-    };
-  });
-  app.querySelectorAll('[data-mot]').forEach((b) => {
-    b.onclick = () => {
       const i = c.items.find((x) => x.id === b.dataset.mot);
-      ouvrirFeuille(`
-        ${enteteFeuille('Ton mot pour le client')}
-        <div class="feuille-corps">
-          <p class="petit">Une ou deux phrases, comme si tu lui parlais. C’est ce qui rend le carnet unique.</p>
-          <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(i.mot)}</textarea>
-          <button type="button" class="bouton-principal" id="ok-mot">Enregistrer</button>
-        </div>`, async (ev) => {
-        if (!ev.target.closest('#ok-mot')) return;
-        i.mot = feuille.querySelector('#mot-item').value.trim();
-        await sauver();
-        fermerFeuille();
-        recharger();
-      });
-      feuille.querySelector('#mot-item').focus();
+      const t = await editerMot(i);
+      if (t === null || t === undefined) return;
+      i.mot = t.trim(); await sauver(); recharger();
     };
   });
 
-  // Réglages : enregistrés dès qu'on les change.
+  // Infos : enregistrées dès qu'on les change.
   const champ = (sel) => app.querySelector(sel);
   const surChange = (sel, fn) => { champ(sel).addEventListener('change', async () => { fn(champ(sel)); await sauver(); }); };
   surChange('#c-prenom', (el) => { c.client = { ...c.client, prenom: el.value.trim() }; });
   surChange('#c-ville', (el) => { c.ville = el.value.trim(); });
   surChange('#c-pays', (el) => { c.pays = el.value.trim(); });
   surChange('#c-fini', (el) => { c.actif = !el.checked; });
-  const changerHeure = () => {
-    // Ce qui attend la livraison suit la nouvelle heure.
-    for (const i of c.items) if (new Date(i.livraison) > Date.now()) i.livraison = prochaineLivraison(new Date(), c.heure, c.fuseau).toISOString();
-  };
-  surChange('#c-heure', (el) => { c.heure = +el.value; changerHeure(); });
-  surChange('#c-fuseau', (el) => { c.fuseau = el.value; changerHeure(); });
-  ['#c-heure', '#c-fuseau', '#c-fini'].forEach((s) => champ(s).addEventListener('change', () => setTimeout(recharger, 50)));
+  ['#c-fini', '#c-ville'].forEach((s) => champ(s).addEventListener('change', () => setTimeout(recharger, 50)));
   app.querySelector('#supprimer-carnet').onclick = async (ev) => {
     const b = ev.currentTarget;
     if (!b.dataset.confirmer) { b.dataset.confirmer = '1'; b.textContent = `Toucher encore pour supprimer (la page de ${prenom} ne s’ouvrira plus)`; return; }

@@ -105,7 +105,7 @@ function afficherPhotos(zone) {
 // ---------- Les groupes de choix ----------
 const GROUPES = commun.GROUPES_CHOIX;
 const ORDRE_GROUPES = Object.keys(GROUPES);
-const groupeDe = (i) => commun.groupeDeCategorie(i.categorie);
+const groupeDe = (i) => i.groupe || commun.groupeDeCategorie(i.categorie);
 
 // ---------- Les choix du client ----------
 // Gardés sur son téléphone, et envoyés (chiffrés) à Raph quelques secondes après.
