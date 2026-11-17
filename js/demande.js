@@ -76,9 +76,9 @@ const TXT = {
       luxe: 'Le voyage de rêve, niveau lune de miel.',
     },
     stylesTxt: {
-      eco: 'Parfait pour les étudiants et les jeunes voyageurs. Auberges et petits hôtels sympathiques, transport local, cuisine de rue : on mise sur l’expérience plutôt que sur le confort.',
-      moyen: 'Le juste milieu, choisi par la plupart des voyageurs. Hôtels de charme (3 à 4 étoiles), bonnes tables, et quelques transferts privés pour voyager l’esprit tranquille.',
-      luxe: 'Le voyage de rêve, niveau lune de miel. Hôtels 5 étoiles et adresses d’exception, chauffeurs privés, expériences exclusives et service aux petits soins.',
+      eco: [['Pour qui', 'Étudiants, jeunes voyageurs, longs voyages où le budget compte.'], ['Hébergement', 'Auberges, guesthouses et petits hôtels simples, propres et bien situés.'], ['Déplacements', 'Trains, bus et transport local, comme les gens du pays.'], ['Repas', 'Cuisine de rue, marchés et petits restos populaires.'], ['Activités', 'Beaucoup de gratuit : randonnées, quartiers, plages, temples.']],
+      moyen: [['Pour qui', 'La plupart des voyageurs : couples, familles, amis.'], ['Hébergement', 'Hôtels de charme 3 à 4 étoiles, chambre privée et salle de bain.'], ['Déplacements', 'Trains rapides et vols intérieurs, quelques transferts privés.'], ['Repas', 'Bons restos locaux, et quelques tables plus réputées.'], ['Activités', 'Visites guidées choisies et sorties qui valent le coup.']],
+      luxe: [['Pour qui', 'Lune de miel, grand anniversaire, voyage d’une vie.'], ['Hébergement', 'Hôtels 5 étoiles, villas et adresses d’exception.'], ['Déplacements', 'Chauffeurs privés, vols en classe affaires si souhaité.'], ['Repas', 'Grandes tables et expériences gastronomiques privées.'], ['Activités', 'Guides privés, accès exclusifs, horaires à votre rythme.']],
     },
     introEnvies: 'Sélectionnez ce qui vous intéresse et indiquez, environ, combien de fois pendant le voyage.', introEnviesSans: 'Sélectionnez ce qui vous intéresse et indiquez, environ, combien de fois pendant le voyage.',
     ideesPour: (p) => (p ? `Idées : ${p}` : 'Quelques idées'), touchezIdees: 'Touchez celles qui vous tentent.',
@@ -137,9 +137,9 @@ const TXT = {
       luxe: 'The dream trip, honeymoon level.',
     },
     stylesTxt: {
-      eco: 'Perfect for students and young travellers. Hostels and friendly small hotels, local transport, street food: the experience comes first, comfort second.',
-      moyen: 'The sweet spot most travellers choose. Charming 3 to 4-star hotels, good restaurants, and a few private transfers so you can relax.',
-      luxe: 'The dream trip, honeymoon level. 5-star hotels and exceptional addresses, private drivers, exclusive experiences and attentive service.',
+      eco: [['Best for', 'Students, young travellers, long trips where budget matters.'], ['Where you stay', 'Hostels, guesthouses and simple small hotels, clean and well located.'], ['Getting around', 'Trains, buses and local transport, like the locals.'], ['Food', 'Street food, markets and popular local spots.'], ['Activities', 'Lots of free things: hikes, neighbourhoods, beaches, temples.']],
+      moyen: [['Best for', 'Most travellers: couples, families, friends.'], ['Where you stay', 'Charming 3 to 4-star hotels, private room and bathroom.'], ['Getting around', 'Fast trains and domestic flights, a few private transfers.'], ['Food', 'Good local restaurants, and a few well-known tables.'], ['Activities', 'Selected guided visits and outings worth the price.']],
+      luxe: [['Best for', 'Honeymoons, big anniversaries, the trip of a lifetime.'], ['Where you stay', '5-star hotels, villas and exceptional addresses.'], ['Getting around', 'Private drivers, business class flights if you wish.'], ['Food', 'Fine dining and private food experiences.'], ['Activities', 'Private guides, exclusive access, your own pace.']],
     },
     introEnvies: 'Select what interests you and roughly how many times during the trip.', introEnviesSans: 'Select what interests you and roughly how many times during the trip.',
     ideesPour: (p) => (p ? `Ideas: ${p}` : 'A few ideas'), touchezIdees: 'Tap the ones you like.',
@@ -705,7 +705,7 @@ function etapeStyle(zone) {
         </button>`).join('')}</div>
       ${d.style && !voirStyles ? `<p class="style-court">${t().stylesCourt[d.style]}</p>` : ''}
       <button class="lien-mode" id="savoir" aria-expanded="${voirStyles}">${voirStyles ? t().masquer : t().enSavoirPlus}</button>
-      ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd>${t().stylesTxt[k]}</dd></div>`).join('')}</dl>` : ''}`;
+      ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd><ul>${t().stylesTxt[k].map(([e, v]) => `<li><span>${e}</span>${v}</li>`).join('')}</ul></dd></div>`).join('')}</dl>` : ''}`;
   };
   dessiner();
   zone.onclick = (ev) => {
