@@ -65,6 +65,11 @@ const TXT = {
     moins: 'Moins', plus: 'Plus', nombreDe: (x) => `Nombre : ${x}`,
     style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
     enSavoirPlus: 'En savoir plus sur les styles', masquer: 'Masquer',
+    stylesCourt: {
+      eco: 'Parfait pour les étudiants et les jeunes voyageurs.',
+      moyen: 'Le juste milieu, choisi par la plupart des voyageurs.',
+      luxe: 'Le voyage de rêve, niveau lune de miel.',
+    },
     stylesTxt: {
       eco: 'Parfait pour les étudiants et les jeunes voyageurs. Auberges et petits hôtels sympathiques, transport local, cuisine de rue : on mise sur l’expérience plutôt que sur le confort.',
       moyen: 'Le juste milieu, choisi par la plupart des voyageurs. Hôtels de charme (3 à 4 étoiles), bonnes tables, et quelques transferts privés pour voyager l’esprit tranquille.',
@@ -119,6 +124,11 @@ const TXT = {
     moins: 'Fewer', plus: 'More', nombreDe: (x) => `Number: ${x}`,
     style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
     enSavoirPlus: 'Learn more about the styles', masquer: 'Hide',
+    stylesCourt: {
+      eco: 'Perfect for students and young travellers.',
+      moyen: 'The sweet spot most travellers choose.',
+      luxe: 'The dream trip, honeymoon level.',
+    },
     stylesTxt: {
       eco: 'Perfect for students and young travellers. Hostels and friendly small hotels, local transport, street food: the experience comes first, comfort second.',
       moyen: 'The sweet spot most travellers choose. Charming 3 to 4-star hotels, good restaurants, and a few private transfers so you can relax.',
@@ -647,6 +657,7 @@ function etapeStyle(zone) {
         <button class="style-carte ${d.style === k ? 'choisi' : ''}" data-style="${k}" aria-pressed="${d.style === k}">
           ${icone(ico, { taille: 22 })}<b>${t().styles[k]}</b><small>${prix}</small>
         </button>`).join('')}</div>
+      ${d.style && !voirStyles ? `<p class="style-court">${t().stylesCourt[d.style]}</p>` : ''}
       <button class="lien-mode" id="savoir" aria-expanded="${voirStyles}">${icone(voirStyles ? 'chevron-down' : 'info', { taille: 16 })} ${voirStyles ? t().masquer : t().enSavoirPlus}</button>
       ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd>${t().stylesTxt[k]}</dd></div>`).join('')}</dl>` : ''}`;
   };
