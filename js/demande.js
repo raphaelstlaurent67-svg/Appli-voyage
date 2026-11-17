@@ -1,6 +1,6 @@
 // Fiche de demande que Raph envoie à ses clients (en français ou en anglais).
 // Cinq petites étapes : destination, dates, voyageurs, envies, coordonnées.
-// Tout est facultatif sauf le moyen de répondre au client : beaucoup de gens ne savent pas encore où aller.
+// Champs obligatoires : destination, durée, voyageurs, style, nom et courriel (?test permet de passer les étapes).
 // À la fin, ses réponses deviennent un lien : en cliquant dessus, Raph crée le voyage dans le Studio.
 
 import { paysDuContinent } from './monde.js';
@@ -23,6 +23,9 @@ let TEL = (params.get('tel') || '').replace(/[^\d+]/g, '');
 try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.getItem('telDemande') || ''; } catch (_) { /* rien */ }
 if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
+// demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
+const MODE_TEST = params.has('test');
+const REQUIS = '<span class="requis" aria-hidden="true">*</span>';
 // Les destinations les plus demandées ; les autres se trouvent avec la recherche.
 const POPULAIRES = ['Japon', 'Italie', 'Thaïlande', 'France', 'Grèce', 'Portugal', 'Espagne', 'Islande', 'Mexique', 'Costa Rica', 'Pérou', 'Vietnam', 'Corée du Sud', 'Indonésie', 'Maroc', 'Cuba', 'République dominicaine', 'États-Unis'];
 const TOUS_PAYS = paysDuContinent('');
@@ -40,23 +43,25 @@ const NB_ETAPES = 5;
 const TXT = {
   fr: {
     etapes: ['Destination', 'Dates', 'Style', 'Envies', 'Coordonnées'], voyageurs: 'Voyageurs',
-    titres: ['Où aimeriez-vous aller ?', 'Quand, combien de temps, et à combien ?', 'Quel style de voyage ?', 'Qu’aimeriez-vous vivre là-bas ?', 'Où pouvons-nous vous répondre ?'],
+    titres: ['Destination', 'Dates et voyageurs', 'Style de voyage', 'Vos envies', 'Vos coordonnées'],
+    requis: 'Champ obligatoire', paysOuRegion: 'Pays ou région', introStyle: 'Il nous guide pour le choix des hébergements et le rythme du voyage.',
+    errDestination: 'Choisissez au moins un pays ou une région.', errDuree: 'Indiquez la durée approximative du voyage.', errDatesPays: 'Choisissez les dates de chaque pays.', errStyle: 'Choisissez un style de voyage.', errNom: 'Indiquez votre nom.', errCourriel: 'Indiquez une adresse courriel valide.',
     etapeSur: (i, n) => `Étape ${i} sur ${n}`, facultatif: 'Facultatif', optionnel: 'facultatif',
-    retour: 'Retour', continuer: 'Continuer', passer: 'Passer cette étape', envoyerDemande: 'Envoyer ma demande', installer: 'Installer sur mon ordi',
-    introPays: 'Un ou plusieurs pays, dans l’ordre du voyage. Rien de décidé ? Choisissez une région, ou passez simplement à la suite.',
-    chercher: 'Chercher un pays', resultats: 'Résultats', populaires: 'Les plus demandés', aucunPays: 'Aucun pays trouvé. Essayez un autre nom, ou choisissez une région plus bas.',
+    retour: 'Retour', continuer: 'Continuer', passer: 'Passer cette étape', envoyerDemande: 'Envoyer la demande', installer: 'Installer sur mon ordi',
+    introPays: 'Un ou plusieurs pays, dans l’ordre souhaité. Vous hésitez encore ? Indiquez plutôt une région.',
+    chercher: 'Chercher un pays', resultats: 'Résultats', populaires: 'Les plus demandés', aucunPays: 'Aucun pays trouvé. Vérifiez l’orthographe ou choisissez une région.',
     trajet: 'Votre itinéraire', plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer',
-    pasDecide: 'Pas encore décidé ? Une région qui vous attire', regionsChoisies: 'Régions qui vous attirent',
-    introDates: 'Une idée approximative nous suffit. Vous pourrez tout préciser avec nous plus tard.',
+    pasDecide: 'Ou une région', regionsChoisies: 'Régions qui vous attirent',
+    introDates: 'Une estimation suffit pour commencer. Nous préciserons ensemble.',
     combien: 'Durée du voyage', moinsJours: 'Un jour de moins', plusJours: 'Un jour de plus', plusDe: '3 sem. et +', plageTxt: (a, z) => `${a} à ${z}`, plageJours: (a, z) => `${a} à ${z} jours`, autreDuree: 'Combien de jours ?', autre: 'Autre durée',
     longs: [[21, '3 semaines'], [30, '1 mois'], [45, '6 semaines'], [60, '2 mois'], [90, '3 mois'], [120, '4 mois']],
     jours: (n) => `${n} jour${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'jours' : 'jour'),
     semaines: (s, j) => `${s} semaine${s > 1 ? 's' : ''}${j ? ` et ${j} jour${j > 1 ? 's' : ''}` : ''}`,
-    quand: 'Départ', quandAide: 'Le mois suffit.', dateExacte: 'J’ai déjà une date précise', sansDateExacte: 'Juste le mois, finalement',
+    quand: 'Mois de départ', quandAide: '', dateExacte: 'J’ai déjà une date précise', sansDateExacte: 'Juste le mois, finalement',
     parPays: 'Des dates précises pour chaque pays', retourTotal: 'Revenir à une durée totale',
-    depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer', touchDepart: 'Touchez votre jour de départ',
-    repartition: 'Une préférence pour répartir votre temps ?', repartitionEx: (p) => `Ex. : plus de temps en ${p}, le reste à votre choix`,
-    introPays2: 'Pour chaque pays, touchez le jour d’arrivée, puis le jour de départ.',
+    depart: 'Départ', retourLe: 'Retour', effacer: 'Effacer', touchDepart: 'Choisissez le jour de départ',
+    repartition: 'Une préférence pour répartir votre temps ?', repartitionEx: (p) => `Ex. : surtout ${p}, le reste à votre choix`,
+    introPays2: 'Pour chaque pays, choisissez le jour d’arrivée, puis celui du départ.',
     arrivee: 'Arrivée', choisisJour: 'Choisir un jour', choisisDepart: 'Choisir le départ', aChoisir: 'Dates à choisir',
     tonVoyage: 'Votre voyage', au: 'au', astuce: 'Le jour où vous quittez un pays peut être celui où vous arrivez dans le suivant.',
     moisPrec: 'Mois précédent', moisSuiv: 'Mois suivant', semaineJours: ['L', 'M', 'M', 'J', 'V', 'S', 'D'], sem: 'S',
@@ -64,7 +69,7 @@ const TXT = {
     adultes: 'Adultes', enfants: 'Enfants', enfantsAide: '12 ans et moins', agesEnfants: 'Âge des enfants', agesEx: 'Ex. : 4 et 9 ans',
     moins: 'Moins', plus: 'Plus', nombreDe: (x) => `Nombre : ${x}`,
     style: 'Style de voyage', styles: { eco: 'Économique', moyen: 'Confort', luxe: 'Luxe' },
-    enSavoirPlus: 'En savoir plus sur les styles', masquer: 'Masquer',
+    enSavoirPlus: 'Comparer les styles', masquer: 'Masquer',
     stylesCourt: {
       eco: 'Parfait pour les étudiants et les jeunes voyageurs.',
       moyen: 'Le juste milieu, choisi par la plupart des voyageurs.',
@@ -75,21 +80,21 @@ const TXT = {
       moyen: 'Le juste milieu, choisi par la plupart des voyageurs. Hôtels de charme (3 à 4 étoiles), bonnes tables, et quelques transferts privés pour voyager l’esprit tranquille.',
       luxe: 'Le voyage de rêve, niveau lune de miel. Hôtels 5 étoiles et adresses d’exception, chauffeurs privés, expériences exclusives et service aux petits soins.',
     },
-    introEnvies: 'Touchez ce qui vous plaît. Quelques idées sur place vous seront proposées, à cocher si elles vous tentent.', introEnviesSans: 'Touchez ce qui vous plaît. Nous vous ferons des suggestions adaptées.',
+    introEnvies: 'Sélectionnez ce qui vous intéresse et indiquez, environ, combien de fois pendant le voyage.', introEnviesSans: 'Sélectionnez ce qui vous intéresse et indiquez, environ, combien de fois pendant le voyage.',
     ideesPour: (p) => (p ? `Idées : ${p}` : 'Quelques idées'), touchezIdees: 'Touchez celles qui vous tentent.',
-    combienFois: 'Combien de fois pendant le voyage, environ ?',
-    aVoir: 'Un lieu ou une activité à ne pas manquer ?', aVoirEx: 'Ex. : voir les cerisiers en fleurs, un resto en particulier',
-    nom: 'Votre nom', nomEx: 'Ex. : Julie Tremblay', courriel: 'Courriel', courrielEx: 'julie@exemple.com',
-    tel: 'Téléphone', message: 'Autre chose à nous dire ?', messageEx: 'Occasion spéciale, budget, allergies, rythme souhaité',
-    introToi: 'Pour vous envoyer votre proposition d’itinéraire. Gratuit et sans engagement.',
+    combienFois: 'Nombre de fois',
+    aVoir: 'Un lieu ou une expérience à ne pas manquer', aVoirEx: 'Par exemple : les cerisiers en fleurs à Kyoto',
+    nom: 'Nom complet', nomEx: '', courriel: 'Courriel', courrielEx: '',
+    tel: 'Téléphone', message: 'Précisions', messageEx: 'Occasion spéciale, budget, rythme souhaité, besoins particuliers',
+    introToi: 'Nous vous répondons sous 48 heures avec une première proposition, sans frais ni engagement.',
     ecrisNom: 'Écrivez votre nom pour que l’on sache à qui répondre', ecrisCourriel: 'Écrivez votre courriel ou votre téléphone pour recevoir la réponse',
-    monVoyage: 'Votre voyage sur mesure', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'),
+    monVoyage: 'Demande de voyage', voyageursN: (n) => (n > 1 ? 'voyageurs' : 'voyageur'),
     adultesN: (n) => `${n} adulte${n > 1 ? 's' : ''}`, enfantsN: (n) => `${n} enfant${n > 1 ? 's' : ''}`,
     destinationAVoir: 'Destination à définir ensemble', dureeTotale: 'Durée', departLe: (x) => `Départ : ${x}`, datesAVoir: 'Dates à préciser',
     jeTeLaisse: 'Répartition du temps entre les pays : à votre choix', styleMot: 'style', aDefinir: 'À définir', flexible: 'Flexible', dureeMot: 'durée',
     mesEnvies: 'Envies', aVoirCourt: 'À ne pas manquer',
     presque: 'Votre demande est prête', presqueTxt: 'Envoyez-la-nous avec un des boutons ci-dessous. Notre équipe vous répond avec une proposition d’itinéraire.',
-    envoiCours: 'Envoi de votre demande', envoyee: 'Merci, c’est envoyé', envoyeeTxt: 'Notre équipe vous répond sous 48 heures avec une première proposition d’itinéraire.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
+    envoiCours: 'Envoi de votre demande', envoyee: 'Demande envoyée', envoyeeTxt: 'Merci. Nous vous répondons sous 48 heures pour convenir d’un appel et vous présenter une première proposition.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
     parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message', copier: 'Copier la demande',
     image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses', nouvelle: 'Faire une autre demande',
     merci: 'Merci ! Demande envoyée', copie: 'Copié ! Collez-le dans un courriel ou un message', copieCeTexte: 'Copiez ce texte :',
@@ -99,23 +104,25 @@ const TXT = {
   },
   en: {
     etapes: ['Destination', 'Dates', 'Style', 'Interests', 'Contact'], voyageurs: 'Travellers',
-    titres: ['Where would you like to go?', 'When, how long, and how many?', 'What style of trip?', 'What would you love to do there?', 'Where can we reach you?'],
+    titres: ['Destination', 'Dates and travellers', 'Travel style', 'Your interests', 'Your details'],
+    requis: 'Required field', paysOuRegion: 'Country or region', introStyle: 'It guides our choice of accommodation and the pace of your trip.',
+    errDestination: 'Choose at least one country or region.', errDuree: 'Enter the approximate length of your trip.', errDatesPays: 'Choose the dates for each country.', errStyle: 'Choose a travel style.', errNom: 'Enter your name.', errCourriel: 'Enter a valid email address.',
     etapeSur: (i, n) => `Step ${i} of ${n}`, facultatif: 'Optional', optionnel: 'optional',
-    retour: 'Back', continuer: 'Continue', passer: 'Skip this step', envoyerDemande: 'Send my request', installer: 'Install on my computer',
-    introPays: 'One or more countries, in travel order. Nothing decided yet? Pick a region, or simply skip ahead.',
-    chercher: 'Search a country', resultats: 'Results', populaires: 'Most requested', aucunPays: 'No country found. Try another name, or pick a region below.',
+    retour: 'Back', continuer: 'Continue', passer: 'Skip this step', envoyerDemande: 'Send request', installer: 'Install on my computer',
+    introPays: 'One or more countries, in the order you’d like. Still deciding? Choose a region instead.',
+    chercher: 'Search a country', resultats: 'Results', populaires: 'Most requested', aucunPays: 'No country found. Check the spelling or choose a region.',
     trajet: 'Your route', plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove',
-    pasDecide: 'Not sure yet? A region you’re drawn to', regionsChoisies: 'Regions you’re drawn to',
-    introDates: 'A rough idea is all we need. You can fine-tune everything with us later.',
+    pasDecide: 'Or a region', regionsChoisies: 'Regions you’re drawn to',
+    introDates: 'An estimate is enough to start. We’ll refine it together.',
     combien: 'Trip length', moinsJours: 'One day less', plusJours: 'One day more', plusDe: '3 wks +', plageTxt: (a, z) => `${a} to ${z}`, plageJours: (a, z) => `${a} to ${z} days`, autreDuree: 'How many days?', autre: 'Other length',
     longs: [[21, '3 weeks'], [30, '1 month'], [45, '6 weeks'], [60, '2 months'], [90, '3 months'], [120, '4 months']],
     jours: (n) => `${n} day${n > 1 ? 's' : ''}`, joursMot: (n) => (n > 1 ? 'days' : 'day'),
     semaines: (s, j) => `${s} week${s > 1 ? 's' : ''}${j ? ` and ${j} day${j > 1 ? 's' : ''}` : ''}`,
-    quand: 'Departure', quandAide: 'The month is enough.', dateExacte: 'I already have an exact date', sansDateExacte: 'Just the month after all',
+    quand: 'Departure month', quandAide: '', dateExacte: 'I already have an exact date', sansDateExacte: 'Just the month after all',
     parPays: 'Exact dates for each country', retourTotal: 'Back to a total length',
-    depart: 'Departure', retourLe: 'Return', effacer: 'Clear', touchDepart: 'Tap your departure day',
+    depart: 'Departure', retourLe: 'Return', effacer: 'Clear', touchDepart: 'Choose your departure day',
     repartition: 'Any preference on how to split your time?', repartitionEx: (p) => `E.g. more time in ${p}, the rest is up to you`,
-    introPays2: 'For each country, tap your arrival day, then your departure day.',
+    introPays2: 'For each country, choose the arrival day, then the departure day.',
     arrivee: 'Arrival', choisisJour: 'Pick a day', choisisDepart: 'Pick departure', aChoisir: 'Dates to pick',
     tonVoyage: 'Your trip', au: 'to', astuce: 'The day you leave one country can be the day you arrive in the next.',
     moisPrec: 'Previous month', moisSuiv: 'Next month', semaineJours: ['M', 'T', 'W', 'T', 'F', 'S', 'S'], sem: 'W',
@@ -123,7 +130,7 @@ const TXT = {
     adultes: 'Adults', enfants: 'Children', enfantsAide: '12 and under', agesEnfants: 'Children’s ages', agesEx: 'E.g. 4 and 9',
     moins: 'Fewer', plus: 'More', nombreDe: (x) => `Number: ${x}`,
     style: 'Travel style', styles: { eco: 'Budget', moyen: 'Comfort', luxe: 'Luxury' },
-    enSavoirPlus: 'Learn more about the styles', masquer: 'Hide',
+    enSavoirPlus: 'Compare the styles', masquer: 'Hide',
     stylesCourt: {
       eco: 'Perfect for students and young travellers.',
       moyen: 'The sweet spot most travellers choose.',
@@ -134,21 +141,21 @@ const TXT = {
       moyen: 'The sweet spot most travellers choose. Charming 3 to 4-star hotels, good restaurants, and a few private transfers so you can relax.',
       luxe: 'The dream trip, honeymoon level. 5-star hotels and exceptional addresses, private drivers, exclusive experiences and attentive service.',
     },
-    introEnvies: 'Tap what appeals to you. A few ideas for your destination will show up, tick the ones you like.', introEnviesSans: 'Tap what appeals to you. We’ll suggest ideas that fit.',
+    introEnvies: 'Select what interests you and roughly how many times during the trip.', introEnviesSans: 'Select what interests you and roughly how many times during the trip.',
     ideesPour: (p) => (p ? `Ideas: ${p}` : 'A few ideas'), touchezIdees: 'Tap the ones you like.',
-    combienFois: 'Roughly how many times during the trip?',
-    aVoir: 'A place or activity you don’t want to miss?', aVoirEx: 'E.g. the cherry blossoms, a specific restaurant',
-    nom: 'Your name', nomEx: 'E.g. Julie Smith', courriel: 'Email', courrielEx: 'julie@example.com',
-    tel: 'Phone', message: 'Anything else we should know?', messageEx: 'Special occasion, budget, allergies, preferred pace',
-    introToi: 'So we can send you your itinerary proposal. Free, no commitment.',
+    combienFois: 'Number of times',
+    aVoir: 'A place or experience not to miss', aVoirEx: 'For example: the cherry blossoms in Kyoto',
+    nom: 'Full name', nomEx: '', courriel: 'Email', courrielEx: '',
+    tel: 'Phone', message: 'Additional details', messageEx: 'Special occasion, budget, preferred pace, specific needs',
+    introToi: 'We reply within 48 hours with a first proposal, free and with no commitment.',
     ecrisNom: 'Enter your name so we know who to reply to', ecrisCourriel: 'Enter your email or phone to receive our reply',
-    monVoyage: 'Your custom trip', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'),
+    monVoyage: 'Trip request', voyageursN: (n) => (n > 1 ? 'travellers' : 'traveller'),
     adultesN: (n) => `${n} adult${n > 1 ? 's' : ''}`, enfantsN: (n) => `${n} child${n > 1 ? 'ren' : ''}`,
     destinationAVoir: 'Destination to decide together', dureeTotale: 'Length', departLe: (x) => `Departure: ${x}`, datesAVoir: 'Dates to confirm',
     jeTeLaisse: 'Time split between countries: up to you', styleMot: 'style', aDefinir: 'To decide', flexible: 'Flexible', dureeMot: 'length',
     mesEnvies: 'Interests', aVoirCourt: 'Not to miss',
     presque: 'Your request is ready', presqueTxt: 'Send it to us with one of the buttons below. Our team will reply with an itinerary proposal.',
-    envoiCours: 'Sending your request', envoyee: 'Thank you, it’s sent', envoyeeTxt: 'Our team will reply within 48 hours with a first itinerary proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
+    envoiCours: 'Sending your request', envoyee: 'Request sent', envoyeeTxt: 'Thank you. We’ll get back to you within 48 hours to set up a call and share a first proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
     parCourriel: 'Send by email', parMessage: 'Send by message', copier: 'Copy the request',
     image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers', nouvelle: 'Start a new request',
     merci: 'Thanks! Request sent', copie: 'Copied! Paste it in an email or a message', copieCeTexte: 'Copy this text:',
@@ -325,7 +332,7 @@ const borne = (v, min, max) => Math.max(min, Math.min(max, Number.isFinite(v) ? 
 function enTete(etapeIci) {
   return `
     <div class="haut-ligne">
-      <p class="marque"><img src="icons/demande.svg" alt="" width="26" height="26">${esc(MARQUE)}</p>
+      <p class="marque">${esc(MARQUE)}</p>
       <div class="haut-actions">
         ${MONTRER_INSTALLER ? `<button class="petit-bouton" id="installer">${icone('download', { taille: 15 })}<span>${t().installer}</span></button>` : ''}
         <div class="langue" role="group" aria-label="Langue / Language">${['fr', 'en'].map((l) => `<button class="${d.langue === l ? 'choisi' : ''}" data-langue="${l}" lang="${l}">${l.toUpperCase()}</button>`).join('')}</div>
@@ -335,7 +342,7 @@ function enTete(etapeIci) {
     <div class="progres" role="progressbar" aria-valuemin="1" aria-valuemax="${NB_ETAPES}" aria-valuenow="${etapeIci + 1}" aria-label="${esc(t().etapeSur(etapeIci + 1, NB_ETAPES))}">
       ${t().etapes.map((e, i) => `<button type="button" class="${i < etapeIci ? 'fait' : i === etapeIci ? 'ici' : ''}" data-aller="${i}" ${i === etapeIci ? 'aria-current="step"' : ''}><i></i><span>${e}</span></button>`).join('')}
     </div>
-    <p class="etape-sur">${t().etapeSur(etapeIci + 1, NB_ETAPES)}${etapeIci < 4 ? ` <span class="pastille-fac">${t().facultatif}</span>` : ''}</p>
+    <p class="etape-sur">${t().etapeSur(etapeIci + 1, NB_ETAPES)}</p>
     <h1>${t().titres[etapeIci]}</h1>`}`;
 }
 
@@ -349,14 +356,14 @@ function brancherEnTete(refaire) {
 function majBas() {
   const s = fiche.querySelector('#suivant');
   if (!s || etape === 4) return;
-  const passer = etapeVide();
+  const passer = MODE_TEST && etapeVide();
   s.classList.toggle('passer', passer);
   s.innerHTML = `${passer ? t().passer : t().continuer} ${icone('arrow-right', { taille: 18 })}`;
 }
 
 function rendre() {
   document.documentElement.lang = d.langue;
-  document.title = `${t().titres[etape].replace(/ \?$|\?$/, '')} · ${MARQUE}`;
+  document.title = `${t().monVoyage} · ${MARQUE}`;
   fiche.innerHTML = `
     <header class="haut">${enTete(etape)}</header>
     <section class="corps" id="corps"></section>
@@ -366,6 +373,7 @@ function rendre() {
     </footer>`;
   brancherEnTete(rendre);
   [etapePays, etapeDates, etapeStyle, etapeEnvies, etapeToi][etape](fiche.querySelector('#corps'));
+  if (etape !== 3) fiche.querySelector('#corps').insertAdjacentHTML('beforeend', `<p class="note-requis"><span class="requis">*</span> ${t().requis}</p>`);
   fiche.querySelector('#suivant').onclick = suivant;
   const r = fiche.querySelector('#retour');
   if (r) r.onclick = () => allerA(etape - 1);
@@ -375,11 +383,46 @@ function rendre() {
 
 function allerA(i) {
   if (i === etape || i < 0 || i >= NB_ETAPES) return;
+  // On peut revenir en arrière librement ; pour avancer par la barre d'étapes, celles d'avant doivent être remplies.
+  if (i > etape && !MODE_TEST) {
+    if (!verifierEtape()) return;
+    for (let k = etape + 1; k < i; k++) if (!etapeValide(k)) { i = k; break; }
+  }
   etape = i;
   if (etape === 1) { paysActif = Math.max(0, d.pays.findIndex((p) => !p.fin)); moisAffiche = null; }
   garder();
   rendre();
   window.scrollTo(0, 0);
+}
+
+// Les champs obligatoires de chaque étape sont-ils remplis ?
+function etapeValide(k) {
+  if (k === 0) return Boolean(d.pays.length || d.regions.length);
+  if (k === 1) return d.mode === 'total' ? d.duree > 0 : d.pays.every((p) => p.debut && p.fin);
+  if (k === 2) return Boolean(d.style);
+  return true;
+}
+// Ce qui manque à l'étape (champ obligatoire) : on l'indique sous le champ, sans fenêtre qui bloque.
+function verifierEtape() {
+  if (MODE_TEST) return true;
+  if (etape === 0 && !d.pays.length && !d.regions.length) return montrerErreur('#cherche', t().errDestination, '.recherche');
+  if (etape === 1 && d.mode === 'total' && !d.duree) return montrerErreur('#duree-libre', t().errDuree, '.duree-boite');
+  if (etape === 1 && d.mode === 'pays' && d.pays.some((p) => !p.debut || !p.fin)) return montrerErreur('.choix-dates', t().errDatesPays, '.choix-dates');
+  if (etape === 2 && !d.style) return montrerErreur('.styles', t().errStyle, '.styles');
+  return true;
+}
+function montrerErreur(cible, message, bloc) {
+  fiche.querySelectorAll('.erreur-msg').forEach((e) => e.remove());
+  fiche.querySelectorAll('.erreur').forEach((e) => e.classList.remove('erreur'));
+  const el = fiche.querySelector(bloc) || fiche.querySelector(cible);
+  if (el) {
+    el.classList.add('erreur');
+    el.insertAdjacentHTML('afterend', `<p class="erreur-msg" role="alert">${esc(message)}</p>`);
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const champ = fiche.querySelector(cible);
+    if (champ?.focus && champ.matches('input')) champ.focus({ preventScroll: true });
+  } else toast(message);
+  return false;
 }
 
 function suivant() {
@@ -393,6 +436,7 @@ function etapePays(zone) {
   let recherche = '';
   zone.innerHTML = `
     <p class="intro">${t().introPays}</p>
+    <label class="petit-titre premier" for="cherche">${t().paysOuRegion} ${REQUIS}</label>
     <label class="recherche">${icone('search', { taille: 18 })}<input id="cherche" type="search" placeholder="${t().chercher}" autocomplete="off" enterkeyhint="search"></label>
     <div id="resultats"></div>
     <div id="choix"></div>`;
@@ -418,7 +462,7 @@ function etapePays(zone) {
           </span>
         </li>`).join('')}</ol>` : `
       <div class="indecis">
-        <p class="petit-titre">${icone('compass', { taille: 17 })} ${t().pasDecide}</p>
+        <p class="petit-titre">${t().pasDecide}</p>
         <div class="puces">${REGIONS.map(([fr]) => `<button class="puce douce ${d.regions.includes(fr) ? 'choisie' : ''}" data-region="${esc(fr)}" aria-pressed="${d.regions.includes(fr)}">${esc(nomRegion(fr))}</button>`).join('')}</div>
       </div>`;
   };
@@ -544,7 +588,7 @@ function datesTotal(zone) {
     <p class="intro">${t().introDates}</p>
     <div class="duree-voyageurs">
     <div>
-    <label class="petit-titre premier" for="duree-libre">${t().combien}</label>
+    <label class="petit-titre premier" for="duree-libre">${t().combien} ${REQUIS}</label>
     <div class="duree-boite ${n ? 'remplie' : ''}">
       <label class="duree-champ"><input id="duree-libre" type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="365" value="${n || ''}" placeholder="${DUREE_DEFAUT}"><span>${t().joursMot(2)}</span></label>
       <span class="compteur grand">
@@ -554,9 +598,9 @@ function datesTotal(zone) {
     </div>
     <p class="doux duree-resume">${n >= 7 ? esc(semainesTxt(n)) : ''}</p>
     </div>
-    <div><p class="petit-titre premier">${t().voyageurs}</p>${blocVoyageurs()}</div>
+    <div><p class="petit-titre premier">${t().voyageurs} ${REQUIS}</p>${blocVoyageurs()}</div>
     </div>
-    <p class="petit-titre">${t().quand} <small>${voirCalendrier ? '' : t().quandAide}</small></p>
+    <p class="petit-titre">${voirCalendrier ? t().depart : t().quand}</p>
     ${voirCalendrier ? `
     <div class="choix-dates une" style="--c:${coul(0)}">
       <div class="case-date ${d.depart ? '' : 'attend'}"><small>${t().depart}</small><b>${d.depart ? jolie(d.depart) : t().touchDepart}</b></div>
@@ -572,7 +616,7 @@ function datesTotal(zone) {
     }).join('')}</div>
     <button class="lien-mode" data-voir-cal>${icone('calendar', { taille: 16 })} ${t().dateExacte}</button>`}
     ${d.pays.length > 1 ? `
-    <label class="champ marge-haut"><span>${t().repartition} <small>${t().optionnel}</small></span><textarea id="repartition" rows="2" placeholder="${esc(t().repartitionEx(exemple))}">${esc(d.repartition)}</textarea></label>
+    <label class="champ marge-haut"><span>${t().repartition}</span><textarea id="repartition" rows="2" placeholder="${esc(t().repartitionEx(exemple))}">${esc(d.repartition)}</textarea></label>
     <button class="lien-mode discret" data-mode="pays">${icone('route', { taille: 16 })} ${t().parPays}</button>` : ''}`;
 }
 
@@ -653,12 +697,14 @@ function changerVoyageurs(cle, v) {
 function etapeStyle(zone) {
   const dessiner = () => {
     zone.innerHTML = `
+      <p class="intro">${t().introStyle}</p>
+      <p class="petit-titre premier">${t().style} ${REQUIS}</p>
       <div class="styles">${STYLES.map(([k, ico, prix]) => `
         <button class="style-carte ${d.style === k ? 'choisi' : ''}" data-style="${k}" aria-pressed="${d.style === k}">
           ${icone(ico, { taille: 22 })}<b>${t().styles[k]}</b><small>${prix}</small>
         </button>`).join('')}</div>
       ${d.style && !voirStyles ? `<p class="style-court">${t().stylesCourt[d.style]}</p>` : ''}
-      <button class="lien-mode" id="savoir" aria-expanded="${voirStyles}">${icone(voirStyles ? 'chevron-down' : 'info', { taille: 16 })} ${voirStyles ? t().masquer : t().enSavoirPlus}</button>
+      <button class="lien-mode" id="savoir" aria-expanded="${voirStyles}">${voirStyles ? t().masquer : t().enSavoirPlus}</button>
       ${voirStyles ? `<dl class="styles-info">${STYLES.map(([k, ico]) => `<div class="${d.style === k ? 'choisi' : ''}"><dt>${icone(ico, { taille: 16 })} ${t().styles[k]}</dt><dd>${t().stylesTxt[k]}</dd></div>`).join('')}</dl>` : ''}`;
   };
   dessiner();
@@ -690,16 +736,18 @@ function etapeEnvies(zone) {
         const choisies = d.idees[k] || [];
         return `
         <div class="envie ${n ? 'oui' : ''}">
-          <button class="envie-tete" data-envie="${k}" aria-expanded="${Boolean(n)}">
-            <span class="envie-ico">${icone(ico, { taille: 22 })}</span>
-            <span class="envie-txt"><b>${esc(nomEnvie(k, nom))}</b><small>${esc(exEnvie(k, ex))}</small></span>
-            <span class="coche">${n ? icone('check', { taille: 15, epaisseur: 3 }) : ''}</span>
-          </button>
+          <div class="envie-tete">
+            <button class="envie-zone" data-envie="${k}" aria-pressed="${Boolean(n)}">
+              <span class="envie-ico">${icone(ico, { taille: 22 })}</span>
+              <span class="envie-txt"><b>${esc(nomEnvie(k, nom))}</b><small>${esc(exEnvie(k, ex))}</small></span>
+            </button>
+            ${n ? compteur(k, n, 0, 30, `${nomEnvie(k, nom)} : ${t().combienFois}`) : `<button class="ajouter-envie" data-envie="${k}" aria-label="${esc(nomEnvie(k, nom))}">${icone('plus', { taille: 18, epaisseur: 2.2 })}</button>`}
+          </div>
           ${n && ideesEnvie(k).length ? `
           <div class="idees" aria-label="${esc(t().touchezIdees)}">${ideesEnvie(k).map((i) => `<button class="idee ${choisies.includes(i.fr) ? 'choisie' : ''}" data-idee="${k}" data-fr="${esc(i.fr)}" aria-pressed="${choisies.includes(i.fr)}">${choisies.includes(i.fr) ? icone('check', { taille: 13, epaisseur: 2.8 }) : icone('plus', { taille: 13 })}${i.pays ? `<em>${esc(i.pays)} ·</em>` : ''}${esc(i.texte)}</button>`).join('')}</div>` : ''}
         </div>`;
       }).join('')}</div>
-      <label class="champ marge-haut"><span>${t().aVoir} <small>${t().optionnel}</small></span><textarea id="incontournable" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(d.incontournable)}</textarea></label>`;
+      <label class="champ marge-haut"><span>${t().aVoir}</span><textarea id="incontournable" rows="2" placeholder="${esc(t().aVoirEx)}">${esc(d.incontournable)}</textarea></label>`;
   };
   dessiner();
   zone.onclick = (ev) => {
@@ -707,14 +755,14 @@ function etapeEnvies(zone) {
     if (!b) return;
     if (b.dataset.envie) {
       const k = b.dataset.envie;
-      d.envies[k] = d.envies[k] ? 0 : 2;
+      d.envies[k] = d.envies[k] ? 0 : 1;
       if (!d.envies[k]) delete d.idees[k];
     } else if (b.dataset.idee) {
       const k = b.dataset.idee;
       const l = d.idees[k] || [];
       d.idees[k] = l.includes(b.dataset.fr) ? l.filter((x) => x !== b.dataset.fr) : [...l, b.dataset.fr];
     } else if (b.dataset.plus) d.envies[b.dataset.plus] = Math.min(30, (d.envies[b.dataset.plus] || 0) + 1);
-    else if (b.dataset.moins) d.envies[b.dataset.moins] = Math.max(1, (d.envies[b.dataset.moins] || 0) - 1);
+    else if (b.dataset.moins) { const k = b.dataset.moins; d.envies[k] = Math.max(0, (d.envies[k] || 0) - 1); if (!d.envies[k]) delete d.idees[k]; }
     else return;
     garder();
     // Le défilement reste en place : on redessine sans faire sauter la page.
@@ -726,9 +774,9 @@ function etapeEnvies(zone) {
   zone.oninput = (ev) => {
     if (ev.target.id === 'incontournable') { d.incontournable = ev.target.value; garder(); majBas(); }
     const cle = ev.target.dataset.nombre;
-    if (cle && ev.target.value !== '') { d.envies[cle] = borne(parseInt(ev.target.value, 10), 1, 30); garder(); }
+    if (cle && ev.target.value !== '') { d.envies[cle] = borne(parseInt(ev.target.value, 10), 0, 30); garder(); }
   };
-  zone.onchange = (ev) => { const cle = ev.target.dataset.nombre; if (cle) { d.envies[cle] = borne(parseInt(ev.target.value, 10), 1, 30); garder(); const y = window.scrollY; dessiner(); window.scrollTo(0, y); } };
+  zone.onchange = (ev) => { const cle = ev.target.dataset.nombre; if (cle) { d.envies[cle] = borne(parseInt(ev.target.value, 10), 0, 30); if (!d.envies[cle]) delete d.idees[cle]; garder(); const y = window.scrollY; dessiner(); window.scrollTo(0, y); } };
   zone.onfocusin = (ev) => { if (ev.target.dataset.nombre) ev.target.select(); };
 }
 
@@ -736,16 +784,16 @@ function etapeEnvies(zone) {
 function etapeToi(zone) {
   zone.innerHTML = `
     <p class="intro">${t().introToi}</p>
-    <label class="champ"><span>${t().nom}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
-    <label class="champ"><span>${t().courriel}</span><input data-champ="courriel" type="email" inputmode="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
-    <label class="champ"><span>${t().tel} <small>${t().optionnel}</small></span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
-    <label class="champ"><span>${t().message} <small>${t().optionnel}</small></span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
+    <label class="champ"><span>${t().nom} ${REQUIS}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
+    <label class="champ"><span>${t().courriel} ${REQUIS}</span><input data-champ="courriel" type="email" inputmode="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
+    <label class="champ"><span>${t().tel}</span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
+    <label class="champ"><span>${t().message}</span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
     ${carteResume()}`;
   zone.oninput = (ev) => {
     const k = ev.target.dataset.champ;
     if (!k) return;
     d[k] = ev.target.value; garder();
-    ev.target.closest('.champ')?.classList.remove('erreur');
+    const c = ev.target.closest('.champ'); if (c?.classList.contains('erreur')) { c.classList.remove('erreur'); c.querySelector('.erreur-msg')?.remove(); }
     if (k === 'nom') { const s = zone.querySelector('.cr-sur'); if (s) s.textContent = `${t().monVoyage}${d.nom.trim() ? `, ${d.nom.trim()}` : ''}`; }
   };
 }
@@ -811,7 +859,7 @@ function carteResume() {
 
 // Dessine la carte du résumé dans une image, pour la partager aux autres voyageurs.
 async function imageResume() {
-  try { await Promise.all(['500', '600', '700', '800'].map((w) => document.fonts.load(`${w} 30px Figtree`))); } catch (_) { /* police par défaut */ }
+  try { await document.fonts.load('500 30px Newsreader'); } catch (_) { /* police par défaut */ }
   const W = 1080;
   const M = 48; // marge autour de la carte
   const P = 56; // marge dans la carte
@@ -820,7 +868,8 @@ async function imageResume() {
   const c = document.createElement('canvas');
   c.width = W; c.height = 5000;
   const x = c.getContext('2d');
-  const police = (poids, taille) => { x.font = `${poids} ${taille}px Figtree, system-ui, sans-serif`; };
+  // Les grands titres (64 px) en Newsreader, comme sur la page ; le reste dans la police du système.
+  const police = (poids, taille) => { x.font = taille >= 60 ? `500 ${taille}px Newsreader, Georgia, serif` : `${poids} ${taille}px -apple-system, 'Segoe UI', system-ui, sans-serif`; };
   const couper = (texte, largeur) => {
     const res = [];
     let ligne = '';
@@ -966,14 +1015,19 @@ function texteMessage(lien) {
 }
 
 function marquerErreur(champ, message) {
+  fiche.querySelectorAll('.erreur-msg').forEach((e) => e.remove());
   const el = fiche.querySelector(`[data-champ="${champ}"]`);
-  if (el) { el.closest('.champ')?.classList.add('erreur'); el.focus(); }
-  toast(message);
+  if (!el) return toast(message);
+  const c = el.closest('.champ');
+  c.classList.add('erreur');
+  c.insertAdjacentHTML('beforeend', `<span class="erreur-msg" role="alert">${esc(message)}</span>`);
+  el.focus();
+  return undefined;
 }
 
 async function envoyer() {
-  if (!d.nom.trim()) return marquerErreur('nom', t().ecrisNom);
-  if (!/^\S+@\S+\.\S+$/.test(d.courriel.trim()) && d.telephone.replace(/\D/g, '').length < 7) return marquerErreur('courriel', t().ecrisCourriel);
+  if (!d.nom.trim()) return marquerErreur('nom', t().errNom);
+  if (!/^\S+@\S+\.\S+$/.test(d.courriel.trim())) return marquerErreur('courriel', t().errCourriel);
   d.voyageurs = totalVoyageurs();
   d.envoyeLe = new Date().toISOString();
   // On n'envoie que ce qui sert au mode choisi.
