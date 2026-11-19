@@ -15,6 +15,7 @@ import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX, 
 import * as carnets from './carnets.js';
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
+import { avecEssai, estEssai, ENDROITS_ESSAI } from './essai.js';
 
 const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], liens: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
@@ -62,7 +63,7 @@ const sansAccents = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, 
 const uniques = (l) => [...new Set(l.filter(Boolean))];
 const trier = (l) => [...l].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 const categorie = (e) => TAXONOMIE[e?.categorie] || TAXONOMIE.autre;
-const endroit = (id) => etat.endroits.find((e) => e.id === id);
+const endroit = (id) => etat.endroits.find((e) => e.id === id) || (estEssai(id) ? ENDROITS_ESSAI.find((e) => e.id === id) : undefined);
 const pluriel = (n, mot, motPluriel = `${mot}s`) => `${n} ${n > 1 ? motPluriel : mot}`;
 const nombre = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 const dateCourte = (iso) => (iso ? new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -105,6 +106,7 @@ function lienCarte(e) {
 }
 
 async function urlPhoto(id) {
+  if (/^https?:/.test(id)) return id;
   if (urlsPhotos.has(id)) return urlsPhotos.get(id);
   const p = await db.lire('photos', id);
   if (!p) return '';
@@ -156,7 +158,8 @@ const nomCle = (nom) => String(nom || '').trim().split(/\s+/)[0].toLowerCase().n
 const voyageDuCarnet = (c) => etat.voyages.find((v) => v.carnetId === c.id);
 async function integrerChoixClients() {
   for (const c of etat.carnets) {
-    const voulus = endroitsChoisis(c);
+    // Les choix faits pendant l'essai de Montréal ne vont pas dans son vrai voyage.
+    const voulus = new Set([...endroitsChoisis(c)].filter((x) => !estEssai(x)));
     let v = voyageDuCarnet(c);
     let change = false;
     // Le client a déjà rempli le formulaire : son voyage sur mesure s'attache à ce voyage-là.
@@ -814,7 +817,7 @@ async function pageCarnetStudio(id) {
   const c = await db.lire('carnets', id);
   if (!c) { location.hash = '#/'; return; }
   const prenom = c.client?.prenom || 'ton client';
-  const parId = new Map(etat.endroits.map((e) => [e.id, e]));
+  const parId = avecEssai(etat.endroits);
   const lien = lienClient(new URL('../', location.href).href, c.id, c.cle);
   const aAjouter = aVenir.endroitsAAjouter(c, parId);
   app.innerHTML = `

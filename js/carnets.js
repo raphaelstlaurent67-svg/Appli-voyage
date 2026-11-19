@@ -4,9 +4,10 @@
 
 import * as db from './db.js';
 import * as sync from './sync.js';
+import { avecEssai } from './essai.js';
 import {
   DEPOT_CARNETS, BRANCHE_CARNETS, RELAIS, HEURE_PAR_DEFAUT, FUSEAU_PAR_DEFAUT,
-  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, lienClient, planifier, reglagesEnvoi, groupePour, QUOTAS_DEFAUT, TOUS_LES_JOURS,
+  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, lienClient, planifier, reglagesEnvoi, groupePour, estEnvoye, QUOTAS_DEFAUT, TOUS_LES_JOURS,
 } from './carnet-commun.js';
 
 const API = 'https://api.github.com';
@@ -55,7 +56,7 @@ export function ajouterItem(c, endroitId, mot = '') {
 
 // Recalcule l'heure d'envoi de tout ce qui n'est pas encore parti.
 export async function replanifier(c) {
-  const parId = new Map((await db.tous('endroits')).map((e) => [e.id, e]));
+  const parId = avecEssai(await db.tous('endroits'));
   return planifier(c, (i) => parId.get(i.endroitId)?.categorie);
 }
 
@@ -67,13 +68,39 @@ export async function enregistrer(c) {
   publierBientot(c.id);
 }
 
+// Envoie tout de suite la prochaine série (ex. : 3 hôtels, 3 restos, 3 activités, selon ses réglages).
+// Pratique pendant un appel. Retourne combien d'endroits sont partis.
+export async function envoyerMaintenant(c) {
+  const parId = avecEssai(await db.tous('endroits'));
+  planifier(c, (i) => parId.get(i.endroitId)?.categorie);
+  const { quotas } = reglagesEnvoi(c);
+  const attente = c.items.filter((i) => parId.has(i.endroitId) && !estEnvoye(i))
+    .sort((a, b) => (a.livraison || '9').localeCompare(b.livraison || '9'));
+  const pris = {};
+  const maintenant = new Date(Date.now() - 1000).toISOString();
+  let n = 0;
+  for (const i of attente) {
+    const g = groupePour(parId.get(i.endroitId).categorie, quotas);
+    const q = g === 'savoir' ? 1 : quotas[g] || 0;
+    if ((pris[g] || 0) >= q) continue;
+    pris[g] = (pris[g] || 0) + 1;
+    i.livraison = maintenant;
+    n++;
+  }
+  if (!n) return 0;
+  await enregistrer(c);
+  clearTimeout(minuteries.get(c.id));
+  await publier(c.id);
+  return n;
+}
+
 // ---------- Publication ----------
 // Ce que le client reçoit : jamais les notes privées, jamais le téléphone perso de Raph.
 function versClient(c, endroits) {
   const items = [];
   const { quotas } = reglagesEnvoi(c);
   for (const it of c.items) {
-    const e = endroits.find((x) => x.id === it.endroitId);
+    const e = endroits.get(it.endroitId);
     if (!e || !it.livraison) continue; // dans la réserve : pas envoyé
     items.push({
       id: it.id,
@@ -162,8 +189,7 @@ export async function publier(id) {
     try {
       await assurerBranche(cfg.jeton);
       await replanifier(c);
-      const endroits = await db.tous('endroits');
-      const donnees = versClient(c, endroits);
+      const donnees = versClient(c, avecEssai(await db.tous('endroits')));
       // Les photos d'abord (une seule fois chacune), puis le carnet.
       for (const it of donnees.items) {
         for (const p of it.photos) {

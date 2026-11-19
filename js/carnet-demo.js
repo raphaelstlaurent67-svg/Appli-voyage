@@ -9,7 +9,7 @@ const u = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&
 const JOUR = 24 * 3600 * 1000;
 
 // La réserve : 6 hôtels, 6 restos, 6 activités.
-const RESERVE = [
+export const RESERVE = [
   ['d1', { categorie: 'hebergement', type: 'Hôtel', sousType: 'Boutique hôtel', nom: 'Hôtel William Gray', adresse: '421, rue Saint-Vincent, Vieux-Montréal', description: 'Deux maisons de pierre du 18e siècle reliées par une aile moderne, en plein cœur du Vieux-Montréal.', mot: 'Demande une chambre côté place Jacques-Cartier, au 6e. Le matin, tu te réveilles avec les cloches.', prix: 3, confort: 5, montant: '389', devise: 'CAD', coupDeCoeur: true, photos: [u('1611892440504-42a792e24d32'), u('1621293954908-907159247fc8')] }],
   ['d2', { categorie: 'hebergement', type: 'Hôtel', sousType: 'Hôtel historique', nom: 'Hôtel Nelligan', adresse: '106, rue Saint-Paul Ouest, Vieux-Montréal', description: 'Murs de briques et de pierres, et une terrasse sur le toit qui donne sur le fleuve.', mot: 'Le bar sur le toit est parfait pour ton premier soir.', prix: 3, confort: 4, montant: '329', devise: 'CAD', photos: [u('1618773928121-c32242e63f39'), u('1759038086403-c607d67bb245')] }],
   ['d3', { categorie: 'hebergement', type: 'Hôtel', sousType: 'Boutique hôtel', nom: 'Le Petit Hôtel', adresse: '168, rue Saint-Paul Ouest, Vieux-Montréal', description: 'Une vingtaine de chambres seulement, un café au rez-de-chaussée.', mot: 'Plus petit, plus chaleureux, et le meilleur rapport qualité-prix.', prix: 2, confort: 4, montant: '249', devise: 'CAD', photos: [u('1759328257280-28bdb3050be3')] }],

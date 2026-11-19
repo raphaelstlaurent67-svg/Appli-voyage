@@ -648,3 +648,4 @@ body[data-page="clients"] .bouton-ajouter { display: none; }
 .liens-ligne { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
 #zone-cle { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 #envoi-carnet { margin: 14px 0; }
+.envoi-rapide { display: flex; flex-direction: column; gap: 10px; }
