@@ -7,6 +7,7 @@
 //   studio/<magasin>.json   voyages, contributeurs, paiements (Studio)
 //   carnets/<id>.json       carnets « voyage sur mesure » en direct (cellulaire)
 //   carnets-choix/<id>.json choix du client, rangés chaque heure par l'envoi du soir (GitHub)
+//   liens/<id>.json         liens personnels du formulaire de demande, et la demande reçue
 // Si internet manque, les envois attendent et repartent tout seuls plus tard.
 
 import * as db from './db.js';
@@ -107,6 +108,7 @@ export const cheminPhoto = (id) => `photos/${id}.jpg`;
 export const cheminVille = (id) => `villes/${encodeURIComponent(id)}.json`;
 export const cheminStudio = (magasin) => `studio/${magasin}.json`;
 export const cheminCarnet = (id) => `carnets/${id}.json`;
+export const cheminLien = (id) => `liens/${id}.json`;
 
 // Donne le contenu à envoyer pour un chemin (null = à effacer).
 async function contenuPour(chemin) {
@@ -127,6 +129,10 @@ async function contenuPour(chemin) {
   if (dossier === 'carnets') {
     const c = await db.lire('carnets', id);
     return c ? texteVersBase64(JSON.stringify(c, null, 1)) : null;
+  }
+  if (dossier === 'liens') {
+    const l = await db.lire('liens', id);
+    return l ? texteVersBase64(JSON.stringify(l, null, 1)) : null;
   }
   if (dossier === 'studio') {
     return texteVersBase64(JSON.stringify(await db.tous(id), null, 1));
@@ -192,7 +198,7 @@ export async function envoyer() {
 
 // Va chercher ce qui a changé dans le dossier GitHub et l'ajoute ici.
 // dossiers : ceux à lire (le cellulaire lit ses endroits ; le Studio lit tout).
-export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'contributions', 'studio', 'carnets', 'carnets-choix']) {
+export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'contributions', 'studio', 'carnets', 'carnets-choix', 'liens']) {
   if (!(await lireConfig()) || !navigator.onLine) return { nouveaux: 0 };
   const r = await api(`/repos/${config.depot}/git/trees/HEAD?recursive=1`);
   if (r.statut === 409 || r.statut === 404) return { nouveaux: 0 }; // dossier encore vide
@@ -222,6 +228,10 @@ export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'cont
         if (actuel && (actuel.choix?.recuLe || '') > (objet.choix?.recuLe || '')) objet.choix = actuel.choix;
         await db.ecrire('carnets', objet);
       }
+    } else if (dossier === 'liens') {
+      const actuel = await db.lire('liens', objet.id);
+      // Une demande reçue n'est jamais perdue, peu importe l'appareil qui l'a reçue.
+      if (!actuel || (objet.modifieLe || '') > (actuel.modifieLe || '')) await db.ecrire('liens', actuel?.code && !objet.code ? { ...objet, code: actuel.code, statut: actuel.statut, recuLe: actuel.recuLe } : objet);
     } else if (dossier === 'studio') {
       const magasin = f.path.slice(7, -5);
       for (const x of Array.isArray(objet) ? objet : []) {
@@ -265,13 +275,14 @@ export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'cont
 }
 
 // Tout envoyer une première fois (après avoir branché le dossier).
-export async function toutMarquer(magasins = ['endroits', 'villes', 'carnets']) {
+export async function toutMarquer(magasins = ['endroits', 'villes', 'carnets', 'liens']) {
   const chemins = [];
   if (magasins.includes('endroits')) {
     for (const e of await db.tous('endroits')) { chemins.push(cheminEndroit(e)); for (const p of e.photos || []) chemins.push(cheminPhoto(p)); }
   }
   if (magasins.includes('villes')) for (const v of await db.tous('villes')) chemins.push(cheminVille(v.id));
   if (magasins.includes('carnets')) for (const c of await db.tous('carnets')) chemins.push(cheminCarnet(c.id));
+  if (magasins.includes('liens')) for (const l of await db.tous('liens')) chemins.push(cheminLien(l.id));
   for (const m of ['voyages', 'contributeurs', 'paiements']) if (magasins.includes(m)) chemins.push(cheminStudio(m));
   await marquer(chemins);
 }

@@ -69,6 +69,12 @@ export async function canalChoix(id, cle) {
   return `pv${[...h.subarray(0, 12)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Le canal où un formulaire de demande dépose la demande du client (chiffrée avec la clé de son lien).
+export async function canalDemande(id, cle) {
+  const h = new Uint8Array(await subtil().digest('SHA-256', new TextEncoder().encode(`demande|${id}|${cle}`)));
+  return `pd${[...h.subarray(0, 12)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
 // ---------- Adresses des fichiers publiés ----------
 export const cheminPublic = (id, fichier = 'c') => `carnets/${id}/${fichier}.bin`;
 export const urlPublique = (id, fichier = 'c', depot = DEPOT_CARNETS) => `https://raw.githubusercontent.com/${depot}/${BRANCHE_CARNETS}/${cheminPublic(id, fichier)}`;

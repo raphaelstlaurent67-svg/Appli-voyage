@@ -9,6 +9,7 @@ import { icone, iconeCat } from './icones.js';
 import * as carnets from './carnets.js';
 import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
 import * as aVenir from './a-venir.js';
+import * as liensDemande from './liens-demande.js';
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -1048,12 +1049,12 @@ async function pageClients() {
     <section class="section carte-fiche">
       <h2 class="section-titre">${icone('file-text', { taille: 20 })} Formulaire de demande</h2>
       <label class="champ"><span>Nom du client <small>optionnel</small></span><input id="fiche-nom" placeholder="Ex. : Marie Tremblay" autocapitalize="words" autocomplete="off"></label>
-      <p class="carte-lien-url fiche-url" id="fiche-url"></p>
       <div class="trois">
         <button class="bouton-principal" id="fiche-copier">${icone('copy', { taille: 17 })} Copier</button>
         <button class="bouton-secondaire" id="fiche-envoyer">${icone('send', { taille: 17 })} Envoyer</button>
-        <a class="bouton-secondaire" id="fiche-voir" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
+        <a class="bouton-secondaire" id="fiche-voir" href="demande.html" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
       </div>
+      <ul class="liste-liens" id="liste-liens"></ul>
       <details class="fiche-plus">
         <summary>Où arrivent les réponses</summary>
         <label class="champ"><span>Ton courriel</span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
@@ -1061,33 +1062,39 @@ async function pageClients() {
       </details>
       <a class="lien lien-icone" href="demande.html?installer=1" target="_blank" rel="noopener">${icone('download', { taille: 14 })} Sur mon écran d’accueil</a>
     </section>`;
-  // Le lien du formulaire, personnel si on met un nom (même lien que dans le Studio).
-  const lienFiche = () => {
-    const u = new URL('demande.html', location.href);
-    const nom = app.querySelector('#fiche-nom').value.trim();
-    const courriel = app.querySelector('#fiche-courriel').value.trim();
-    const tel = app.querySelector('#fiche-tel').value.replace(/[^\d+]/g, '');
-    if (nom) u.searchParams.set('client', nom);
-    if (courriel) u.searchParams.set('pour', courriel);
-    if (tel) u.searchParams.set('tel', tel);
-    return u.href;
-  };
-  const majFiche = () => { const l = lienFiche(); app.querySelector('#fiche-url').textContent = l.replace(/^https?:\/\//, ''); app.querySelector('#fiche-voir').href = l; };
-  majFiche();
-  ['#fiche-nom', '#fiche-courriel', '#fiche-tel'].forEach((sel) => { app.querySelector(sel).oninput = majFiche; });
+  // Le lien du formulaire : un nouveau lien unique à chaque Copier ou Envoyer.
+  const nouveauLienFiche = () => liensDemande.preparerLien(location.href, {
+    client: app.querySelector('#fiche-nom').value,
+    pour: app.querySelector('#fiche-courriel').value.trim(),
+    tel: app.querySelector('#fiche-tel').value,
+  });
   app.querySelector('#fiche-courriel').onchange = (ev) => db.ecrireReglage('courrielFiche', ev.target.value.trim());
   app.querySelector('#fiche-tel').onchange = (ev) => db.ecrireReglage('telFiche', ev.target.value.trim());
+  const apres = async (lien) => { await liensDemande.garderLien(lien); app.querySelector('#fiche-nom').value = ''; majListeLiens(); };
   app.querySelector('#fiche-copier').onclick = async () => {
-    const l = lienFiche();
-    try { await navigator.clipboard.writeText(l); toast('Lien du formulaire copié'); } catch (_) { window.prompt('Copie ce lien :', l); }
+    const { lien, url } = nouveauLienFiche();
+    try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { window.prompt('Copie ce lien :', url); }
+    apres(lien);
   };
   app.querySelector('#fiche-envoyer').onclick = async () => {
-    const l = lienFiche();
+    const { lien, url } = nouveauLienFiche();
     try {
-      if (navigator.share) await navigator.share({ title: 'Ton voyage sur mesure', url: l });
-      else { await navigator.clipboard.writeText(l); toast('Lien du formulaire copié'); }
-    } catch (_) { /* annulé */ }
+      if (navigator.share) await navigator.share({ title: 'Votre voyage sur mesure', url });
+      else { await navigator.clipboard.writeText(url); toast('Nouveau lien copié'); }
+      apres(lien);
+    } catch (_) { /* annulé : le lien n'est pas gardé */ }
   };
+  // Les liens envoyés, et ceux dont la demande est arrivée.
+  const majListeLiens = async () => {
+    const liens = (await liensDemande.tousLesLiens()).slice(0, 8);
+    const zone = app.querySelector('#liste-liens');
+    if (!zone) return;
+    zone.innerHTML = liens.map((l) => `
+      <li><span><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' }))}</small></span>
+        ${l.code ? `<em class="lien-recu">${icone('check', { taille: 13 })} Demande reçue</em>` : '<em>En attente</em>'}</li>`).join('');
+  };
+  majListeLiens();
+  liensDemande.relever().then((r) => { if (r.length) { toast(`${r.length > 1 ? `${r.length} demandes reçues` : `Demande reçue : ${r[0].nom || r[0].client}`}`); majListeLiens(); } });
   app.querySelector('#nouveau-carnet').onclick = async () => {
     const dernier = await db.lireReglage('dernierLieu', {});
     const c = carnets.nouveauCarnet({ ville: dernier.ville || '', pays: dernier.pays || etat.region.pays || '' });
@@ -1505,7 +1512,7 @@ async function pageReglages() {
       if (!t.ok) { msg.textContent = t.message; return; }
       await sync.enregistrerConfig(t.depot, app.querySelector('#jeton').value);
       msg.textContent = 'Branché ! Envoi de tes endroits…';
-      await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix']).catch(() => {});
+      await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix', 'liens']).catch(() => {});
       await charger();
       await sync.toutMarquer();
       toast('Branché : tes endroits partent vers le Studio');
@@ -1570,7 +1577,7 @@ function texteDetailEnvoi(e) {
 async function demarrerEnvoi() {
   if (!(await sync.lireConfig())) return;
   try {
-    const { nouveaux } = await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix']);
+    const { nouveaux } = await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix', 'liens']);
     if (nouveaux) { await charger(); if (!location.hash || location.hash === '#/') router(); }
   } catch (_) { /* on réessaiera */ }
   sync.envoyerBientot(300);
