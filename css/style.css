@@ -636,3 +636,15 @@ body[data-page="clients"] .bouton-ajouter { display: none; }
 .liste-liens small { color: var(--doux); font-size: .8rem; }
 .liste-liens em { font-style: normal; font-size: .82rem; font-weight: 650; color: var(--doux); }
 .liste-liens em.lien-recu { color: #1f8a4c; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Simplification (nov. 2026) */
+.carnet-sur .pub { margin: 0 0 0 auto; font-weight: 500; font-size: .8rem; }
+.etat-branche span { display: grid; gap: 1px; }
+.etat-branche small { font-weight: 500; opacity: .85; }
+.etat-branche .ico { flex: none; }
+.etat-branche span .ico { display: inline-block; vertical-align: -2px; }
+.etat-branche.mauvais { background: #fdecea; color: #a8321d; }
+@media (prefers-color-scheme: dark) { .etat-branche.mauvais { background: rgba(255, 120, 90, .14); color: #ffb4a0; } }
+.liens-ligne { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
+#zone-cle { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+#envoi-carnet { margin: 14px 0; }

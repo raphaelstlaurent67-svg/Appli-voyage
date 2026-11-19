@@ -449,3 +449,14 @@ html.dans-appli #carnet { padding-bottom: 24px; }
 .comment ol { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 10px; color: var(--dim); font-size: 14.5px; }
 .comment ol b { color: var(--tx); font-weight: 650; }
 @media (min-width: 720px) { .comment { grid-column: 1 / -1; } }
+
+/* Aperçu de Raph : bouton Retour (jamais dans le lien du client) */
+.retour-apercu {
+  position: fixed; z-index: 50; top: calc(12px + env(safe-area-inset-top)); left: 12px;
+  display: inline-flex; align-items: center; gap: 4px; padding: 8px 14px 8px 8px; border: 0; border-radius: 99px;
+  background: rgba(14, 13, 18, 0.78); color: #f4f0ea; font: 600 14px/1 inherit; font-family: inherit;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35); cursor: pointer;
+}
+.retour-apercu .ico { width: 20px; height: 20px; }
+body:has(.retour-apercu) .couv-haut { padding-left: 104px; }
+.carte-douce p:empty { display: none; }

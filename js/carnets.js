@@ -34,6 +34,9 @@ export function nouveauCarnet({ prenom = '', ville = '', pays = '' } = {}) {
 }
 
 export const lien = (c) => lienClient(location.href.split('#')[0].split('?')[0], c.id, c.cle);
+// Le même lien, en « aperçu » : pour Raph seulement (bouton Retour, rien n'est envoyé au client).
+export const lienApercu = (url) => url.replace(/(\?[^#]*)?(#|$)/, (_, q, h) => `${q ? `${q}&` : '?'}apercu${h}`);
+export const DEPOT_PAGES = DEPOT_CARNETS;
 export const carnetActif = async () => {
   const id = await db.lireReglage('carnetActif', null);
   const c = id ? await db.lire('carnets', id) : null;

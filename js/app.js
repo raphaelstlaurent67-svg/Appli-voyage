@@ -457,8 +457,8 @@ async function pageListe() {
     const compte = app.querySelector('#compte');
     if (compte) compte.textContent = `${l.length} endroit${l.length > 1 ? 's' : ''}`;
     ul.innerHTML = l.map(carte).join('') || (etat.endroits.length
-      ? `<li class="vide"><span class="vide-icone">${icone('search', { taille: 28 })}</span><b>Aucun résultat</b><span>Essaie un autre mot ou enlève des filtres.</span></li>`
-      : `<li class="vide"><span class="vide-icone">${icone('map-pin', { taille: 30 })}</span><b>Ajoute ton premier endroit</b><span>Un hôtel, un resto, une activité : note-le en 30 secondes pendant que tu y es.</span><a class="bouton-principal bouton-vide" href="#/ajouter">${icone('plus', { taille: 18 })} Ajouter un endroit</a></li>`);
+      ? `<li class="vide"><span class="vide-icone">${icone('search', { taille: 28 })}</span><b>Aucun résultat</b></li>`
+      : `<li class="vide"><span class="vide-icone">${icone('map-pin', { taille: 30 })}</span><b>Aucun endroit</b><a class="bouton-principal bouton-vide" href="#/ajouter">${icone('plus', { taille: 18 })} Ajouter un endroit</a></li>`);
     afficherPhotos(ul);
   };
   remplir();
@@ -1029,9 +1029,9 @@ async function pageClients() {
   app.innerHTML = `
     <header class="entete-page entete-clients">
       <h1>Clients</h1>
-      <a class="lien-exemple" href="carnet.html?demo" target="_blank" rel="noopener">${icone('eye', { taille: 16 })} Exemple</a>
+      <a class="lien-exemple" href="carnet.html?demo&apercu">${icone('eye', { taille: 16 })} Exemple</a>
     </header>
-    <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau voyage sur mesure</button>
+    <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau client</button>
     <ul class="carnets">
       ${tous.map((c) => `
         <li><a class="carnet-ligne" href="#/carnet/${esc(c.id)}">
@@ -1044,7 +1044,7 @@ async function pageClients() {
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`).join('')}
     </ul>
-    ${tous.length ? '' : '<p class="petit vide-clients">Aucun client pour l’instant.</p>'}
+    ${tous.length ? '' : '<p class="petit vide-clients">Aucun client</p>'}
 
     <section class="section carte-fiche">
       <h2 class="section-titre">${icone('file-text', { taille: 20 })} Formulaire de demande</h2>
@@ -1052,15 +1052,14 @@ async function pageClients() {
       <div class="trois">
         <button class="bouton-principal" id="fiche-copier">${icone('copy', { taille: 17 })} Copier</button>
         <button class="bouton-secondaire" id="fiche-envoyer">${icone('send', { taille: 17 })} Envoyer</button>
-        <a class="bouton-secondaire" id="fiche-voir" href="demande.html" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
+        <a class="bouton-secondaire" id="fiche-voir" href="demande.html?apercu">${icone('eye', { taille: 17 })} Voir</a>
       </div>
       <ul class="liste-liens" id="liste-liens"></ul>
       <details class="fiche-plus">
-        <summary>Où arrivent les réponses</summary>
+        <summary>Mes coordonnées</summary>
         <label class="champ"><span>Ton courriel</span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
         <label class="champ"><span>Ton cell</span><input id="fiche-tel" type="tel" value="${esc(await db.lireReglage('telFiche', ''))}" placeholder="514 555-1234"></label>
       </details>
-      <a class="lien lien-icone" href="demande.html?installer=1" target="_blank" rel="noopener">${icone('download', { taille: 14 })} Sur mon écran d’accueil</a>
     </section>`;
   // Le lien du formulaire : un nouveau lien unique à chaque Copier ou Envoyer.
   const nouveauLienFiche = () => liensDemande.preparerLien(location.href, {
@@ -1113,7 +1112,7 @@ function ligneItem(c, i, endroit, { attente }) {
       <div class="item-txt">
         <b>${esc(endroit.nom)}</b>
         <small>${esc(endroit.sousType || endroit.type || TAXONOMIE[endroit.categorie]?.nom || '')}${choisi ? ` · <span class="choisi-client">${icone('check', { taille: 12 })} son choix</span>` : ''}</small>
-        <button type="button" class="lien item-mot" data-mot="${esc(i.id)}">${i.mot ? `« ${esc(i.mot)} »` : '+ Ajouter ton mot pour le client'}</button>
+        <button type="button" class="lien item-mot" data-mot="${esc(i.id)}">${i.mot ? `« ${esc(i.mot)} »` : '+ Conseil'}</button>
       </div>
       <div class="item-actions">
         ${attente ? `<button type="button" class="petit-rond" data-livrer="${esc(i.id)}" aria-label="Livrer tout de suite" title="Livrer tout de suite">${icone('send', { taille: 16 })}</button>` : ''}
@@ -1140,53 +1139,41 @@ async function pageCarnet(id, sous) {
   app.innerHTML = `
     <header class="entete-form">
       <a class="rond" href="#/clients" aria-label="Retour">${icone('chevron-left')}</a>
-      <h1>${esc(c.client?.prenom ? `Voyage de ${c.client.prenom}` : 'Nouveau voyage sur mesure')}</h1>
+      <h1>${esc(c.client?.prenom || 'Nouveau client')}</h1>
       <button type="button" class="rond rond-supprimer" id="supprimer-haut" aria-label="Supprimer ce client" title="Supprimer ce client">${icone('trash-2', { taille: 19 })}</button>
     </header>
 
     <section class="carnet-entete">
-      <p class="carnet-sur">${icone('moon', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')} · ${esc(aVenir.resumeReglages(c))}</p>
-      <p class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</p>
+      <p class="carnet-sur">${icone('map-pin', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')}<span class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</span></p>
       <label class="interrupteur carte-interrupteur">
-        <span><b>Je repère pour ${esc(prenom)}</b><small>Chaque endroit que tu sauvegardes entre tout seul dans sa file d’envoi</small></span>
+        <span><b>Je repère pour ${esc(prenom)}</b></span>
         <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
         <i aria-hidden="true"></i>
       </label>
-      <div class="carte-lien">
-        <p class="carte-lien-titre">${icone('lock', { taille: 14 })} Le lien privé de ${esc(prenom)}</p>
-        <p class="carte-lien-url" id="url-lien">${esc(lienClient.replace(/^https?:\/\//, '').replace(/#.*/, '#…'))}</p>
-        <div class="trois">
-          <button class="bouton-principal" id="copier-lien">${icone('copy', { taille: 17 })} Copier</button>
-          <button class="bouton-secondaire" id="envoyer-lien">${icone('send', { taille: 17 })} Envoyer</button>
-          <a class="bouton-secondaire" href="${esc(lienClient)}" target="_blank" rel="noopener">${icone('eye', { taille: 17 })} Voir</a>
-        </div>
-        <p class="petit">Seul ce lien ouvre son voyage. Il l’ajoute à son écran d’accueil : ça devient son appli « Mon voyage », sans rien de tes données.</p>
+      <div class="trois">
+        <button class="bouton-principal" id="copier-lien">${icone('copy', { taille: 17 })} Copier</button>
+        <button class="bouton-secondaire" id="envoyer-lien">${icone('send', { taille: 17 })} Envoyer</button>
+        <a class="bouton-secondaire" href="${esc(carnets.lienApercu(lienClient))}">${icone('eye', { taille: 17 })} Voir</a>
       </div>
     </section>
 
     ${ch.envoyeLe || nbChoix(c) ? `
     <section class="section">
-      <h2 class="section-titre">${icone('check', { taille: 20 })} Ses choix et messages</h2>
-      <p class="petit">${ch.vuLe ? `${esc(prenom)} a ouvert son voyage ${esc(depuis(ch.vuLe))}. ` : ''}Ses choix arrivent tout seuls et vont dans son voyage du Studio.</p>
+      <h2 class="section-titre">${icone('check', { taille: 20 })} Ses choix</h2>
+      ${ch.vuLe ? `<p class="petit">Vu ${esc(depuis(ch.vuLe))}</p>` : ''}
       ${[...new Set(choixRetenus(c).map((r) => r.quand))].map((q) => `
         <p class="soir-titre">${esc(dateLongue(q, c.fuseau))}</p>
         ${choixRetenus(c).filter((r) => r.quand === q).map((r) => { const i = c.items.find((y) => y.id === r.itemId); const e = i && parId.get(i.endroitId); return `<p class="choix-ligne">${icone(GROUPES_CHOIX[r.groupe].ico, { taille: 16 })}<span>${GROUPES_CHOIX[r.groupe].court} : <b>${e ? esc(e.nom) : 'aucun ne lui plaisait'}</b></span></p>`; }).join('')}`).join('')}
       ${(ch.messages?.length ? ch.messages : ch.mot ? [{ texte: ch.mot }] : []).map((m) => `<blockquote class="mot-du-client">« ${esc(m.texte)} »${m.le ? `<small>${esc(depuis(m.le))}</small>` : ''}</blockquote>`).join('')}
-      <button class="lien lien-icone" id="rafraichir-choix">${icone('refresh-cw', { taille: 14 })} Regarder s’il y a du nouveau</button>
+      <button class="lien lien-icone" id="rafraichir-choix">${icone('refresh-cw', { taille: 14 })} Actualiser</button>
     </section>` : ''}
 
     <section class="section" id="a-venir">
       <h2 class="section-titre">${icone('clock', { taille: 20 })} À venir</h2>
-      <p class="petit">Ce qui part à ${esc(prenom)}, et quand. Tu peux changer l’ordre, remplacer ou retirer jusqu’à la dernière minute.</p>
       ${aVenir.blocAVenir(c, parId, { prenom })}
       ${aAjouter.length ? `<button class="bouton-principal bouton-bloc" id="ajouter-tous">${icone('plus', { taille: 18 })} Ajouter mes ${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''}${c.ville ? ` de ${esc(c.ville)}` : ''}</button>` : ''}
-      <button class="bouton-secondaire bouton-bloc" id="ajouter-existant">${icone('plus', { taille: 18 })} Ajouter un endroit déjà noté</button>
+      <button class="bouton-secondaire bouton-bloc" id="ajouter-existant">${icone('plus', { taille: 18 })} Ajouter un endroit</button>
     </section>
-
-    <details class="section" id="envoi-carnet" ${sous === 'envoi' ? 'open' : ''}>
-      <summary>Réglages d’envoi <small>${esc(aVenir.resumeReglages(c))}</small></summary>
-      ${aVenir.blocReglages(c)}
-    </details>
 
     ${soirs.length ? `
     <section class="section" id="deja-livre">
@@ -1196,24 +1183,25 @@ async function pageCarnet(id, sous) {
         <ul class="items-carnet">${faits.filter((i) => i.livraison === s).map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: false })).join('')}</ul>`).join('')}
     </section>` : ''}
 
-    <details class="section" id="reglages-carnet" ${reglagesOuverts ? 'open' : ''}>
-      <summary>Infos du voyage <small>prénom, ville…</small></summary>
+    <details class="section" id="reglages-carnet" ${reglagesOuverts || sous === 'envoi' ? 'open' : ''}>
+      <summary>Réglages</summary>
       <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" placeholder="Ex. : Marc" autocapitalize="words"></label>
       <div class="deux">
         <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" placeholder="Ex. : Montréal"></label>
         <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" placeholder="Ex. : Canada"></label>
       </div>
-      <label class="champ"><span>Ton cell <small>pour qu’il t’écrive par texto depuis sa page</small></span><input id="c-tel" type="tel" value="${esc(c.tel ?? telDefaut)}" placeholder="514 555-1234"></label>
+      <label class="champ"><span>Ton cell</span><input id="c-tel" type="tel" value="${esc(c.tel ?? telDefaut)}" placeholder="514 555-1234"></label>
       <label class="interrupteur">
-        <span><b>Repérage terminé</b><small>Sa page reste ouverte, sans le « En repérage »</small></span>
+        <span><b>Repérage terminé</b></span>
         <input type="checkbox" id="c-fini" ${c.actif ? '' : 'checked'}>
         <i aria-hidden="true"></i>
       </label>
-      <button class="bouton-danger" id="supprimer-carnet">${icone('trash-2', { taille: 18 })} Supprimer ce voyage</button>
+      <div id="envoi-carnet">${aVenir.blocReglages(c)}</div>
+      <button class="bouton-danger" id="supprimer-carnet">${icone('trash-2', { taille: 18 })} Supprimer ce client</button>
     </details>`;
 
   afficherPhotos(app);
-  const ouvert = () => (app.querySelector('#envoi-carnet')?.open ? 'envoi' : reglagesOuverts && app.querySelector('#reglages-carnet')?.open ? 'reglages' : '');
+  const ouvert = () => (app.querySelector('#reglages-carnet')?.open ? 'envoi' : '');
   const recharger = () => pageCarnet(id, ouvert());
   const sauver = async () => { await carnets.enregistrer(c); };
 
@@ -1245,9 +1233,8 @@ async function pageCarnet(id, sous) {
   // Le mot pour le client, dans une feuille.
   const editerMot = (i) => new Promise((ok) => {
     ouvrirFeuille(`
-      ${enteteFeuille('Petit conseil pour le client')}
+      ${enteteFeuille('Conseil')}
       <div class="feuille-corps">
-        <p class="petit">Une phrase courte et pratique. Ex. : « Vas-y au coucher du soleil. »</p>
         <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(i.mot)}</textarea>
         <button type="button" class="bouton-principal" id="ok-mot">Enregistrer</button>
       </div>`, (ev) => {
@@ -1385,7 +1372,7 @@ async function pageVilles() {
             </div>
             <textarea rows="2" placeholder="Notes sur la ville (privé)" data-champ="notes">${esc(info.notes)}</textarea>
           </div>`;
-      }).join('') || `<p class="vide"><span class="vide-icone">${icone('building-2', { taille: 28 })}</span><b>Pas encore de villes</b><span>Elles apparaîtront ici dès que tu auras ajouté des endroits.</span></p>`}
+      }).join('') || `<p class="vide"><span class="vide-icone">${icone('building-2', { taille: 28 })}</span><b>Aucune ville</b></p>`}
     </div>`;
 
   app.querySelectorAll('[data-ville]').forEach((bloc) => {
@@ -1421,7 +1408,6 @@ async function pageReglages() {
 
     <section class="section">
       <h2 class="section-titre">${icone('map-pin', { taille: 20 })} Où je suis</h2>
-      <p class="petit">Pour aller plus vite : l'appli te propose seulement les pays de ce continent, et remplit le pays toute seule.</p>
       <label class="champ"><span>Continent</span><select id="continent">
         <option value="">Tous les continents</option>
         ${Object.keys(CONTINENTS).map((c) => `<option ${c === r.continent ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -1435,41 +1421,42 @@ async function pageReglages() {
     <section class="section" id="section-envoi">
       <h2 class="section-titre">${icone('refresh-cw', { taille: 20 })} Envoi automatique au Studio</h2>
       ${cfg ? `
-        <p class="etat-branche">${icone('check', { taille: 16 })}<span>Branché au dossier <b>${esc(cfg.depot)}</b></span></p>
-        <p class="petit">Chaque endroit part tout seul au Studio quand tu l'enregistres. Sans internet, il attend et part dès que possible.</p>
-        <p class="petit" id="detail-envoi">${esc(texteDetailEnvoi(envoi))}</p>
+        <p class="etat-branche" id="detail-envoi">${texteDetailEnvoi(envoi)}</p>
+        <p class="etat-branche" id="etat-cle">${icone('lock', { taille: 16 })}<span><b>Clé GitHub : vérification…</b></span></p>
         <button class="bouton-principal" id="envoyer-maintenant">Envoyer maintenant</button>
-        <button class="lien" id="debrancher">Débrancher</button>` : `
-        <p class="petit">Tes endroits et tes photos partent tout seuls vers ton dossier GitHub privé, et le Studio les reçoit. C'est aussi ta copie de sauvegarde.</p>
-        <label class="champ"><span>Nom du dossier GitHub privé</span><input id="depot" value="appli-voyage-donnees" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <div class="liens-ligne"><button class="lien" id="changer-cle">Changer la clé</button><button class="lien" id="debrancher">Débrancher</button></div>
+        <div id="zone-cle" hidden>
+          <label class="champ"><span>Nouvelle clé</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+          <p class="aide" id="message-envoi"></p>
+          <button class="bouton-secondaire bouton-bloc" id="enregistrer-cle">Enregistrer</button>
+        </div>` : `
+        <label class="champ"><span>Dossier GitHub privé</span><input id="depot" value="appli-voyage-donnees" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <label class="champ"><span>Clé d'accès GitHub</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <p class="aide" id="message-envoi"></p>
         <button class="bouton-principal" id="brancher">Brancher</button>`}
     </section>
 
     <section class="section">
-      <h2 class="section-titre">${icone('route', { taille: 20 })} Studio (générateur de voyages)</h2>
-      <p class="petit">Pour assembler tes endroits en voyages. Fait pour l'ordinateur, mais marche aussi ici.</p>
-      <a class="bouton-secondaire bouton-bloc" href="studio/">Ouvrir le Studio</a>
+      <h2 class="section-titre">${icone('route', { taille: 20 })} Studio</h2>
+      <a class="bouton-secondaire bouton-bloc" href="studio/?depuis=appli">Ouvrir le Studio</a>
     </section>
     ${pwa.dejaInstallee() ? '' : `
     <section class="section">
-      <h2 class="section-titre">${icone('download', { taille: 20 })} Mettre l'appli sur cet appareil</h2>
-      <p class="petit">Pour l'ouvrir d'un clic, comme une vraie appli, sur ton cell ou ton ordi.</p>
+      <h2 class="section-titre">${icone('download', { taille: 20 })} Installer l'appli</h2>
       <button class="bouton-secondaire bouton-bloc" id="installer">Installer l'appli</button>
       <p class="petit" id="aide-installer" hidden>${pwa.EXPLICATION.fr}</p>
     </section>`}
 
     <section class="section">
       <h2 class="section-titre">${icone('save', { taille: 20 })} Copie dans un fichier</h2>
-      <p class="petit">${cfg ? 'Pas nécessaire avec l\'envoi automatique, mais possible au besoin.' : 'Sans envoi automatique, tes données sont seulement sur ce téléphone : fais une copie de temps en temps.'} ${etat.endroits.length} endroits, ${nbPhotos} photos. ${derniere ? `Dernière copie : ${new Date(derniere).toLocaleDateString('fr-CA')}.` : ''}</p>
+      <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos${derniere ? ` · dernière copie le ${new Date(derniere).toLocaleDateString('fr-CA')}` : ''}</p>
       <button class="bouton-secondaire bouton-bloc" id="exporter">Faire une copie</button>
       <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
     </section>
 
     <section class="section">
       <h2 class="section-titre">${icone('coins', { taille: 20 })} Taux de change</h2>
-      <p class="petit">Valeur approximative de 1 unité en dollars canadiens. Sert seulement à afficher l'équivalent en $ CA.</p>
+      <p class="petit">1 unité = ? $ CA</p>
       <div class="taux">
         ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
       </div>
@@ -1493,7 +1480,25 @@ async function pageReglages() {
 
   if (cfg) {
     const detail = app.querySelector('#detail-envoi');
-    const arret = sync.surChangement((e) => { if (document.body.contains(detail)) detail.textContent = texteDetailEnvoi(e); else arret(); });
+    const arret = sync.surChangement((e) => { if (document.body.contains(detail)) detail.innerHTML = texteDetailEnvoi(e); else arret(); });
+    // La clé marche-t-elle pour le Studio (dossier privé) et pour les pages des clients (appli) ?
+    sync.verifierCle(carnets.DEPOT_PAGES).then((v) => {
+      const el = app.querySelector('#etat-cle');
+      if (el && v) el.outerHTML = texteCle(v);
+    });
+    app.querySelector('#changer-cle').onclick = () => { const z = app.querySelector('#zone-cle'); z.hidden = !z.hidden; if (!z.hidden) z.querySelector('#jeton').focus(); };
+    app.querySelector('#enregistrer-cle').onclick = async (ev) => {
+      const msg = app.querySelector('#message-envoi');
+      ev.target.disabled = true;
+      msg.textContent = 'Vérification…';
+      const t = await sync.tester(cfg.depot, app.querySelector('#jeton').value);
+      ev.target.disabled = false;
+      if (!t.ok) { msg.textContent = t.message; return; }
+      await sync.enregistrerConfig(t.depot, app.querySelector('#jeton').value);
+      sync.envoyerBientot(200);
+      toast('Nouvelle clé enregistrée');
+      pageReglages();
+    };
     app.querySelector('#envoyer-maintenant').onclick = async (ev) => {
       ev.target.disabled = true;
       await sync.toutMarquer();
@@ -1566,11 +1571,22 @@ async function pageReglages() {
 }
 
 function texteDetailEnvoi(e) {
-  const quand = e.dernier ? `Dernier envoi : ${new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })}.` : '';
-  if (!e.enAttente) return `Tout est envoyé. ${quand}`;
-  if (e.horsLigne) return `${e.enAttente} élément(s) en attente d'internet. ${quand}`;
-  if (e.erreur) return `${e.enAttente} élément(s) en attente : GitHub ne répond pas (${e.erreur}). Ça réessaiera tout seul. ${quand}`;
-  return `Envoi en cours : ${e.enAttente} élément(s)… ${quand}`;
+  const quand = e.dernier ? `<small>Dernier envoi : ${esc(new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' }))}</small>` : '';
+  const ligne = (ico, texte) => `${icone(ico, { taille: 16 })}<span><b>${texte}</b>${quand}</span>`;
+  if (!e.enAttente) return ligne('check', 'Tout est envoyé');
+  if (e.horsLigne) return ligne('clock', `${e.enAttente} en attente d'internet`);
+  if (e.erreur) return ligne('triangle-alert', /401/.test(e.erreur) ? 'Clé refusée : change la clé' : `${e.enAttente} en attente : GitHub ne répond pas`);
+  return ligne('refresh-cw', `Envoi en cours (${e.enAttente})`);
+}
+
+function texteCle(v) {
+  if (v.horsLigne) return `<p class="etat-branche" id="etat-cle">${icone('lock', { taille: 16 })}<span><b>Clé GitHub : pas d'internet pour vérifier</b></span></p>`;
+  const bout = (nom, x) => `${icone(x === 'ok' ? 'check' : 'x', { taille: 13 })} ${nom}`;
+  const ok = v.studio === 'ok' && v.pages === 'ok';
+  const conseil = ok ? '' : v.studio === 'cle' ? '<small>Clé refusée : colle la nouvelle clé (Changer la clé)</small>'
+    : v.pages !== 'ok' ? '<small>Sur GitHub, donne aussi à ta clé le dossier « Appli-voyage » (Contents : Read and write)</small>'
+    : '<small>Sur GitHub, donne à ta clé le dossier « appli-voyage-donnees » (Contents : Read and write)</small>';
+  return `<p class="etat-branche ${ok ? '' : 'mauvais'}" id="etat-cle">${icone('lock', { taille: 16 })}<span><b>Clé GitHub : ${bout('Studio', v.studio)} · ${bout('Pages clients', v.pages)}</b>${conseil}</span></p>`;
 }
 
 // Au démarrage : recevoir ce qui manque (ex. : nouveau téléphone), puis envoyer ce qui attend.
