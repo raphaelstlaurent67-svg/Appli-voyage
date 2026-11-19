@@ -10,6 +10,7 @@ import * as carnets from './carnets.js';
 import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
+import * as essai from './essai.js';
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -85,6 +86,7 @@ function migrer(e) {
 }
 
 async function urlPhoto(id) {
+  if (/^https?:/.test(id)) return id;
   if (urlsPhotos.has(id)) return urlsPhotos.get(id);
   const p = await db.lire('photos', id);
   if (!p) return '';
@@ -1108,7 +1110,7 @@ function ligneItem(c, i, endroit, { attente }) {
   const choisi = choixRetenus(c).some((r) => r.itemId === i.id);
   return `
     <li class="item-carnet">
-      <a class="item-vignette" href="#/endroit/${esc(endroit.id)}">${endroit.photos?.length ? `<img data-photo="${esc(endroit.photos[0])}" alt="">` : iconeCat(endroit.categorie, { taille: 22 })}</a>
+      <a class="item-vignette" ${endroit.essai ? '' : `href="#/endroit/${esc(endroit.id)}"`}>${endroit.photos?.length ? `<img data-photo="${esc(endroit.photos[0])}" alt="">` : iconeCat(endroit.categorie, { taille: 22 })}</a>
       <div class="item-txt">
         <b>${esc(endroit.nom)}</b>
         <small>${esc(endroit.sousType || endroit.type || TAXONOMIE[endroit.categorie]?.nom || '')}${choisi ? ` · <span class="choisi-client">${icone('check', { taille: 12 })} son choix</span>` : ''}</small>
@@ -1127,8 +1129,9 @@ async function pageCarnet(id, sous) {
   const actifId = await db.lireReglage('carnetActif', null);
   const prenom = c.client?.prenom || 'ton client';
   const lienClient = carnets.lien(c);
-  const parId = new Map(etat.endroits.map((e) => [e.id, e]));
+  const parId = essai.avecEssai(etat.endroits);
   const faits = c.items.filter((i) => parId.has(i.endroitId) && estEnvoye(i));
+  const enEssai = essai.essaiEnCours(c, estEnvoye);
   const soirs = [...new Set(faits.map((i) => i.livraison))].sort().reverse();
   const pub = etatPublication(c);
   const ch = c.choix || {};
@@ -1182,6 +1185,11 @@ async function pageCarnet(id, sous) {
         <p class="soir-titre">${esc(dateLongue(s, c.fuseau))}</p>
         <ul class="items-carnet">${faits.filter((i) => i.livraison === s).map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: false })).join('')}</ul>`).join('')}
     </section>` : ''}
+
+    <section class="section envoi-rapide">
+      <button class="bouton-principal bouton-bloc" id="envoyer-maintenant">${icone('send', { taille: 18 })} Envoyer maintenant</button>
+      <button class="bouton-secondaire bouton-bloc" id="essai-montreal">${icone(enEssai ? 'x' : 'map-pin', { taille: 18 })} ${enEssai ? 'Arrêter l’essai de Montréal' : 'Envoyer l’essai de Montréal'}</button>
+    </section>
 
     <details class="section" id="reglages-carnet" ${reglagesOuverts || sous === 'envoi' ? 'open' : ''}>
       <summary>Réglages</summary>
@@ -1259,6 +1267,29 @@ async function pageCarnet(id, sous) {
   const zoneAVenir = app.querySelector('#a-venir');
   aVenir.brancherAVenir(zoneAVenir, c, parId, { sauver, recharger, choisirEndroit, editerMot, ajouterItem: carnets.ajouterItem, toast });
   aVenir.brancherReglages(app.querySelector('#envoi-carnet'), c, { sauver, recharger });
+
+  // Envoyer maintenant : la prochaine série part tout de suite (pendant un appel, par exemple).
+  app.querySelector('#envoyer-maintenant').onclick = async (ev) => {
+    const b = ev.currentTarget;
+    b.disabled = true;
+    const n = await carnets.envoyerMaintenant(c);
+    if (!n) { b.disabled = false; toast('Rien en attente. Ajoute des endroits ou l’essai de Montréal.'); return; }
+    const frais = await db.lire('carnets', c.id);
+    toast(frais?.publication?.erreur ? 'Pas envoyé : vérifie ta connexion' : `${n} choix envoyé${n > 1 ? 's' : ''} : il les voit déjà`);
+    recharger();
+  };
+  // L'essai de Montréal : 2 soirées de vrais choix à Montréal, envoyées à son heure, pour essayer.
+  app.querySelector('#essai-montreal').onclick = async () => {
+    if (enEssai) {
+      essai.retirerEssai(c, estEnvoye);
+      await sauver(); toast('Essai arrêté'); recharger(); return;
+    }
+    essai.ajouterEssai(c, carnets.ajouterItem);
+    if (!c.ville) { c.ville = 'Montréal'; c.pays = c.pays || 'Canada'; }
+    await sauver();
+    toast(`Essai prêt : ses choix arrivent à ${formatHeure(c.heure ?? 19)}`);
+    recharger();
+  };
 
   const tous = app.querySelector('#ajouter-tous');
   if (tous) {

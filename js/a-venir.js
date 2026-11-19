@@ -205,7 +205,7 @@ export function brancherAVenir(zone, c, endroits, { sauver, recharger, choisirEn
       const enFile = c.items.filter((x) => x !== i && !estEnvoye(x) && x.livraison && x.livraison > i.livraison && groupe(x) === g);
       const dans = new Set(c.items.map((x) => x.endroitId));
       const libres = [...endroits.values()]
-        .filter((e) => !dans.has(e.id) && !e.contributeurId && groupePour(e.categorie, r.quotas) === g)
+        .filter((e) => !dans.has(e.id) && !e.contributeurId && !e.essai && groupePour(e.categorie, r.quotas) === g)
         .sort((a, b) => (b.ville === ville) - (a.ville === ville) || (b.creeLe || '').localeCompare(a.creeLe || ''));
       const options = [
         ...enFile.map((x) => ({ id: `item:${x.id}`, nom: endroits.get(x.endroitId).nom, detail: `déjà prévu : ${quandEnvoi(x.livraison, r.fuseau).titre}` })),
@@ -229,6 +229,6 @@ export function brancherAVenir(zone, c, endroits, { sauver, recharger, choisirEn
 export function endroitsAAjouter(c, endroits) {
   const dans = new Set(c.items.map((i) => i.endroitId));
   const ville = (c.ville || '').trim().toLowerCase();
-  return [...endroits.values()].filter((e) => !dans.has(e.id) && !e.contributeurId && (!ville || (e.ville || '').trim().toLowerCase() === ville))
+  return [...endroits.values()].filter((e) => !dans.has(e.id) && !e.contributeurId && !e.essai && (!ville || (e.ville || '').trim().toLowerCase() === ville))
     .sort((a, b) => (a.creeLe || '').localeCompare(b.creeLe || ''));
 }
