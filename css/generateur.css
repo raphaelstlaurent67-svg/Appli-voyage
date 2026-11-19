@@ -884,3 +884,7 @@ input[type='date'] { color-scheme: light; }
 .nouveau-client .rangee-btn input { flex: 1; min-width: 220px; }
 .tableau-clients td { vertical-align: middle; }
 .tableau-clients .btn.sm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Retour à l'appli du cell, toujours visible (Studio = Raph seulement) */
+.side .retour-appli { flex: none; margin-right: 6px; }
+#etat-cle.mauvais { color: var(--bad); }

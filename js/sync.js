@@ -26,9 +26,30 @@ export async function lireConfig() {
 }
 
 export async function enregistrerConfig(depot, jeton) {
+  const avant = await db.lireReglage('sync', null);
   config = { depot: nettoyerDepot(depot), jeton: String(jeton || '').trim() };
   await db.ecrireReglage('sync', config);
-  await db.ecrireReglage('syncShas', {});
+  // Nouvelle clé pour le même dossier : on garde ce qui est déjà envoyé.
+  if (avant?.depot !== config.depot) await db.ecrireReglage('syncShas', {});
+}
+
+// La clé peut-elle écrire ? On crée un petit bout de données invisible (aucun fichier, aucun changement visible).
+async function peutEcrire(depot, cfg) {
+  try {
+    const r = await api(`/repos/${depot}/git/blobs`, { methode: 'POST', corps: { content: 'ok', encoding: 'utf-8' }, cfg });
+    if (r.ok) return 'ok';
+    return r.statut === 401 ? 'cle' : 'acces';
+  } catch (_) { return 'reseau'; }
+}
+
+// Vérifie la clé enregistrée : dossier privé (Studio) et dossier de l'appli (pages des clients).
+export async function verifierCle(depotPages) {
+  const cfg = await lireConfig();
+  if (!cfg) return null;
+  if (!navigator.onLine) return { horsLigne: true };
+  const [studio, pages] = await Promise.all([peutEcrire(cfg.depot, cfg), peutEcrire(depotPages, cfg)]);
+  if (studio === 'reseau' && pages === 'reseau') return { horsLigne: true };
+  return { studio, pages };
 }
 
 export async function oublierConfig() {

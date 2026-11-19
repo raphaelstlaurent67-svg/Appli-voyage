@@ -32,6 +32,15 @@ const LIEN = (() => {
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
 const MODE_TEST = params.has('test');
+// demande.html?apercu : Raph regarde depuis son appli. Bouton Retour (le client ne le voit jamais).
+if (params.has('apercu')) {
+  const retour = document.createElement('button');
+  retour.type = 'button';
+  retour.className = 'retour-apercu';
+  retour.innerHTML = `${icone('chevron-left', { taille: 20 })}<span>Retour</span>`;
+  retour.onclick = () => { if (history.length > 1) history.back(); else { window.close(); setTimeout(() => { location.href = './#/clients'; }, 300); } };
+  document.body.appendChild(retour);
+}
 // demande.html?client=Marie%20Tremblay : lien personnel fait dans le Studio. Chaque client a son propre
 // brouillon (rien n'est partagé entre appareils de toute façon), son nom est déjà rempli et on le salue.
 const CLIENT = (params.get('client') || '').trim().slice(0, 80);

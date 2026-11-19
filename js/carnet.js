@@ -15,6 +15,22 @@ const params = new URLSearchParams(location.search);
 const DEMO = params.has('demo');
 const DANS_APPLI = window.self !== window.top || params.has('appli');
 if (DANS_APPLI) document.documentElement.classList.add('dans-appli');
+// Aperçu : Raph regarde depuis son appli ou le Studio. Bouton Retour, et rien ne part au client.
+// Le lien du client n'a jamais « apercu » : lui ne voit pas ce bouton.
+const APERCU = params.has('apercu');
+if (APERCU) document.documentElement.classList.add('apercu');
+if (APERCU) {
+  const retour = document.createElement('button');
+  retour.type = 'button';
+  retour.className = 'retour-apercu';
+  retour.innerHTML = `${icone('chevron-left', { taille: 20 })}<span>Retour</span>`;
+  retour.onclick = () => {
+    if (history.length > 1) { history.back(); return; }
+    window.close();
+    setTimeout(() => { location.href = './#/clients'; }, 300);
+  };
+  document.body.appendChild(retour);
+}
 
 // ---------- Petits outils ----------
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -35,7 +51,7 @@ const pluriel = (n, mot, motPluriel = `${mot}s`) => `${n} ${n > 1 ? motPluriel :
 // ---------- Quel voyage ? ----------
 let id = params.get('c');
 let cle = location.hash.slice(1);
-if (!DEMO) {
+if (!DEMO && !APERCU) {
   if (id && cle) memoire.ecrire('carnet', { id, cle });
   else {
     // Ouvert depuis l'écran d'accueil : on rouvre le voyage gardé sur ce téléphone.
@@ -43,7 +59,7 @@ if (!DEMO) {
     if (m && (!id || m.id === id)) { id = m.id; cle = m.cle; history.replaceState(null, '', `?c=${encodeURIComponent(id)}${DANS_APPLI ? '&appli' : ''}#${cle}`); }
   }
 }
-const cleLocale = DEMO ? 'demo-montreal' : id;
+const cleLocale = DEMO ? 'demo-montreal' : APERCU ? `apercu-${id}` : id;
 
 const lireChoixLocaux = () => {
   const c = memoire.lire(`choix-${cleLocale}`, {});
@@ -116,7 +132,7 @@ function sauverChoix() {
   minuterieEnvoi = setTimeout(envoyerChoix, 2000);
 }
 async function envoyerChoix() {
-  if (DEMO || !id || !cle || !navigator.onLine) return;
+  if (DEMO || APERCU || !id || !cle || !navigator.onLine) return;
   try {
     const canal = await commun.canalChoix(id, cle);
     const maintenant = new Date().toISOString();
@@ -128,6 +144,7 @@ async function envoyerChoix() {
 }
 // À chaque visite, on renvoie ses choix (le relais les garde 12 h) : Raph les retrouve toujours.
 function signalerVisite() {
+  if (APERCU) return;
   if (Date.now() - memoire.lire(`ping-${cleLocale}`, 0) > 20 * 60 * 1000) envoyerChoix();
 }
 
@@ -247,22 +264,13 @@ function rendre() {
     <div id="contenu">${contenuOnglet(liste)}</div>
 
     <footer class="pied">
-      ${pwa.dejaInstallee() || DANS_APPLI ? '' : `
+      ${pwa.dejaInstallee() || DANS_APPLI || APERCU ? '' : `
       <section class="carte-douce" id="installer">
         <span class="rond-ico">${icone('download', { taille: 18 })}</span>
-        <div><b>Gardez votre voyage à portée de main</b><p id="aide-installer">Ajoutez-le à votre écran d’accueil : il s’ouvrira comme une appli.</p></div>
+        <div><b>Ajouter à l’écran d’accueil</b><p id="aide-installer"></p></div>
         <button class="btn-doux" id="bouton-installer">Ajouter</button>
       </section>`}
-      <details class="comment">
-        <summary>Comment ça marche</summary>
-        <ol>
-          <li><b>${esc(d.raph)} repère pour vous.</b> Sur place, il visite, photographie et garde seulement le meilleur.</li>
-          <li><b>Chaque soir, vos sélections arrivent.</b> Quelques hôtels, restaurants et activités, à ${commun.formatHeure(d.heure ?? 19)}.</li>
-          <li><b>Vous choisissez.</b> Touchez votre préféré dans chaque section. Rien n’est obligatoire.</li>
-          <li><b>Votre itinéraire prend forme.</b> Vos choix sont réservés dans votre voyage, jour par jour.</li>
-        </ol>
-      </details>
-      <p class="signature">${icone('lock', { taille: 13 })} Voyage privé : seul votre lien l’ouvre.${DEMO ? ' <br>Démo : photos d’illustration.' : ''}</p>
+      <p class="signature">${icone('lock', { taille: 13 })} Voyage privé${DEMO ? ' · Démo' : ''}</p>
     </footer>`;
 
   afficherPhotos(racine);
@@ -278,11 +286,11 @@ function pageSoirees(liste) {
     return `
       <div class="vide">
         <div class="vide-lune">${icone('moon', { taille: 34, epaisseur: 1.4 })}</div>
-        <h2>Vos premières sélections arrivent bientôt</h2>
-        <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)}, les meilleures trouvailles de la journée : où dormir, où manger, quoi faire.</p>
+        <h2>Vos sélections arrivent bientôt</h2>
+        <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)}</p>
       </div>`;
   }
-  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré dans chaque section. Rien n’est obligatoire.</p>';
+  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré.</p>';
   return aide + liste.map((s, n) => {
     const gs = groupesDuSoir(s.items);
     const complet = soirComplet(s);
@@ -344,8 +352,8 @@ function pageResume(liste) {
   return `
     <div class="choix">
       <div class="choix-tete">
-        <h2>Votre voyage prend forme</h2>
-        <p>${parSoir.length ? `${esc(d.raph)} reçoit vos choix automatiquement : rien à envoyer.` : 'Les endroits que vous choisissez chaque soir s’ajoutent ici, et deviennent votre itinéraire.'}</p>
+        <h2>Mes choix</h2>
+        ${parSoir.length ? '' : '<p>Aucun choix pour l’instant.</p>'}
       </div>
       ${parSoir.map(({ s, gs }) => `
         <h4>Soir ${s.numero} <small>${esc(commun.dateLongue(s.quand, d.fuseau))}</small></h4>
@@ -368,7 +376,7 @@ function pageMessage() {
       </div>
       <div class="fil">
         ${messages.length ? messages.map((m) => `<div class="bulle"><p>${esc(m.texte)}</p><small>${esc(heure(m.le))} · ${icone('check', { taille: 12, epaisseur: 2.6 })} Envoyé</small></div>`).join('') : `
-        <p class="fil-vide">Une question, une envie particulière, une allergie, un anniversaire à souligner ? Écrivez à ${esc(d.raph)} ici : il reçoit votre message directement${tel || DEMO ? ', ou par texto' : ''}.</p>`}
+        <p class="fil-vide">Écrivez à ${esc(d.raph)} ici.</p>`}
       </div>
       <form class="ecrire" id="ecrire">
         <textarea id="texte-message" rows="1" placeholder="Votre message à ${esc(d.raph)}…" enterkeyhint="send"></textarea>
@@ -552,14 +560,14 @@ function erreur(titre, texte) {
 // ---------- Démarrage ----------
 (async () => {
   if (!DEMO && (!id || !cle)) {
-    erreur('Ce voyage est privé', 'Il s’ouvre seulement avec le lien complet reçu de votre conseiller. Ouvrez-le directement depuis son message.');
+    erreur('Ce voyage est privé', 'Ouvrez le lien reçu de votre conseiller.');
     return;
   }
   try {
     etat.donnees = await chargerDonnees();
   } catch (err) {
-    if (err?.name === 'OperationError') erreur('Ce lien ne fonctionne pas', 'Le lien semble incomplet. Ouvrez-le directement depuis le message reçu, sans le modifier.');
-    else erreur('Votre voyage arrive bientôt', 'Il n’est pas encore en ligne, ou internet manque. Réessayez dans quelques minutes.');
+    if (err?.name === 'OperationError') erreur('Ce lien ne fonctionne pas', 'Ouvrez le lien complet reçu de votre conseiller.');
+    else erreur('Votre voyage arrive bientôt', 'Réessayez dans quelques minutes.');
     return;
   }
   // Démo : les soirées passées sont déjà complétées ; les choix faits à la main restent par-dessus.

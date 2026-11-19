@@ -346,6 +346,7 @@ function rendreSide() {
   const actif = (href) => (href === '#/' ? route === '#/' || route === '#' || route.startsWith('#/voyage') || route.startsWith('#/demande') : route.startsWith(href) || (href === '#/contributeurs' && route.startsWith('#/a-valider')));
   const lienNav = (href, ico, texte, extra = '') => `<a class="navBtn ${actif(href) ? 'on' : ''}" href="${href}">${icone(ico, { taille: 17 })}<span>${texte}</span>${extra}</a>`;
   side.innerHTML = `
+    <a class="btn ghost sm retour-appli" href="../index.html#/reglages">${icone('chevron-left', { taille: 15 })} Appli</a>
     <a class="brand" href="#/">
       <span class="mk">${icone('compass', { taille: 17, epaisseur: 2.2 })}</span>
       <span><b>Studio</b><small>Voyages sur mesure</small></span>
@@ -354,7 +355,6 @@ function rendreSide() {
       ${MENU.map(([href, ico, nom]) => lienNav(href, ico, nom, href === '#/contributeurs' && n ? `<span class="pastille-n" title="${n} à valider">${n}</span>` : '')).join('')}
     </nav>
     <div class="side-droite">
-      <a class="lien-discret" href="../index.html">${icone('smartphone', { taille: 14 })} Appli des endroits</a>
       ${pwa.dejaInstallee() ? '' : `<button class="btn ghost sm" id="side-installer">${icone('download', { taille: 14 })} Installer</button>`}
     </div>`;
   const inst = side.querySelector('#side-installer');
@@ -423,7 +423,7 @@ async function router() {
 
 const entete = (titre, sousTitre, actions = '') => `
   <div class="head"><h1>${titre}</h1><div class="head-actions">${actions}</div></div>
-  <p class="crumb">${sousTitre}</p>`;
+  ${sousTitre ? `<p class="crumb">${sousTitre}</p>` : ''}`;
 
 // Met une appli sur le bureau, ou explique comment faire si le navigateur ne le propose pas.
 async function installerAppli(nom) {
@@ -585,7 +585,7 @@ async function pageDemandes() {
   const telFiche = await db.lireReglage('telFiche', '');
   const recues = etat.voyages.filter((v) => v.demande).sort((a, b) => (b.demande.envoyeLe || '').localeCompare(a.demande.envoyeLe || ''));
   app.innerHTML = `
-    ${entete('Fiche client', 'Le questionnaire que tu envoies à un client : ses pays, ses dates, ses envies. Sa réponse crée le voyage ici.')}
+    ${entete('Fiche client', '')}
     <div class="grille-2">
       <section class="panel">
         <div class="etape-titre"><span class="gros-num">1</span><div><h3>Envoie la fiche au client</h3><p>Copie ce lien et envoie-le par Messenger, texto ou courriel.</p></div></div>
@@ -725,7 +725,7 @@ function panneauCarnets() {
   const tries = [...etat.carnets].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   return `
     <section class="panel carnets-direct">
-      <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3><span class="aide">Les choix du client entrent tout seuls dans son voyage</span></div>
+      <div class="panel-tete"><h3>${icone('moon', { taille: 15 })} Voyages sur mesure en direct</h3></div>
       ${tries.map((c) => {
         const livres = c.items.filter((i) => estEnvoye(i, maintenant)).length;
         const attente = c.items.length - livres;
@@ -740,7 +740,7 @@ function panneauCarnets() {
               <span class="rangee-btn">
                 <a class="btn sm" href="#/carnet/${esc(c.id)}">${icone('clock', { taille: 14 })} À venir</a>
                 ${v ? `<a class="btn sm" href="#/voyage/${esc(v.id)}">${icone('route', { taille: 14 })} Son voyage</a>` : ''}
-                <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>
+                <a class="btn ghost sm" href="${esc(carnets.lienApercu(lienClient(new URL('../', location.href).href, c.id, c.cle)))}" target="_blank">${icone('eye', { taille: 14 })} Sa page</a>
               </span>
             </div>
             ${retenus.length ? `<ul class="choix-studio">${retenus.map((r) => `<li>${icone(GROUPES_CHOIX[r.groupe].ico, { taille: 14 })}<span>${GROUPES_CHOIX[r.groupe].court}</span><b>${r.itemId === 'aucun' ? '<i>aucun ne lui plaisait</i>' : esc(nomItem(c, r.itemId))}</b></li>`).join('')}</ul>` : '<p class="aide">Pas encore de choix.</p>'}
@@ -779,7 +779,7 @@ async function pageClientsStudio() {
   app.innerHTML = `
     ${entete('Clients', pluriel(clients.length, 'client'))}
     <section class="panel nouveau-client">
-      <div class="panel-tete"><h3>${icone('send', { taille: 15 })} Nouveau client</h3><span class="aide">Un lien unique à chaque fois. Sa demande arrive ici toute seule.</span></div>
+      <div class="panel-tete"><h3>${icone('send', { taille: 15 })} Nouveau client</h3></div>
       <div class="rangee-btn">
         <input id="nom-client" type="text" placeholder="Nom du client (ex. : Marie Tremblay)" autocomplete="off">
         <button class="btn" id="copier-lien-client">${icone('copy', { taille: 15 })} Copier son lien</button>
@@ -795,7 +795,7 @@ async function pageClientsStudio() {
           <td><b>${esc(g.nom)}</b></td>
           <td>${recu ? `<span class="etiq ok">${icone('check', { taille: 12 })} Demande reçue ${esc(date(recu.recuLe))}</span>` : attente.length ? `<span class="etiq">Lien envoyé ${esc(date(attente[0].creeLe))}</span>` : v?.demande ? `<span class="etiq ok">Demande reçue</span>` : '<span class="aide">—</span>'}</td>
           <td>${v ? `<a class="btn ghost sm" href="#/voyage/${esc(v.id)}">${icone('route', { taille: 14 })} ${esc(v.titre)}</a>` : '<span class="aide">—</span>'}</td>
-          <td>${c ? `<a class="btn ghost sm" href="#/carnet/${esc(c.id)}">${icone('clock', { taille: 14 })} À venir</a> <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>` : '<span class="aide">Crée-le sur le cellulaire (Clients)</span>'}</td>
+          <td>${c ? `<a class="btn ghost sm" href="#/carnet/${esc(c.id)}">${icone('clock', { taille: 14 })} À venir</a> <a class="btn ghost sm" href="${esc(carnets.lienApercu(lienClient(new URL('../', location.href).href, c.id, c.cle)))}" target="_blank">${icone('eye', { taille: 14 })} Sa page</a>` : '<span class="aide">Crée-le sur le cellulaire (Clients)</span>'}</td>
         </tr>`;
       }).join('')}
       </tbody></table></section>` : '<p class="vide-ligne">Aucun client pour l\'instant.</p>'}`;
@@ -821,7 +821,7 @@ async function pageCarnetStudio(id) {
     ${entete(`Voyage de ${esc(prenom)}`, `${esc(c.ville || 'Ville à choisir')} · ${esc(aVenir.resumeReglages(c))}`, `<a class="btn ghost sm" href="#/">${icone('chevron-left', { taille: 14 })} Accueil</a>`)}
     <div class="grille-2 carnet-studio-page">
       <section class="panel" id="a-venir">
-        <div class="panel-tete"><h3>${icone('clock', { taille: 15 })} À venir</h3><span class="aide">Ce qui part à ${esc(prenom)}, et quand</span></div>
+        <div class="panel-tete"><h3>${icone('clock', { taille: 15 })} À venir</h3></div>
         ${aVenir.blocAVenir(c, parId, { prenom, montrer: 6 })}
         <div class="rangee-btn" style="margin-top:12px">
           ${aAjouter.length ? `<button class="btn" id="ajouter-tous">${icone('plus', { taille: 15 })} Ajouter mes ${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''}${c.ville ? ` de ${esc(c.ville)}` : ''}</button>` : ''}
@@ -838,7 +838,7 @@ async function pageCarnetStudio(id) {
           <div class="lien-fiche"><code>${esc(lien.replace(/#.*/, '#…'))}</code></div>
           <div class="rangee-btn">
             <button class="btn" id="copier-lien">${icone('copy', { taille: 15 })} Copier son lien</button>
-            <a class="btn ghost" href="${esc(lien)}" target="_blank" rel="noopener">${icone('eye', { taille: 15 })} Voir sa page</a>
+            <a class="btn ghost" href="${esc(carnets.lienApercu(lien))}" target="_blank">${icone('eye', { taille: 15 })} Voir sa page</a>
           </div>
         </section>
       </div>
@@ -1333,8 +1333,8 @@ function ongletClient(v, zone) {
         </div>
       </div>
       <p class="aide aide-client">${mode === 'apercu'
-    ? `${icone('info', { taille: 14 })}<span>Ce que tu montres avant la vente : le trajet, les jours et le genre d'endroits. Les noms, adresses et liens sont cachés et les photos floues, sauf le jour 1, offert en exemple.</span>`
-    : `${icone('lock', { taille: 14 })}<span>La version que le client reçoit après avoir payé. Tes notes privées ne sont jamais incluses.</span>`}</p>
+    ? `${icone('info', { taille: 14 })}<span>Avant la vente : noms cachés, photos floues, sauf le jour 1.</span>`
+    : `${icone('lock', { taille: 14 })}<span>Après paiement. Sans tes notes privées.</span>`}</p>
       <div class="cadre-client">${htmlClient(v, mode)}</div>`;
     afficherPhotos(zone);
     zone.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => { mode = b.dataset.mode; rendre(); }; });
@@ -1693,7 +1693,7 @@ async function ongletSuivi(v, zone, enregistrer) {
     const nouvelles = [...s.nouvelles].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     zone.innerHTML = `
       <div class="barre-client">
-        <p class="aide-client">${icone('lock', { taille: 14 })}<span>Sa page privée pendant que tu es sur place. Envoie-la par WhatsApp ou courriel, et renvoie-la à chaque nouvelle.</span></p>
+        <span></span>
         <div class="head-actions">
           <button class="btn sm" id="telecharger-suivi">${icone('download', { taille: 14 })} Télécharger la page</button>
           ${navigator.canShare ? `<button class="btn ghost sm" id="partager-suivi">${icone('send', { taille: 14 })} Envoyer</button>` : ''}
@@ -1886,7 +1886,7 @@ function pageContributeurs(onglet) {
   const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
   const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
   app.innerHTML = `
-    ${entete('Contributeurs', "Ce qu'ils t'envoient et ce que tu leur dois.", `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
+    ${entete('Contributeurs', '', `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
     <div class="kpis kpis-3">
       <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
       <div class="kpi ${du ? 'warn' : ''}"><span>${icone('wallet', { taille: 15 })} À payer</span><b>${formatArgent(du)}</b><small>Total dû maintenant</small></div>
@@ -1905,7 +1905,7 @@ function pageContributeurs(onglet) {
 function pageAValider() {
   const n = aValider().length;
   app.innerHTML = `
-    ${entete('À valider', n ? 'Seuls les endroits acceptés sont payés et servent dans tes voyages.' : "Ici arrivent les endroits que tes contributeurs t'envoient.")}
+    ${entete('À valider', '')}
     <div id="contenu"></div>`;
   ongletSoumissions(app.querySelector('#contenu'));
 }
@@ -1947,7 +1947,7 @@ function pageVentes(periode) {
   const haut = graduation * 4;
 
   app.innerHTML = `
-    ${entete('Ventes', 'Les itinéraires marqués « vendu » dans l\'onglet « Infos et vente » de chaque voyage.')}
+    ${entete('Ventes', '')}
     <div class="kpis kpis-3">
       <div class="kpi"><span>${icone('banknote', { taille: 15 })} Total</span><b>${formatCAD(total)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></div>
       <div class="kpi"><span>${icone('calendar', { taille: 15 })} Ce mois-ci</span><b>${formatCAD(ceMois)}</b><small>${new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' })}</small></div>
@@ -1964,7 +1964,7 @@ function pageVentes(periode) {
           ${barres.map((b) => `<div class="barre ${b.montant ? '' : 'zero'}" title="${esc(b.titre)} : ${b.montant ? `${formatCAD(b.montant)} (${pluriel(b.nb, 'vente')})` : 'aucune vente'}"><i style="height:${(b.montant / haut) * 100}%"></i><span>${esc(b.etiquette)}</span></div>`).join('')}
         </div>
       </div>
-      ${vendus.length ? '' : '<p class="aide graphique-vide">Pas encore de vente. Quand tu vends un itinéraire, ouvre-le, va dans « Infos et vente » et coche « Itinéraire vendu ».</p>'}
+      ${vendus.length ? '' : '<p class="aide graphique-vide">Aucune vente</p>'}
     </section>
     <section class="panel">
       <div class="panel-tete"><h3>Itinéraires vendus</h3></div>
@@ -2219,7 +2219,7 @@ async function ouvrirRapport(id, forcer = false) {
             </div>
           </aside>
         </div>
-        <p class="aide rapport-honnete">${icone('info', { taille: 13 })} Aucune vérification gratuite n'est sûre à 100 %. Cette note réunit une trentaine d'indices ; en cas de doute, fie-toi aux boutons ci-dessus.</p>
+        <p class="aide rapport-honnete">${icone('info', { taille: 13 })} Pas sûr à 100 %. En cas de doute, utilise les boutons ci-dessus.</p>
       </div>
       <footer class="mod-pied">
         ${e.statut === 'en_attente' ? `
@@ -2363,7 +2363,6 @@ function ongletRegles(zone) {
   zone.innerHTML = `
     ${explications}
     <form class="panel regles marge-panel" id="regles">
-      <p class="aide">Change les montants ici : tout le reste du Studio se met à jour.</p>
       <div class="form-grille">
         <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
         <label class="champ"><span>Pourcentage sur les ventes (%) <small>ex. : 0,5 ou 1</small></span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
@@ -2396,17 +2395,22 @@ async function pageDonnees() {
   const cfg = await sync.lireConfig();
   const envoi = await sync.etat();
   app.innerHTML = `
-    ${entete('Mes données', cfg ? 'Tes endroits arrivent tout seuls de ton cellulaire, par ton dossier GitHub privé.' : 'Branche ton cellulaire pour recevoir tes endroits tout seuls.')}
+    ${entete('Mes données', '')}
     <section class="panel lien-cell">
       <div class="panel-tete"><h3>${icone('refresh-cw', { taille: 16 })} Lien avec ton cellulaire</h3>${cfg ? `<span class="badge-ok">${icone('check', { taille: 13 })} Branché</span>` : ''}</div>
       ${cfg ? `
-        <p class="doux">Dossier privé <b>${esc(cfg.depot)}</b>. Le Studio va chercher les nouveaux endroits à l'ouverture et toutes les 2 minutes. Tes voyages, contributeurs et paiements y sont aussi copiés.</p>
-        <p class="aide" id="etat-sync">${esc(texteSync(envoi))}</p>
+        <p class="doux" id="etat-sync">${esc(texteSync(envoi))}</p>
+        <p class="doux" id="etat-cle">${icone('lock', { taille: 14 })} Clé GitHub : vérification…</p>
         <div class="head-actions gauche">
           <button class="btn sm" id="sync-maintenant">${icone('refresh-cw', { taille: 14 })} Synchroniser maintenant</button>
+          <button class="btn ghost sm" id="sync-cle">Changer la clé</button>
           <button class="btn ghost sm" id="sync-debrancher">Débrancher</button>
+        </div>
+        <div id="zone-cle" hidden>
+          <div class="form-grille"><label class="champ"><span>Nouvelle clé</span><input id="sync-jeton" type="password" placeholder="github_pat_…" spellcheck="false"></label></div>
+          <p class="aide" id="sync-message"></p>
+          <div class="head-actions gauche"><button class="btn sm" id="sync-enregistrer">Enregistrer</button></div>
         </div>` : `
-        <p class="doux">Colle ici la même clé que dans les Réglages de l'appli sur ton cell. Le Studio recevra alors chaque endroit que tu enregistres, avec ses photos.</p>
         <div class="form-grille">
           <label class="champ"><span>Dossier GitHub privé</span><input id="sync-depot" value="appli-voyage-donnees" spellcheck="false"></label>
           <label class="champ"><span>Clé d'accès GitHub</span><input id="sync-jeton" type="password" placeholder="github_pat_…" spellcheck="false"></label>
@@ -2433,9 +2437,7 @@ async function pageDonnees() {
       </section>
       <section class="panel">
         <div class="panel-tete"><h3>Garder une copie</h3></div>
-        <p class="doux">Tes voyages, contributeurs et paiements sont seulement dans ce navigateur. Télécharge une copie de temps en temps et garde-la dans ton Google Drive ou tes courriels.</p>
         <button class="btn ghost" id="exporter">${icone('download', { taille: 15 })} Télécharger une copie complète</button>
-        <p class="aide">Pour la remettre : choisis-la ci-contre avec « Moi ».</p>
       </section>
     </div>`;
   if (cfg) {
@@ -2448,6 +2450,27 @@ async function pageDonnees() {
       toast(n === null ? 'La synchronisation n\'a pas marché' : n ? pluriel(n, 'nouvel endroit reçu', 'nouveaux endroits reçus') : 'Tout est à jour');
     };
     app.querySelector('#sync-debrancher').onclick = async () => { await sync.oublierConfig(); toast('Débranché'); router(); };
+    sync.verifierCle(carnets.DEPOT_PAGES).then((v) => {
+      const el = app.querySelector('#etat-cle');
+      if (!el || !v) return;
+      if (v.horsLigne) { el.innerHTML = `${icone('lock', { taille: 14 })} Clé GitHub : pas d'internet pour vérifier`; return; }
+      const b = (nom, x) => `${x === 'ok' ? '✓' : '✗'} ${nom}`;
+      const ok = v.studio === 'ok' && v.pages === 'ok';
+      el.classList.toggle('mauvais', !ok);
+      el.innerHTML = `${icone('lock', { taille: 14 })} Clé GitHub : ${b('Studio', v.studio)} · ${b('Pages clients', v.pages)}${ok ? '' : v.studio === 'cle' ? ' · clé refusée, change la clé' : v.pages !== 'ok' ? ' · donne aussi le dossier « Appli-voyage » à ta clé (Contents : Read and write)' : ' · donne le dossier « appli-voyage-donnees » à ta clé'}`;
+    });
+    app.querySelector('#sync-cle').onclick = () => { const z = app.querySelector('#zone-cle'); z.hidden = !z.hidden; };
+    app.querySelector('#sync-enregistrer').onclick = async (ev) => {
+      const msg = app.querySelector('#sync-message');
+      ev.target.disabled = true;
+      msg.textContent = 'Vérification…';
+      const t = await sync.tester(cfg.depot, app.querySelector('#sync-jeton').value);
+      ev.target.disabled = false;
+      if (!t.ok) { msg.textContent = t.message; return; }
+      await sync.enregistrerConfig(t.depot, app.querySelector('#sync-jeton').value);
+      toast('Nouvelle clé enregistrée');
+      router();
+    };
   } else {
     app.querySelector('#sync-brancher').onclick = async (ev) => {
       const msg = app.querySelector('#sync-message');
@@ -2512,11 +2535,11 @@ async function pageDonnees() {
 
 // ---------- Lien avec le cellulaire ----------
 function texteSync(e) {
-  const quand = e.dernier ? `Dernière synchronisation : ${new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })}.` : '';
-  if (e.horsLigne) return `Pas d'internet en ce moment. ${quand}`;
-  if (e.enAttente && e.erreur) return `${e.enAttente} élément(s) à envoyer : GitHub ne répond pas (${e.erreur}). ${quand}`;
-  if (e.enAttente) return `Envoi de ${e.enAttente} élément(s)… ${quand}`;
-  return quand || 'Prêt.';
+  const quand = e.dernier ? `Dernière synchro : ${new Date(e.dernier).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })}` : '';
+  if (e.horsLigne) return `Pas d'internet. ${quand}`;
+  if (e.enAttente && e.erreur) return `${/401/.test(e.erreur) ? 'Clé refusée : change la clé' : `${e.enAttente} en attente : GitHub ne répond pas`}. ${quand}`;
+  if (e.enAttente) return `Envoi en cours (${e.enAttente}). ${quand}`;
+  return `✓ Tout est à jour. ${quand}`;
 }
 
 // Reçoit les nouveautés du cellulaire, puis envoie ce que le Studio a changé.

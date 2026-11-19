@@ -57,7 +57,7 @@ export function blocReglages(c) {
   const r = reglagesEnvoi(c);
   return `
     <div class="av-reglages">
-      <p class="av-etiquette">Combien de choix à chaque envoi</p>
+      <p class="av-etiquette">Choix par envoi</p>
       ${ORDRE.map((g) => `
         <div class="av-quota">
           <span class="av-quota-nom">${icone(GROUPES_CHOIX[g].ico, { taille: 17 })}<span><b>${GROUPES_CHOIX[g].titre}</b><small>${g === 'sortir' ? 'bars (sinon avec les activités)' : g === 'faire' ? 'visites, expériences' + (r.quotas.sortir > 0 ? '' : ', bars') : COURTS[g][1]}</small></span></span>
@@ -67,7 +67,6 @@ export function blocReglages(c) {
             <button type="button" data-quota="${g}" data-pas="1" aria-label="Plus" ${r.quotas[g] >= 9 ? 'disabled' : ''}>${icone('plus', { taille: 16 })}</button>
           </span>
         </div>`).join('')}
-      <p class="av-aide">0 = cette catégorie n'est pas envoyée (ses endroits restent de côté).</p>
       <p class="av-etiquette">Quels jours</p>
       <div class="av-jours">${ORDRE_JOURS.map((j) => `<button type="button" class="${r.jours.includes(j) ? 'on' : ''}" data-jour="${j}" aria-pressed="${r.jours.includes(j)}">${NOMS_JOURS[j]}</button>`).join('')}</div>
       <div class="av-deux">
@@ -155,11 +154,11 @@ export function blocAVenir(c, endroits, { montrer = 4, prenom = 'ton client' } =
     <div class="av">
       <p class="av-resume">${icone('settings', { taille: 14 })} ${esc(resumeReglages(c))}</p>
       ${envois.length ? envois.slice(0, montrer).map(carteEnvoi).join('') : `
-        <p class="av-vide">${icone('inbox', { taille: 22 })}<span><b>Rien en attente</b>Chaque endroit que tu sauvegardes pendant le repérage arrive ici tout seul, et part au prochain envoi.</span></p>`}
+        <p class="av-vide">${icone('inbox', { taille: 22 })}<span><b>Rien en attente</b></span></p>`}
       ${autres.length ? `<p class="av-suite">Ensuite : ${pluriel(attente.filter((i) => autres.includes(i.livraison)).length, 'endroit')} sur ${pluriel(autres.length, 'autre envoi', 'autres envois')}, jusqu'au ${esc(dateLongue(autres[autres.length - 1], r.fuseau))}.</p>` : ''}
       ${reserve.length ? `
         <article class="av-envoi reserve">
-          <header class="av-envoi-tete"><span><b>De côté</b><small>catégorie à 0 dans les réglages : pas envoyé</small></span></header>
+          <header class="av-envoi-tete"><span><b>De côté</b><small>pas envoyé</small></span></header>
           <ul class="av-liste">${reserve.map((i) => ligne(i, null)).join('')}</ul>
         </article>` : ''}
     </div>`;
