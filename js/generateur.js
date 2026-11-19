@@ -14,8 +14,9 @@ import * as verif from './verification.js';
 import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
 import * as carnets from './carnets.js';
 import * as aVenir from './a-venir.js';
+import * as liensDemande from './liens-demande.js';
 
-const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
+const etat = { endroits: [], voyages: [], contributeurs: [], paiements: [], carnets: [], liens: [], taux: { ...TAUX_PAR_DEFAUT }, regles: null };
 const urlsPhotos = new Map();
 const app = document.getElementById('app');
 const side = document.getElementById('side');
@@ -125,13 +126,28 @@ async function charger() {
   etat.contributeurs = await db.tous('contributeurs');
   etat.paiements = await db.tous('paiements');
   etat.carnets = await db.tous('carnets');
+  etat.liens = await db.tous('liens');
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
   if (etat.regles.pourcentage === 10) etat.regles.pourcentage = 1;
   etat.regles.cibles = { ...REGLES_DEFAUT.cibles, ...(etat.regles.cibles || {}) };
+  await integrerDemandes();
   await integrerChoixClients();
 }
+
+// ---------- Demandes reçues par un lien personnel : le voyage se crée tout seul ----------
+async function integrerDemandes() {
+  for (const l of etat.liens) {
+    if (!l.code || etat.voyages.some((v) => v.lienId === l.id)) continue;
+    let d;
+    try { d = await decoder(l.code); } catch (_) { continue; }
+    const v = voyageDeDemande(d) || await creerDepuisDemande(d);
+    v.lienId = l.id;
+    await sauver('voyages', v);
+  }
+}
+const nomCle = (nom) => String(nom || '').trim().split(/\s+/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 // ---------- Voyages sur mesure : les choix du client entrent dans son voyage ----------
 // Chaque endroit choisi par le client (son hôtel, son resto, son activité du soir) est mis
@@ -142,8 +158,13 @@ async function integrerChoixClients() {
   for (const c of etat.carnets) {
     const voulus = endroitsChoisis(c);
     let v = voyageDuCarnet(c);
-    if (!v && !voulus.size) continue;
     let change = false;
+    // Le client a déjà rempli le formulaire : son voyage sur mesure s'attache à ce voyage-là.
+    if (!v && c.client?.prenom) {
+      v = etat.voyages.find((x) => !x.carnetId && !x.modele && x.demande && nomCle(x.client) === nomCle(c.client.prenom));
+      if (v) { v.carnetId = c.id; change = true; }
+    }
+    if (!v && !c.client?.prenom && !voulus.size) continue;
     if (!v) {
       v = nouveauVoyage();
       Object.assign(v, { titre: `${c.ville || 'Voyage'} sur mesure`, client: c.client?.prenom || '', carnetId: c.id });
@@ -314,6 +335,7 @@ function bilanContributeur(c) {
 // Le menu, dans l'ordre.
 const MENU = [
   ['#/', 'house', 'Accueil', ''],
+  ['#/clients', 'inbox', 'Clients', 'Tous tes clients : lien envoyé, demande reçue, voyage sur mesure en direct.'],
   ['#/contributeurs', 'users', 'Contributeurs', 'Ajoute des contributeurs, envoie-leur leur lien, vois ce que tu leur dois.'],
   ['#/ventes', 'banknote', 'Ventes', 'Ce que tes itinéraires ont rapporté.'],
   ['#/donnees', 'folder-open', 'Mes données', 'Importer un fichier de contributeur, garder une copie.'],
@@ -393,6 +415,7 @@ async function router() {
   if (page === 'demande') return pageDemande(id);
   if (page === 'demandes') return pageDemandes();
   if (page === 'carnet') return pageCarnetStudio(id);
+  if (page === 'clients') return pageClientsStudio();
   if (page === 'ventes') return pageVentes(id || '30j');
   if (page === 'donnees') return pageDonnees();
   return pageAccueil();
@@ -601,11 +624,14 @@ async function pageDemandes() {
   champClient.oninput = () => maj();
   langue.onchange = maj;
   champ.onchange = () => db.ecrireReglage('courrielFiche', champ.value.trim());
+  // Un nouveau lien unique à chaque Copier : la demande du client arrivera toute seule ici.
   app.querySelector('#copier').onclick = async () => {
-    const l = lienActuel();
+    const { lien, url } = liensDemande.preparerLien(new URL('../', location.href).href, { client: champClient.value, pour: champ.value.trim(), tel: champTel.value.trim(), langue: langue.value });
     db.ecrireReglage('courrielFiche', champ.value.trim());
     db.ecrireReglage('telFiche', champTel.value.trim());
-    try { await navigator.clipboard.writeText(l); toast('Lien copié'); } catch (_) { prompt('Copie ce lien :', l); }
+    try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { prompt('Copie ce lien :', url); }
+    await liensDemande.garderLien(lien);
+    etat.liens = await db.tous('liens');
   };
   app.querySelector('#ouvrir').onclick = () => {
     const c = extraireCode(app.querySelector('#colle').value);
@@ -722,6 +748,65 @@ function panneauCarnets() {
           </div>`;
       }).join('')}
     </section>`;
+}
+
+// ---------- Clients : un client = son lien, sa demande, son voyage, son voyage sur mesure en direct ----------
+function clientsRegroupes() {
+  const groupes = new Map();
+  const groupe = (nom) => {
+    const k = nomCle(nom) || '?';
+    if (!groupes.has(k)) groupes.set(k, { nom: '', liens: [], voyages: [], carnets: [], dernier: '' });
+    const g = groupes.get(k);
+    if (String(nom || '').trim().length > g.nom.length) g.nom = String(nom).trim();
+    return g;
+  };
+  const plusRecent = (g, t) => { if ((t || '') > g.dernier) g.dernier = t || ''; };
+  for (const l of etat.liens) { const g = groupe(l.nom || l.client || 'Sans nom'); g.liens.push(l); plusRecent(g, l.recuLe || l.creeLe); }
+  for (const v of etat.voyages) {
+    if (v.modele || !(v.client || v.demande || v.carnetId)) continue;
+    const g = groupe(v.client || v.demande?.nom);
+    g.voyages.push(v); plusRecent(g, v.modifieLe);
+  }
+  for (const c of etat.carnets) { const g = groupe(c.client?.prenom || 'Sans nom'); g.carnets.push(c); plusRecent(g, c.modifieLe); }
+  return [...groupes.values()].sort((a, b) => b.dernier.localeCompare(a.dernier));
+}
+
+async function pageClientsStudio() {
+  const courriel = await db.lireReglage('courrielFiche', '');
+  const telFiche = await db.lireReglage('telFiche', '');
+  const clients = clientsRegroupes();
+  const date = (t) => (t ? new Date(t).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' }) : '');
+  app.innerHTML = `
+    ${entete('Clients', pluriel(clients.length, 'client'))}
+    <section class="panel nouveau-client">
+      <div class="panel-tete"><h3>${icone('send', { taille: 15 })} Nouveau client</h3><span class="aide">Un lien unique à chaque fois. Sa demande arrive ici toute seule.</span></div>
+      <div class="rangee-btn">
+        <input id="nom-client" type="text" placeholder="Nom du client (ex. : Marie Tremblay)" autocomplete="off">
+        <button class="btn" id="copier-lien-client">${icone('copy', { taille: 15 })} Copier son lien</button>
+      </div>
+    </section>
+    ${clients.length ? `<section class="panel"><table class="tableau tableau-clients"><thead><tr><th>Client</th><th>Formulaire</th><th>Voyage</th><th>Sur mesure en direct</th></tr></thead><tbody>
+      ${clients.map((g) => {
+        const recu = g.liens.find((l) => l.code);
+        const attente = g.liens.filter((l) => !l.code);
+        const v = g.voyages.find((x) => x.demande) || g.voyages[0];
+        const c = g.carnets[0];
+        return `<tr>
+          <td><b>${esc(g.nom)}</b></td>
+          <td>${recu ? `<span class="etiq ok">${icone('check', { taille: 12 })} Demande reçue ${esc(date(recu.recuLe))}</span>` : attente.length ? `<span class="etiq">Lien envoyé ${esc(date(attente[0].creeLe))}</span>` : v?.demande ? `<span class="etiq ok">Demande reçue</span>` : '<span class="aide">—</span>'}</td>
+          <td>${v ? `<a class="btn ghost sm" href="#/voyage/${esc(v.id)}">${icone('route', { taille: 14 })} ${esc(v.titre)}</a>` : '<span class="aide">—</span>'}</td>
+          <td>${c ? `<a class="btn ghost sm" href="#/carnet/${esc(c.id)}">${icone('clock', { taille: 14 })} À venir</a> <a class="btn ghost sm" href="${esc(lienClient(new URL('../', location.href).href, c.id, c.cle))}" target="_blank" rel="noopener">${icone('eye', { taille: 14 })} Sa page</a>` : '<span class="aide">Crée-le sur le cellulaire (Clients)</span>'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></section>` : '<p class="vide-ligne">Aucun client pour l\'instant.</p>'}`;
+  app.querySelector('#copier-lien-client').onclick = async () => {
+    const champNom = app.querySelector('#nom-client');
+    const { lien, url } = liensDemande.preparerLien(new URL('../', location.href).href, { client: champNom.value, pour: courriel, tel: telFiche });
+    try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { prompt('Copie ce lien :', url); }
+    await liensDemande.garderLien(lien);
+    etat.liens = await db.tous('liens');
+    pageClientsStudio();
+  };
 }
 
 // ---------- Un voyage sur mesure en direct : ce qui part au client, et ses réglages ----------
@@ -2443,7 +2528,10 @@ async function synchroniser(forcer = false) {
   derniereSync = Date.now();
   try {
     const { nouveaux } = await sync.recevoir();
+    const recus = await liensDemande.relever();
     await charger();
+    if (recus.length) toast(recus.length > 1 ? `${recus.length} nouvelles demandes de voyage` : `Nouvelle demande de ${recus[0].nom || recus[0].client || 'voyage'}`);
+    if (recus.length && !nouveaux && modale.hidden && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) router();
     if (nouveaux) {
       toast(pluriel(nouveaux, 'nouvel endroit reçu du cellulaire', 'nouveaux endroits reçus du cellulaire'));
       // Ne pas redessiner une page où l'on est en train d'écrire.

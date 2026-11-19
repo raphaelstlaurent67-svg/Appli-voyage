@@ -3,7 +3,7 @@
 
 const NOM_BASE = 'appli-voyage';
 const CLES_SYNC = ['sync', 'syncShas', 'syncFile', 'syncDernier'];
-const VERSION = 4; // 2 : voyages (générateur) · 3 : contributeurs et paiements · 4 : carnets clients en direct
+const VERSION = 5; // 2 : voyages (générateur) · 3 : contributeurs et paiements · 4 : carnets clients en direct · 5 : liens de demande
 let basePromise;
 
 function ouvrir() {
@@ -20,6 +20,7 @@ function ouvrir() {
         if (!db.objectStoreNames.contains('contributeurs')) db.createObjectStore('contributeurs', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('paiements')) db.createObjectStore('paiements', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('carnets')) db.createObjectStore('carnets', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('liens')) db.createObjectStore('liens', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

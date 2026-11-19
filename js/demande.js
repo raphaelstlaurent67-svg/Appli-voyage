@@ -9,6 +9,7 @@ import { ENVIES, encoder, nuits } from './code-demande.js';
 import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
+import { RELAIS, canalDemande, chiffrerJson, enBase64Url } from './carnet-commun.js';
 import { MARQUE } from './marque.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
@@ -22,6 +23,12 @@ if (!POUR) POUR = CONTACT.courriel.trim();
 let TEL = (params.get('tel') || '').replace(/[^\d+]/g, '');
 try { if (TEL) localStorage.setItem('telDemande', TEL); else TEL = localStorage.getItem('telDemande') || ''; } catch (_) { /* rien */ }
 if (!TEL) TEL = CONTACT.cell.replace(/[^\d+]/g, '');
+// Lien personnel fait par Raph : demande.html?l=<id>#k=<clé>. La demande lui arrive toute seule, chiffrée.
+const LIEN = (() => {
+  const id = params.get('l') || '';
+  const cle = new URLSearchParams(location.hash.slice(1)).get('k') || '';
+  return id && cle ? { id, cle } : null;
+})();
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
 const MODE_TEST = params.has('test');
@@ -1053,8 +1060,19 @@ async function envoyer() {
   const lien = `${new URL('studio/', location.href).href}#/demande/${code}`;
   garder(); // le brouillon envoyé ne sera pas rouvert la prochaine fois
   // Envoi automatique : la demande part directement au courriel de Raph (FormSubmit, gratuit).
-  let etat = POUR ? 'envoi' : 'manuel';
+  let etat = POUR || LIEN ? 'envoi' : 'manuel';
   const envoyerAuto = async () => {
+    // 1. Directement dans l'appli de Raph (relais gratuit, chiffré avec la clé du lien).
+    let parRelais = false;
+    if (LIEN) {
+      try {
+        const canal = await canalDemande(LIEN.id, LIEN.cle);
+        const corps = enBase64Url(await chiffrerJson(LIEN.cle, { code, nom: d.nom.trim(), envoyeLe: d.envoyeLe }));
+        parRelais = (await fetch(`${RELAIS}/${canal}`, { method: 'POST', body: corps })).ok;
+      } catch (_) { parRelais = false; }
+    }
+    if (!POUR) { etat = parRelais ? 'ok' : 'manuel'; dessiner(); return; }
+    // 2. Et par courriel (FormSubmit), en plus.
     try {
       const rep = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(POUR)}`, {
         method: 'POST',
@@ -1067,8 +1085,8 @@ async function envoyer() {
         }),
       });
       const r = await rep.json().catch(() => ({}));
-      etat = rep.ok && String(r.success) !== 'false' ? 'ok' : 'manuel';
-    } catch (_) { etat = 'manuel'; }
+      etat = parRelais || (rep.ok && String(r.success) !== 'false') ? 'ok' : 'manuel';
+    } catch (_) { etat = parRelais ? 'ok' : 'manuel'; }
     dessiner();
   };
   const dessiner = () => {

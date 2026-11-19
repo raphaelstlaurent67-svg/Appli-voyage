@@ -879,3 +879,8 @@ input[type='date'] { color-scheme: light; }
 .av-colonne { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .carnet-studio-page { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
 @media (max-width: 900px) { .carnet-studio-page { grid-template-columns: 1fr; } }
+
+/* Clients */
+.nouveau-client .rangee-btn input { flex: 1; min-width: 220px; }
+.tableau-clients td { vertical-align: middle; }
+.tableau-clients .btn.sm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
