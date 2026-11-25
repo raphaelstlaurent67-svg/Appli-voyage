@@ -559,7 +559,21 @@ function calendrier(plages, actif) {
 }
 
 function etapeDates(zone) {
+  // Redessiner ne doit pas faire bouger la page : on garde la position (verticale et la rangée des mois).
+  const rangee = zone.querySelector('.mois-rangee');
+  const gauche = rangee ? rangee.scrollLeft : null;
+  const y = window.scrollY;
   if (d.mode === 'total') datesTotal(zone); else datesPays(zone);
+  const nouvelle = zone.querySelector('.mois-rangee');
+  if (nouvelle) {
+    if (gauche != null) nouvelle.scrollLeft = gauche;
+    else {
+      // À l'arrivée sur l'étape, le mois déjà choisi est visible.
+      const choisi = nouvelle.querySelector('.mois-puce.choisi');
+      if (choisi) nouvelle.scrollLeft += choisi.getBoundingClientRect().left - nouvelle.getBoundingClientRect().left - 16;
+    }
+  }
+  if (window.scrollY !== y) window.scrollTo(0, y);
   zone.onclick = (ev) => {
     const b = ev.target.closest('button');
     if (!b) return;
