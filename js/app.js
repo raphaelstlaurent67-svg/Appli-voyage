@@ -12,6 +12,7 @@ import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from 
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import * as essai from './essai.js';
+import { DEPOT_DONNEES, DEPOT_PUBLIC } from './marque.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 
 // ---------- État de l'appli ----------
@@ -1898,7 +1899,7 @@ async function pageReglages() {
           <p class="aide" id="message-envoi"></p>
           <button class="bouton-secondaire bouton-bloc" id="enregistrer-cle">Enregistrer</button>
         </div>` : `
-        <label class="champ"><span>Dossier GitHub privé</span><input id="depot" value="appli-voyage-donnees" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="champ"><span>Dossier GitHub privé</span><input id="depot" value="${esc(DEPOT_DONNEES)}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <label class="champ"><span>Clé d'accès GitHub</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <p class="aide" id="message-envoi"></p>
         <button class="bouton-principal" id="brancher">Brancher</button>`}
@@ -2053,8 +2054,8 @@ function texteCle(v) {
   const bout = (nom, x) => `${icone(x === 'ok' ? 'check' : 'x', { taille: 13 })} ${nom}`;
   const ok = v.studio === 'ok' && v.pages === 'ok';
   const conseil = ok ? '' : v.studio === 'cle' ? '<small>Clé refusée : colle la nouvelle clé (Changer la clé)</small>'
-    : v.pages !== 'ok' ? '<small>Sur GitHub, donne aussi à ta clé le dossier « Appli-voyage » (Contents : Read and write)</small>'
-    : '<small>Sur GitHub, donne à ta clé le dossier « appli-voyage-donnees » (Contents : Read and write)</small>';
+    : v.pages !== 'ok' ? `<small>Sur GitHub, donne aussi à ta clé le dossier « ${esc(DEPOT_PUBLIC.split('/')[1])} » (Contents : Read and write)</small>`
+    : `<small>Sur GitHub, donne à ta clé le dossier « ${esc(DEPOT_DONNEES)} » (Contents : Read and write)</small>`;
   return `<p class="etat-branche ${ok ? '' : 'mauvais'}" id="etat-cle">${icone('lock', { taille: 16 })}<span><b>Clé GitHub : ${bout('Studio', v.studio)} · ${bout('Pages clients', v.pages)}</b>${conseil}</span></p>`;
 }
 

@@ -14,6 +14,7 @@ import { distanceM } from './exif.js';
 import * as verif from './verification.js';
 import { lienClient, formatHeure, choixRetenus, endroitsChoisis, GROUPES_CHOIX, estEnvoye } from './carnet-commun.js';
 import * as carnets from './carnets.js';
+import { DEPOT_DONNEES, DEPOT_PUBLIC } from './marque.js';
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import { avecEssai, estEssai, ENDROITS_ESSAI } from './essai.js';
@@ -2416,7 +2417,7 @@ async function pageDonnees() {
           <div class="head-actions gauche"><button class="btn sm" id="sync-enregistrer">Enregistrer</button></div>
         </div>` : `
         <div class="form-grille">
-          <label class="champ"><span>Dossier GitHub privé</span><input id="sync-depot" value="appli-voyage-donnees" spellcheck="false"></label>
+          <label class="champ"><span>Dossier GitHub privé</span><input id="sync-depot" value="${esc(DEPOT_DONNEES)}" spellcheck="false"></label>
           <label class="champ"><span>Clé d'accès GitHub</span><input id="sync-jeton" type="password" placeholder="github_pat_…" spellcheck="false"></label>
         </div>
         <p class="aide" id="sync-message"></p>
@@ -2461,7 +2462,7 @@ async function pageDonnees() {
       const b = (nom, x) => `${x === 'ok' ? '✓' : '✗'} ${nom}`;
       const ok = v.studio === 'ok' && v.pages === 'ok';
       el.classList.toggle('mauvais', !ok);
-      el.innerHTML = `${icone('lock', { taille: 14 })} Clé GitHub : ${b('Studio', v.studio)} · ${b('Pages clients', v.pages)}${ok ? '' : v.studio === 'cle' ? ' · clé refusée, change la clé' : v.pages !== 'ok' ? ' · donne aussi le dossier « Appli-voyage » à ta clé (Contents : Read and write)' : ' · donne le dossier « appli-voyage-donnees » à ta clé'}`;
+      el.innerHTML = `${icone('lock', { taille: 14 })} Clé GitHub : ${b('Studio', v.studio)} · ${b('Pages clients', v.pages)}${ok ? '' : v.studio === 'cle' ? ' · clé refusée, change la clé' : v.pages !== 'ok' ? ` · donne aussi le dossier « ${esc(DEPOT_PUBLIC.split('/')[1])} » à ta clé (Contents : Read and write)` : ` · donne le dossier « ${esc(DEPOT_DONNEES)} » à ta clé`}`;
     });
     app.querySelector('#sync-cle').onclick = () => { const z = app.querySelector('#zone-cle'); z.hidden = !z.hidden; };
     app.querySelector('#sync-enregistrer').onclick = async (ev) => {
