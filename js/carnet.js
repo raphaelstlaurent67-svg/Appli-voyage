@@ -4,6 +4,7 @@
 // Le lien ressemble à carnet.html?c=<carnet>#<clé>. Ajoutée à l'écran d'accueil, elle rouvre ce voyage.
 // La clé ne quitte jamais le téléphone du client. Ses choix partent tout seuls à Raph, chiffrés.
 
+import './clavier.js';
 import { TAXONOMIE } from './taxonomie.js';
 import { icone, iconeCat } from './icones.js';
 import * as commun from './carnet-commun.js';

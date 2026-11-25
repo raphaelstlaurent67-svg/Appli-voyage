@@ -3,6 +3,7 @@
 // Inscription : pour l'instant, la demande part au courriel de js/contact.js (FormSubmit, gratuit, sans compte).
 // Plus tard, quand le nom de domaine sera acheté, on branchera de vrais comptes (avec mot de passe).
 
+import './clavier.js';
 import { icone, iconeCat } from './icones.js';
 import { photo, PHOTOS_FOND } from './photos.js';
 import { MARQUE } from './marque.js';

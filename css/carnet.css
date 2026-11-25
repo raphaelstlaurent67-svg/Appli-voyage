@@ -31,6 +31,9 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* Pas de zoom en touchant deux fois, nulle part (le zoom à deux doigts reste possible). */
+*, *::before, *::after { touch-action: manipulation; }
+
 html, body { margin: 0; }
 html { touch-action: manipulation; }
 body {
