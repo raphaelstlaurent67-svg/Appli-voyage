@@ -2,6 +2,7 @@
 // Utilisé par Raph seulement, surtout sur l'ordinateur. Les endroits viennent du fichier
 // de sauvegarde du cellulaire (Mes données > Importer). Tout reste sur cet appareil.
 
+import './clavier.js';
 import { TAXONOMIE, TAUX_PAR_DEFAUT } from './taxonomie.js';
 import { rouvrirALAccueil } from './accueil.js';
 import * as db from './db.js';

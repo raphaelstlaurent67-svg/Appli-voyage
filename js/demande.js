@@ -3,6 +3,7 @@
 // Champs obligatoires : destination, durée, voyageurs, style, nom et courriel (?test permet de passer les étapes).
 // À la fin, ses réponses deviennent un lien : en cliquant dessus, Raph crée le voyage dans le Studio.
 
+import './clavier.js';
 import { paysDuContinent } from './monde.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
@@ -242,8 +243,20 @@ try {
 if (langueParam) d.langue = langueParam;
 d.plage = ''; // les anciennes tranches « 3 à 6 » sont remplacées par un nombre de jours
 if (CLIENT) { d.client = CLIENT; if (!d.nom) d.nom = CLIENT; }
-const garder = () => { try { localStorage.setItem(CLE_BROUILLON, JSON.stringify({ ...d, gardeLe: Date.now() })); } catch (_) { /* rien */ } };
+// L'étape où on est est gardée aussi : si la page se recharge (ex. en tirant vers le bas en haut de la page),
+// on revient à la même étape au lieu du début.
+const CLE_ETAPE = `${CLE_BROUILLON}:etape`;
+const garder = () => {
+  try {
+    localStorage.setItem(CLE_BROUILLON, JSON.stringify({ ...d, gardeLe: Date.now() }));
+    localStorage.setItem(CLE_ETAPE, String(etape));
+  } catch (_) { /* rien */ }
+};
 let etape = 0;
+try {
+  const e = parseInt(localStorage.getItem(CLE_ETAPE), 10);
+  if (d.gardeLe === undefined && d.f === 'demande' && !MODE_TEST && e > 0) etape = Math.min(e, 4);
+} catch (_) { /* rien */ }
 let paysActif = 0;
 let moisAffiche = null;
 let voirCalendrier = Boolean(d.depart);

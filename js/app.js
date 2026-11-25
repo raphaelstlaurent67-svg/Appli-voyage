@@ -1,3 +1,4 @@
+import './clavier.js';
 import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';

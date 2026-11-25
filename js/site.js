@@ -1,6 +1,7 @@
 // Site web public : présente le service et envoie les clients vers la fiche de demande.
 // Pour changer le nom de la marque partout sur le site, il suffit de changer MARQUE (js/marque.js).
 
+import './clavier.js';
 import { icone } from './icones.js';
 import { photo, PHOTOS_PAYS, PHOTOS_FOND } from './photos.js';
 import { MARQUE } from './marque.js';

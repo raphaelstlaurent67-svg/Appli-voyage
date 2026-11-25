@@ -3,6 +3,7 @@
 // que la personne appuie sur « Envoyer ». Les infos cachées des photos (appareil, date, GPS) sont
 // lues AVANT de réduire la photo, pour que le Studio puisse vérifier qu'elle est authentique.
 
+import './clavier.js';
 import { icone, iconeCat } from './icones.js';
 import { lireExif } from './exif.js';
 
