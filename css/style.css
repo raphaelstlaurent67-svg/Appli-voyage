@@ -649,3 +649,22 @@ body[data-page="clients"] .bouton-ajouter { display: none; }
 #zone-cle { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 #envoi-carnet { margin: 14px 0; }
 .envoi-rapide { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- Appui long : notre menu, pas celui du téléphone ---------- */
+.carte, .carte img, .galerie img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.carte { transition: transform .15s; }
+.carte.appui { transform: scale(.97); }
+.ligne-menu { justify-content: flex-start; gap: 14px; font-weight: 600; }
+.ligne-danger { color: var(--danger); }
+#menu-confirmer { margin-top: 8px; }
+#menu-confirmer p { margin: 0 0 12px; font-weight: 600; }
+.fiche-boutons-droite { display: flex; gap: 8px; }
+.selecteur.a-remplir { border-style: dashed; border-color: var(--accent); }
+#zone-pour-client { display: flex; flex-direction: column; gap: 12px; }
+#ma-position:disabled { opacity: .7; }
+@keyframes rempli { from { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); } }
+.vient-remplir { animation: rempli 1.4s ease-out; }
+.section-client .selecteur { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .25); color: #f4f0ea; }
+.section-client .selecteur.a-remplir { border-color: #f4c88f; }
+.section-client .selecteur-texte small { color: #aba5ad; }
+.section-client .chevron-texte { color: #f4f0ea; }

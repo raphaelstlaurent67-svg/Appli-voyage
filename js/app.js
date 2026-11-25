@@ -464,6 +464,11 @@ async function pageListe() {
     afficherPhotos(ul);
   };
   remplir();
+  // Appui long sur un endroit : modifier, pour un client, supprimer…
+  appuiLong(app.querySelector('#cartes'), 'a.carte', (a) => {
+    const e = etat.endroits.find((x) => x.id === a.dataset.id);
+    if (e) menuEndroit(e, { apres: () => remplir() });
+  });
 
   const rafraichir = () => { sauverFiltres(); pageListe(); };
   app.querySelector('#recherche').addEventListener('input', (ev) => { etat.filtres.recherche = ev.target.value; remplir(); });
@@ -515,7 +520,7 @@ function carte(e) {
   const n = e.photos?.length || 0;
   return `
     <li>
-      <a class="carte" href="#/endroit/${esc(e.id)}" style="--c:${cat.couleur}">
+      <a class="carte" href="#/endroit/${esc(e.id)}" data-id="${esc(e.id)}" style="--c:${cat.couleur}">
         <div class="carte-image ${n ? '' : 'sans-photo'}">
           ${n ? `<img data-photo="${esc(e.photos[0])}" alt="" loading="lazy">` : `<span class="carte-icone">${iconeCat(e.categorie, { taille: 38, epaisseur: 1.4 })}</span>`}
           ${e.coupDeCoeur ? '<span class="carte-badge">Coup de cœur</span>' : ''}
@@ -533,6 +538,140 @@ function carte(e) {
         </div>
       </a>
     </li>`;
+}
+
+// ---------- Appui long, menu d'un endroit, choix du client ----------
+// Appui long (½ seconde) sur un élément : ouvre le menu de l'appli au lieu du menu du téléphone.
+function appuiLong(racine, selecteur, quandAppui) {
+  let minuterie = null;
+  let depart = null;
+  let declenche = false;
+  const annuler = () => { clearTimeout(minuterie); minuterie = null; };
+  racine.addEventListener('touchstart', (ev) => {
+    const el = ev.target.closest(selecteur);
+    if (!el || ev.touches.length > 1) return;
+    declenche = false;
+    depart = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+    annuler();
+    el.classList.add('appui');
+    minuterie = setTimeout(() => {
+      minuterie = null;
+      declenche = true;
+      el.classList.remove('appui');
+      if (navigator.vibrate) navigator.vibrate(15);
+      quandAppui(el);
+    }, 480);
+  }, { passive: true });
+  racine.addEventListener('touchmove', (ev) => {
+    if (!minuterie || !depart) return;
+    const t = ev.touches[0];
+    if (Math.abs(t.clientX - depart.x) > 10 || Math.abs(t.clientY - depart.y) > 10) { annuler(); racine.querySelectorAll('.appui').forEach((x) => x.classList.remove('appui')); }
+  }, { passive: true });
+  const fin = (ev) => {
+    annuler();
+    racine.querySelectorAll('.appui').forEach((x) => x.classList.remove('appui'));
+    if (declenche && ev.cancelable) ev.preventDefault(); // pas de clic après un appui long
+  };
+  racine.addEventListener('touchend', fin);
+  racine.addEventListener('touchcancel', fin);
+  // Clic droit (ordinateur) ou menu du téléphone : notre menu à la place.
+  racine.addEventListener('contextmenu', (ev) => {
+    const el = ev.target.closest(selecteur);
+    if (!el) return;
+    ev.preventDefault();
+    if (!declenche) quandAppui(el);
+  });
+  racine.addEventListener('click', (ev) => {
+    if (declenche && ev.target.closest(selecteur)) { ev.preventDefault(); ev.stopPropagation(); declenche = false; }
+  }, true);
+}
+
+// Clients en cours (un carnet actif = un client qu'on prépare). Le client « en repérage » d'abord.
+async function clientsActifs() {
+  const actif = await db.lireReglage('carnetActif', null);
+  return (await db.tous('carnets')).filter((c) => c.actif)
+    .sort((a, b) => (b.id === actif) - (a.id === actif) || (b.modifieLe || '').localeCompare(a.modifieLe || ''));
+}
+const nomClient = (c) => [c.client?.prenom || 'Client sans nom', c.ville].filter(Boolean).join(' · ') + (c.raph && c.raph !== 'Raph' ? ` (${c.raph})` : '');
+
+function choisirClient(clients, choisi, quandChoisi) {
+  const parId = new Map(clients.map((c) => [c.id, c]));
+  choisirDansListe({
+    titre: 'Pour quel client ?',
+    valeurs: clients.map((c) => c.id),
+    choisie: choisi,
+    etiquette: (id) => nomClient(parId.get(id)),
+    placeholder: 'Chercher un client',
+    quandChoisi: (id) => quandChoisi(parId.get(id)),
+  });
+}
+
+// Met l'endroit dans la file d'un client (il part selon ses réglages d'envoi).
+async function envoyerAClient(e) {
+  const clients = await clientsActifs();
+  if (!clients.length) { toast('Aucun client en cours. Crée-le dans Clients.'); return; }
+  const pret = async (c) => {
+    const frais = await db.lire('carnets', c.id);
+    if (frais.items.some((i) => i.endroitId === e.id)) { toast(`Déjà prévu pour ${frais.client?.prenom || 'ce client'}`); return; }
+    carnets.ajouterItem(frais, e.id);
+    await carnets.enregistrer(frais);
+    await db.ecrireReglage('dernierClient', frais.id);
+    toast(`Prévu pour ${frais.client?.prenom || 'le client'} ✓`);
+  };
+  if (clients.length === 1) pret(clients[0]); else choisirClient(clients, null, pret);
+}
+
+// Efface l'endroit partout : sur le téléphone, dans le Studio, et dans la file des clients (s'il n'est pas déjà parti).
+async function supprimerEndroit(e) {
+  for (const p of e.photos || []) await db.effacer('photos', p);
+  await db.effacer('endroits', e.id);
+  etat.endroits = etat.endroits.filter((x) => x.id !== e.id);
+  sync.marquer(sync.cheminEndroit(e), (e.photos || []).map(sync.cheminPhoto));
+  for (const c of await db.tous('carnets')) {
+    const avant = c.items.length;
+    c.items = c.items.filter((i) => i.endroitId !== e.id || estEnvoye(i));
+    if (c.items.length !== avant) await carnets.enregistrer(c);
+  }
+}
+
+function menuEndroit(e, { apres } = {}) {
+  const carteUrl = lienCarte(e);
+  const ligneMenu = (action, ico, texte, classe = '') => `<li><button type="button" class="ligne ligne-menu ${classe}" data-action="${action}">${icone(ico, { taille: 20 })}<span>${texte}</span></button></li>`;
+  ouvrirFeuille(`
+    ${enteteFeuille(esc(e.nom))}
+    <ul class="liste-choix">
+      ${ligneMenu('modifier', 'pencil', 'Modifier')}
+      ${e.contributeurId ? '' : ligneMenu('client', 'send', 'Pour un client…')}
+      ${ligneMenu('coeur', 'heart', e.coupDeCoeur ? 'Retirer le coup de cœur' : 'Coup de cœur')}
+      ${carteUrl ? ligneMenu('carte', 'map', 'Ouvrir dans Google Maps') : ''}
+      ${ligneMenu('supprimer', 'trash-2', 'Supprimer', 'ligne-danger')}
+    </ul>
+    <div class="confirmer" id="menu-confirmer" hidden>
+      <p>Supprimer « ${esc(e.nom)} » ? C'est définitif.</p>
+      <button type="button" class="bouton-danger plein" data-action="oui">Oui, supprimer</button>
+    </div>`, async (ev) => {
+    const b = ev.target.closest('[data-action]');
+    if (!b) return;
+    const a = b.dataset.action;
+    if (a === 'modifier') { fermerFeuille(); aller(`#/modifier/${e.id}`); }
+    else if (a === 'client') { fermerFeuille(); envoyerAClient(e); }
+    else if (a === 'coeur') {
+      e.coupDeCoeur = !e.coupDeCoeur;
+      e.modifieLe = new Date().toISOString();
+      await db.ecrire('endroits', e);
+      sync.marquer(sync.cheminEndroit(e));
+      fermerFeuille();
+      toast(e.coupDeCoeur ? 'Coup de cœur ✓' : 'Coup de cœur retiré');
+      if (apres) apres();
+    } else if (a === 'carte') { fermerFeuille(); window.open(carteUrl, '_blank', 'noopener'); }
+    else if (a === 'supprimer') { feuille.querySelector('#menu-confirmer').hidden = false; b.closest('ul').hidden = true; }
+    else if (a === 'oui') {
+      await supprimerEndroit(e);
+      fermerFeuille();
+      toast('Endroit supprimé');
+      if (apres) apres(true);
+    }
+  });
 }
 
 // ---------- Fiche d'un endroit ----------
@@ -555,7 +694,10 @@ async function pageFiche(id) {
       ${photos.length ? `<div class="galerie" id="galerie">${photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : `<div class="fiche-icone">${iconeCat(e.categorie, { taille: 64, epaisseur: 1.2 })}</div>`}
       <div class="fiche-boutons">
         <a class="rond rond-flottant" href="#/" aria-label="Retour">${icone('chevron-left', { taille: 20, epaisseur: 2.4 })}</a>
-        <a class="rond rond-flottant" href="#/modifier/${esc(e.id)}" aria-label="Modifier">${icone('pencil', { taille: 18 })}</a>
+        <span class="fiche-boutons-droite">
+          <a class="rond rond-flottant" href="#/modifier/${esc(e.id)}" aria-label="Modifier">${icone('pencil', { taille: 18 })}</a>
+          <button type="button" class="rond rond-flottant" id="menu-fiche" aria-label="Plus">${icone('ellipsis', { taille: 20 })}</button>
+        </span>
       </div>
       ${photos.length > 1 ? `<span class="galerie-compte" id="galerie-compte">1 / ${photos.length}</span>` : ''}
     </div>
@@ -623,25 +765,30 @@ async function pageFiche(id) {
     }, { passive: true });
   }
   afficherPhotos(app);
-  carnets.carnetActif().then((c) => {
+  // Les clients pour qui cet endroit est prévu, et un bouton pour l'ajouter à un client.
+  const majZoneClient = async () => {
     const zone = app.querySelector('#zone-client');
-    if (!c || !zone || e.contributeurId) return;
-    const prenom = c.client?.prenom || 'ton client';
-    const dedans = c.items.some((i) => i.endroitId === e.id);
-    zone.innerHTML = dedans
-      ? `<p class="etat-branche">${icone('moon', { taille: 16 })}<span>Dans le carnet de <b>${esc(prenom)}</b></span></p>`
-      : `<button class="bouton-secondaire bouton-bloc" id="envoyer-client">${icone('send', { taille: 18 })} Envoyer à ${esc(prenom)} (${formatHeure(c.heure)})</button>`;
+    if (!zone || e.contributeurId) return;
+    const clients = await clientsActifs();
+    if (!clients.length) { zone.innerHTML = ''; return; }
+    const pour = clients.filter((c) => c.items.some((i) => i.endroitId === e.id));
+    zone.innerHTML = `${pour.map((c) => `<p class="etat-branche">${icone('check', { taille: 16 })}<span>Prévu pour <b>${esc(nomClient(c))}</b></span></p>`).join('')}
+      ${pour.length < clients.length ? `<button class="bouton-secondaire bouton-bloc" id="envoyer-client">${icone('send', { taille: 18 })} ${pour.length ? 'Aussi pour un autre client' : 'Pour un client'}</button>` : ''}`;
     const b = zone.querySelector('#envoyer-client');
-    if (b) b.onclick = async () => { carnets.ajouterItem(c, e.id); await carnets.enregistrer(c); toast(`En route pour ${prenom}`); zone.innerHTML = `<p class="etat-branche">${icone('moon', { taille: 16 })}<span>Dans le carnet de <b>${esc(prenom)}</b></span></p>`; };
-  });
+    if (b) b.onclick = async () => {
+      const restants = clients.filter((c) => !pour.includes(c));
+      const pret = async (c) => { const frais = await db.lire('carnets', c.id); carnets.ajouterItem(frais, e.id); await carnets.enregistrer(frais); await db.ecrireReglage('dernierClient', c.id); toast(`Prévu pour ${c.client?.prenom || 'le client'} ✓`); majZoneClient(); };
+      if (restants.length === 1) pret(restants[0]); else choisirClient(restants, null, pret);
+    };
+  };
+  majZoneClient();
+  app.querySelector('#menu-fiche').onclick = () => menuEndroit(e, { apres: (efface) => (efface ? aller('#/') : pageFiche(e.id)) });
+  appuiLong(app, '.galerie img', () => menuEndroit(e, { apres: (efface) => (efface ? aller('#/') : pageFiche(e.id)) }));
   const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
   app.querySelector('#supprimer').onclick = () => demander(true);
   app.querySelector('#non-supprimer').onclick = () => demander(false);
   app.querySelector('#oui-supprimer').onclick = async () => {
-    for (const p of e.photos || []) await db.effacer('photos', p);
-    await db.effacer('endroits', e.id);
-    etat.endroits = etat.endroits.filter((x) => x.id !== e.id);
-    sync.marquer(sync.cheminEndroit(e), (e.photos || []).map(sync.cheminPhoto));
+    await supprimerEndroit(e);
     toast('Endroit supprimé');
     aller('#/');
   };
@@ -659,10 +806,14 @@ async function pageFormulaire(id) {
     ? structuredClone(existant)
     : { id: db.nouvelId(), pays: lieu.pays || '', ville: lieu.ville || '', devise: lieu.devise || DEVISE_DU_PAYS[lieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
   brouillon = null;
-  // Repérage en cours pour un client : on propose d'envoyer l'endroit dans son carnet.
-  const carnetPour = await carnets.carnetActif();
-  const itemClient = carnetPour?.items.find((i) => i.endroitId === f.id);
-  const prenomClient = carnetPour?.client?.prenom || 'ton client';
+  // « Pour un client » : décoché par défaut. Coché, on choisit le client dans la liste.
+  const clients = f.contributeurId ? [] : await clientsActifs();
+  const clientDepart = existant ? clients.find((c) => c.items.some((i) => i.endroitId === f.id)) || null : null;
+  let clientChoisi = clientDepart;
+  const itemClient = clientDepart?.items.find((i) => i.endroitId === f.id);
+  const dernierClient = await db.lireReglage('dernierClient', null);
+  const pellicule = await db.lireReglage('pellicule', true);
+  f.aPellicule = []; // photos prises avec l'appareil, à garder aussi dans la pellicule
   f.contacts = f.contacts || {};
   f.photos = f.photos || [];
   f.nouvellesPhotos = []; // { cle, blob, url }
@@ -686,7 +837,11 @@ async function pageFormulaire(id) {
       <section class="section">
         <h2 class="section-titre">Photos</h2>
         <div class="photos" id="photos"></div>
-        <label class="bouton-secondaire bouton-photo">${icone('camera', { taille: 20 })} Ajouter des photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
+        <div class="deux">
+          <label class="bouton-secondaire bouton-photo">${icone('camera', { taille: 20 })} Prendre<input type="file" accept="image/*" capture="environment" id="prendre-photo" hidden></label>
+          <label class="bouton-secondaire bouton-photo">${icone('image', { taille: 20 })} Mes photos<input type="file" accept="image/*" multiple id="ajout-photos" hidden></label>
+        </div>
+        <p class="aide" id="aide-pellicule"></p>
       </section>
 
       <section class="section">
@@ -698,8 +853,8 @@ async function pageFormulaire(id) {
         <div id="zone-trajet"></div>
         <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier…"></label>
         <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
-        <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Colle le lien partagé par Google Maps"></label>
-        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} Reprendre ma position actuelle</button>
+        <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Se remplit avec ta position"></label>
+        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} <span>Je suis ici : prendre ma position</span></button>
         <p class="aide" id="texte-position"></p>
       </section>
 
@@ -727,14 +882,17 @@ async function pageFormulaire(id) {
         </label>
       </section>
 
-      ${carnetPour ? `
+      ${clients.length ? `
       <section class="section section-client">
         <label class="interrupteur">
-          <span><b>${icone('moon', { taille: 18 })} Pour ${esc(prenomClient)}</b><small>Dans ses choix de ${esc(formatHeure(carnetPour.heure))}, avec tes photos</small></span>
-          <input type="checkbox" name="pourClient" ${itemClient || !existant ? 'checked' : ''}>
+          <span><b>${icone('send', { taille: 18 })} Pour un client</b><small>Il le reçoit dans ses choix</small></span>
+          <input type="checkbox" name="pourClient" ${clientDepart ? 'checked' : ''}>
           <i aria-hidden="true"></i>
         </label>
-        <label class="champ"><span>Ton mot pour ${esc(prenomClient)} <small>il le lira</small></span><textarea name="motClient" rows="2" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(itemClient?.mot)}</textarea></label>
+        <div id="zone-pour-client" ${clientDepart ? '' : 'hidden'}>
+          <button type="button" class="selecteur" id="choix-client"></button>
+          <label class="champ"><span>Conseil <small>optionnel, il le lira</small></span><textarea name="motClient" rows="2" placeholder="Ex. : Demande la chambre du 6e.">${esc(itemClient?.mot)}</textarea></label>
+        </div>
       </section>` : ''}
 
       <section class="section">
@@ -891,61 +1049,120 @@ async function pageFormulaire(id) {
     if (b.dataset.deviseRapide) { f.devise = b.dataset.deviseRapide; majDevises(); } else if (b.hasAttribute('data-devise-autre')) choisirDevise();
   });
 
-  app.querySelector('#ajout-photos').addEventListener('change', async (ev) => {
-    for (const fichier of ev.target.files) {
+  // Une photo prise avec l'appareil : on la garde aussi pour la pellicule (proposé à l'enregistrement).
+  const peutPellicule = (fichiers) => { try { return !!navigator.canShare?.({ files: fichiers }); } catch (_) { return false; } };
+  const ajouterPhotos = async (ev, priseIci) => {
+    const fichiers = [...ev.target.files];
+    for (const fichier of fichiers) {
       const blob = await compresserPhoto(fichier);
       f.nouvellesPhotos.push({ cle: db.nouvelId(), blob, url: URL.createObjectURL(blob) });
     }
+    if (priseIci && pellicule) f.aPellicule.push(...fichiers.filter((x) => peutPellicule([x])));
     ev.target.value = '';
     majPhotos();
-  });
+    app.querySelector('#aide-pellicule').innerHTML = f.aPellicule.length ? `${icone('download', { taille: 14 })} En enregistrant, touche « Enregistrer ${f.aPellicule.length > 1 ? `les ${f.aPellicule.length} images` : "l'image"} » pour l'avoir aussi dans ta pellicule.` : '';
+  };
+  app.querySelector('#prendre-photo').addEventListener('change', (ev) => ajouterPhotos(ev, true));
+  app.querySelector('#ajout-photos').addEventListener('change', (ev) => ajouterPhotos(ev, false));
+
+  const lienPosition = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const lienAuto = () => (f.lat ? lienPosition(f.lat, f.lng) : '');
 
   function afficherPosition() {
     const texte = app.querySelector('#texte-position');
     if (!f.lat) { texte.textContent = ''; return; }
-    const url = `https://www.google.com/maps/search/?api=1&query=${f.lat},${f.lng}`;
-    texte.innerHTML = `${icone('locate-fixed', { taille: 15 })} Position ${f.positionAuto ? 'prise automatiquement' : 'enregistrée'}${f.precision ? ` (précision ± ${f.precision} m)` : ''}, <a href="${url}" target="_blank" rel="noopener">Vérifier sur la carte</a>, <button type="button" class="lien" id="retirer-position">Retirer</button>`;
+    texte.innerHTML = `${icone('check', { taille: 15 })} Position prise${f.precision ? ` (± ${f.precision} m)` : ''}, <a href="${lienAuto()}" target="_blank" rel="noopener">Voir sur la carte</a>, <button type="button" class="lien" id="retirer-position">Retirer</button>`;
     texte.querySelector('#retirer-position').onclick = () => {
+      if (champ('lienMaps').value.trim() === lienAuto()) champ('lienMaps').value = '';
       delete f.lat; delete f.lng; delete f.precision; delete f.positionAuto;
       afficherPosition();
     };
   }
 
   // auto = true quand on ouvre un nouvel endroit : la position se prend toute seule,
-  // parce qu'on est normalement sur place. On peut la retirer si on n'y est pas.
+  // parce qu'on est normalement sur place. Le lien Google Maps se remplit avec.
+  let chercheEnCours = false;
   function prendrePosition(auto = false) {
     const texte = app.querySelector('#texte-position');
+    const bouton = app.querySelector('#ma-position');
     if (!navigator.geolocation) { texte.textContent = 'Position non disponible sur cet appareil.'; return; }
-    texte.textContent = auto ? 'Prise de ta position automatiquement…' : 'Recherche de ta position…';
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!document.body.contains(texte)) return;
-        f.lat = +pos.coords.latitude.toFixed(6);
-        f.lng = +pos.coords.longitude.toFixed(6);
-        f.precision = Math.round(pos.coords.accuracy);
-        f.positionAuto = auto;
-        afficherPosition();
-      },
-      (err) => {
-        if (!document.body.contains(texte)) return;
-        texte.textContent = err.code === 1
-          ? "Ton téléphone a refusé l'accès à la position. Va dans Réglages > Confidentialité > Service de localisation et permets-le pour Safari (ou Chrome)."
-          : err.code === 3
-            ? 'La position prend trop de temps. Sors à découvert ou réessaie dans un instant.'
-            : "Impossible d'obtenir ta position pour le moment. Réessaie dans un instant.";
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: auto ? 60000 : 0 },
-    );
+    if (chercheEnCours) return;
+    chercheEnCours = true;
+    bouton.disabled = true;
+    bouton.querySelector('span').textContent = 'Recherche de ta position…';
+    texte.textContent = '';
+    const fini = () => { chercheEnCours = false; if (document.body.contains(bouton)) { bouton.disabled = false; bouton.querySelector('span').textContent = 'Je suis ici : prendre ma position'; } };
+    const reussi = (pos) => {
+      fini();
+      if (!document.body.contains(texte)) return;
+      const ancien = lienAuto();
+      f.lat = +pos.coords.latitude.toFixed(6);
+      f.lng = +pos.coords.longitude.toFixed(6);
+      f.precision = Math.round(pos.coords.accuracy);
+      f.positionAuto = auto;
+      // Le lien se remplit, sauf si tu as collé ton propre lien Google Maps.
+      const lien = champ('lienMaps');
+      if (!lien.value.trim() || lien.value.trim() === ancien) {
+        lien.value = lienAuto();
+        lien.classList.remove('vient-remplir'); void lien.offsetWidth; lien.classList.add('vient-remplir');
+      }
+      afficherPosition();
+      if (!auto) toast(`Position prise ✓${f.precision ? ` (± ${f.precision} m)` : ''}`);
+    };
+    const rate = (err) => {
+      fini();
+      if (!document.body.contains(texte)) return;
+      const msg = err.code === 1
+        ? "Position refusée. Sur iPhone : Réglages > Confidentialité > Service de localisation > Safari > « Lorsque l'app est active »."
+        : err.code === 3
+          ? 'La position prend trop de temps. Sors à découvert et réessaie.'
+          : "Impossible d'avoir ta position pour le moment. Réessaie.";
+      texte.textContent = msg;
+      if (!auto) toast(err.code === 1 ? 'Position refusée' : 'Pas de position, réessaie');
+    };
+    // D'abord le GPS précis ; s'il est trop long (à l'intérieur), une position approximative.
+    navigator.geolocation.getCurrentPosition(reussi, (err) => {
+      if (err.code === 1) { rate(err); return; }
+      navigator.geolocation.getCurrentPosition(reussi, rate, { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: auto ? 60000 : 5000 });
   }
 
   app.querySelector('#ma-position').addEventListener('click', () => prendrePosition(false));
-  // Écrire un mot pour le client, c'est vouloir lui envoyer l'endroit.
-  if (carnetPour) champ('motClient').addEventListener('input', () => { if (champ('motClient').value.trim()) champ('pourClient').checked = true; });
+
+  // Le client choisi (seulement si « Pour un client » est coché).
+  function majClient() {
+    const b = app.querySelector('#choix-client');
+    if (!b) return;
+    b.classList.toggle('a-remplir', !clientChoisi);
+    b.innerHTML = `<span class="selecteur-texte"><small>Client</small><b class="${clientChoisi ? '' : 'vide-txt'}">${esc(clientChoisi ? nomClient(clientChoisi) : 'Choisir le client')}</b></span><span class="chevron ${clientChoisi ? 'chevron-texte' : ''}">${clientChoisi ? 'Changer' : icone('chevron-down', { taille: 16 })}</span>`;
+  }
+  const ouvrirChoixClient = () => choisirClient(clients, clientChoisi?.id, (c) => { clientChoisi = c; majClient(); });
+  if (clients.length) {
+    champ('pourClient').addEventListener('change', () => {
+      const oui = champ('pourClient').checked;
+      app.querySelector('#zone-pour-client').hidden = !oui;
+      if (!oui) return;
+      // Un seul client en cours : il est choisi. Sinon, le dernier choisi, ou la liste s'ouvre.
+      if (!clientChoisi) clientChoisi = clients.length === 1 ? clients[0] : clients.find((c) => c.id === dernierClient) || null;
+      majClient();
+      if (!clientChoisi) ouvrirChoixClient();
+    });
+    app.querySelector('#choix-client').onclick = ouvrirChoixClient;
+    majClient();
+  }
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     if (!f.categorie) { toast('Choisis une catégorie'); choisirCategorie(f, majCategorie); return; }
     if (!champ('nom').value.trim()) { toast("Écris le nom de l'endroit"); champ('nom').focus(); return; }
+    const pourClient = clients.length && champ('pourClient').checked ? clientChoisi : null;
+    if (clients.length && champ('pourClient').checked && !pourClient) { toast('Choisis le client'); ouvrirChoixClient(); return; }
+    // Les photos prises ici : le téléphone propose de les enregistrer dans la pellicule (une touche).
+    if (f.aPellicule.length) {
+      const aGarder = f.aPellicule;
+      f.aPellicule = [];
+      try { navigator.share({ files: aGarder }).catch(() => {}); } catch (_) { /* pas possible sur cet appareil */ }
+    }
     const bouton = form.querySelector('[type=submit]');
     bouton.disabled = true;
 
@@ -959,7 +1176,7 @@ async function pageFormulaire(id) {
     for (const p of f.nouvellesPhotos) { await db.ecrire('photos', { id: p.cle, blob: p.blob }); f.photos.push(p.cle); }
     for (const p of f.photosRetirees) await db.effacer('photos', p);
 
-    const { nouvellesPhotos, photosRetirees, ...endroit } = f;
+    const { nouvellesPhotos, photosRetirees, aPellicule, ...endroit } = f;
     const maintenant = new Date().toISOString();
     endroit.creeLe = endroit.creeLe || maintenant;
     endroit.modifieLe = maintenant;
@@ -970,14 +1187,24 @@ async function pageFormulaire(id) {
     await db.ecrireReglage('dernierLieu', { pays: endroit.pays, ville: endroit.ville, devise: endroit.devise });
     db.demanderStockagePersistant();
     let envoyeAuClient = false;
-    if (carnetPour) {
-      const c = await db.lire('carnets', carnetPour.id);
+    // Changé de client, ou décoché : on le retire de l'ancien (s'il n'est pas déjà parti chez lui).
+    if (clientDepart && clientDepart.id !== pourClient?.id) {
+      const c = await db.lire('carnets', clientDepart.id);
+      c.items = c.items.filter((i) => i.endroitId !== endroit.id || estEnvoye(i));
+      await carnets.enregistrer(c);
+    }
+    if (pourClient) {
+      const c = await db.lire('carnets', pourClient.id);
       const dans = c.items.some((i) => i.endroitId === endroit.id);
-      if (champ('pourClient').checked) { carnets.ajouterItem(c, endroit.id, champ('motClient').value.trim()); envoyeAuClient = !dans; await carnets.enregistrer(c); } else if (dans) { c.items = c.items.filter((i) => i.endroitId !== endroit.id); await carnets.enregistrer(c); }
+      const item = carnets.ajouterItem(c, endroit.id, champ('motClient').value.trim());
+      if (dans) item.mot = champ('motClient').value.trim();
+      envoyeAuClient = !dans;
+      await carnets.enregistrer(c);
+      await db.ecrireReglage('dernierClient', c.id);
     }
     // Un endroit déjà dans le carnet d'un client : son carnet se met à jour (photos, textes).
-    for (const c of await db.tous('carnets')) if (c.id !== carnetPour?.id && c.items.some((i) => i.endroitId === endroit.id)) carnets.publierBientot(c.id);
-    if (envoyeAuClient) { toast(`Ajouté, et en route pour ${prenomClient} (${formatHeure(carnetPour.heure)})`); aller('#/'); return; }
+    for (const c of await db.tous('carnets')) if (c.id !== pourClient?.id && c.items.some((i) => i.endroitId === endroit.id)) carnets.publierBientot(c.id);
+    if (envoyeAuClient) { toast(`Enregistré ✓ et prévu pour ${pourClient.client?.prenom || 'le client'}`); aller(existant ? `#/endroit/${endroit.id}` : '#/'); return; }
     toast(existant ? 'Modifications enregistrées' : 'Endroit ajouté ✓');
     aller(existant ? `#/endroit/${endroit.id}` : '#/');
   });
@@ -988,6 +1215,7 @@ async function pageFormulaire(id) {
   majPhotos();
   majDevises();
   afficherPosition();
+  if (f.lat && !champ('lienMaps').value.trim()) champ('lienMaps').value = lienAuto();
   // Nouvel endroit (sauf un trajet) : position GPS prise automatiquement.
   if (!existant && !f.lat && f.categorie !== 'trajets') prendrePosition(true);
 }
@@ -1449,6 +1677,15 @@ async function pageReglages() {
       </select></label>
     </section>
 
+    <section class="section">
+      <h2 class="section-titre">${icone('camera', { taille: 20 })} Photos</h2>
+      <label class="interrupteur">
+        <span><b>Aussi dans ma pellicule</b><small>Les photos prises dans l'appli</small></span>
+        <input type="checkbox" id="pellicule" ${(await db.lireReglage('pellicule', true)) ? 'checked' : ''}>
+        <i aria-hidden="true"></i>
+      </label>
+    </section>
+
     <section class="section" id="section-envoi">
       <h2 class="section-titre">${icone('refresh-cw', { taille: 20 })} Envoi automatique au Studio</h2>
       ${cfg ? `
@@ -1496,6 +1733,7 @@ async function pageReglages() {
   const boutonInstaller = app.querySelector('#installer');
   if (boutonInstaller) boutonInstaller.onclick = async () => { if (!(await pwa.installer())) app.querySelector('#aide-installer').hidden = false; };
 
+  app.querySelector('#pellicule').onchange = (ev) => db.ecrireReglage('pellicule', ev.target.checked);
   const sauverRegion = async () => { await db.ecrireReglage('region', etat.region); };
   app.querySelector('#continent').onchange = async (ev) => {
     etat.region.continent = ev.target.value;
