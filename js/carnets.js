@@ -4,6 +4,7 @@
 
 import * as db from './db.js';
 import * as sync from './sync.js';
+import { DEPOT_PUBLIC } from './marque.js';
 import { avecEssai } from './essai.js';
 import {
   DEPOT_CARNETS, BRANCHE_CARNETS, RELAIS, HEURE_PAR_DEFAUT, FUSEAU_PAR_DEFAUT,
@@ -139,7 +140,7 @@ async function api(jeton, chemin, { methode = 'GET', corps } = {}) {
   return { ok: rep.ok, statut: rep.status, donnees };
 }
 
-const EXPLICATION_CLE = "Ta clé GitHub n'a pas encore le droit d'écrire dans le dossier de l'appli. Sur github.com : Settings > Developer settings > Fine-grained tokens > ta clé > ajoute le dossier « Appli-voyage » (Contents : Read and write).";
+const EXPLICATION_CLE = `Ta clé GitHub n'a pas encore le droit d'écrire dans le dossier de l'appli. Sur github.com : Settings > Developer settings > Fine-grained tokens > ta clé > ajoute le dossier « ${DEPOT_PUBLIC.split('/')[1]} » (Contents : Read and write).`;
 
 // La branche « carnets » est créée la première fois, vide (le site ne change pas).
 async function assurerBranche(jeton) {

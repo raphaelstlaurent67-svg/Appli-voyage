@@ -9,6 +9,7 @@ import { TAXONOMIE } from './taxonomie.js';
 import { icone, iconeCat } from './icones.js';
 import * as commun from './carnet-commun.js';
 import * as pwa from './installer.js';
+import { MARQUE } from './marque.js';
 
 const racine = document.getElementById('carnet');
 const feuille = document.getElementById('feuille');
@@ -236,7 +237,7 @@ function rendre() {
     <header class="couv">
       ${couverture ? `<img class="couv-img" data-p="${esc(couverture)}" alt="">` : ''}
       <div class="couv-haut">
-        <span class="marque">Voyage sur mesure</span>
+        <span class="marque">${esc(MARQUE)}</span>
         ${d.actif ? '<span class="direct"><i></i> En repérage</span>' : '<span class="direct fini">Repérage terminé</span>'}
       </div>
       <div class="couv-bas">

@@ -11,7 +11,7 @@
 
 // Où sont publiés les carnets chiffrés : une branche à part du dossier public de l'appli.
 // (Le site ne change pas : cette branche sert seulement à garder les carnets.)
-export const DEPOT_CARNETS = 'raphaelstlaurent67-svg/Appli-voyage';
+export { DEPOT_PUBLIC as DEPOT_CARNETS } from './marque.js';
 export const BRANCHE_CARNETS = 'carnets';
 // Le petit service gratuit (sans compte) par lequel les choix du client reviennent à Raph.
 // Ce qui y passe est chiffré avec la même clé : illisible pour tout le monde sauf Raph.
