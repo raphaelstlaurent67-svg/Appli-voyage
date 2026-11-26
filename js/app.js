@@ -1,6 +1,14 @@
 import './clavier.js';
 import { tirerPourRecharger } from './tirer.js';
-tirerPourRecharger();
+// Tirer vers le bas : on relit les données et on redessine la page, sans écran vide.
+tirerPourRecharger(async () => {
+  try { if (await sync.lireConfig()) await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix', 'liens']); } catch (_) { /* hors ligne */ }
+  try { await liensDemande.relever(); } catch (_) { /* hors ligne */ }
+  await charger();
+  const y = window.scrollY;
+  await router();
+  window.scrollTo(0, y);
+});
 import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, CONTACTS_RARES, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
@@ -18,6 +26,10 @@ import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE, ALERTE } from './marque.js';
 import { messageAppel, lienTexto, lienCourriel } from './appel.js';
 import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './phrases.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
+import * as autour from './autour.js';
+import * as styleAppli from './style-appli.js';
+
+styleAppli.couleurBarre();
 
 // ---------- État de l'appli ----------
 const etat = {
@@ -380,11 +392,60 @@ document.addEventListener('click', (ev) => {
   revenir(a.getAttribute('href') || a.dataset.retourPage || '#/');
 });
 
+// Les onglets principaux, dans l'ordre : on glisse de l'un à l'autre (gauche / droite).
+const ONGLETS = ['liste', 'clients', 'demandes', 'reglages'];
+const ROUTE_ONGLET = { liste: '#/', clients: '#/clients', demandes: '#/demandes', reglages: '#/reglages' };
+let ongletAvant = null;
+function animerOnglet(nom) {
+  const a = ONGLETS.indexOf(ongletAvant);
+  const b = ONGLETS.indexOf(nom);
+  ongletAvant = b >= 0 ? nom : null;
+  app.classList.remove('glisse-gauche', 'glisse-droite', 'glisse-tenu');
+  app.style.transform = '';
+  if (a < 0 || b < 0 || a === b) return;
+  void app.offsetWidth;
+  app.classList.add(b > a ? 'glisse-gauche' : 'glisse-droite');
+}
+(function glisserEntreOnglets() {
+  let x0 = null; let y0 = null; let sens = null;
+  const bloque = (cible) => cible.closest('input, textarea, select, .onglets-cats, .galerie, .puces-langues, .defile, .av-jours, #feuille, .pas-glisser');
+  document.addEventListener('touchstart', (ev) => {
+    x0 = null;
+    if (ev.touches.length !== 1 || !ONGLETS.includes(document.body.dataset.page) || !feuille.hidden || bloque(ev.target)) return;
+    x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; sens = null;
+  }, { passive: true });
+  document.addEventListener('touchmove', (ev) => {
+    if (x0 == null) return;
+    const dx = ev.touches[0].clientX - x0; const dy = ev.touches[0].clientY - y0;
+    if (!sens && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) sens = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'x' : 'y';
+    if (sens !== 'x') return;
+    const k = ONGLETS.indexOf(document.body.dataset.page);
+    const bout = (dx > 0 && k === 0) || (dx < 0 && k === ONGLETS.length - 1);
+    app.classList.add('glisse-tenu');
+    app.style.transform = `translateX(${dx * (bout ? 0.12 : 0.35)}px)`;
+  }, { passive: true });
+  const fin = (ev) => {
+    if (x0 == null) return;
+    const dx = (ev.changedTouches?.[0]?.clientX ?? x0) - x0;
+    x0 = null;
+    app.classList.remove('glisse-tenu');
+    if (sens !== 'x') { app.style.transform = ''; return; }
+    const k = ONGLETS.indexOf(document.body.dataset.page);
+    const cible = Math.abs(dx) > 60 ? ONGLETS[k + (dx < 0 ? 1 : -1)] : null;
+    if (!cible) { app.style.transition = 'transform .2s'; app.style.transform = ''; setTimeout(() => { app.style.transition = ''; }, 220); return; }
+    try { navigator.vibrate?.(8); } catch (_) { /* rien */ }
+    aller(ROUTE_ONGLET[cible]);
+  };
+  document.addEventListener('touchend', fin, { passive: true });
+  document.addEventListener('touchcancel', fin, { passive: true });
+})();
+
 async function router() {
   noterRang();
   fermerFeuille();
   const [, page, id] = (location.hash || '#/').split('/');
   const nom = page || 'liste';
+  animerOnglet(nom);
   document.body.dataset.page = nom;
   document.body.classList.remove('mode-selection');
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === (['carnet', 'demande', 'demandes'].includes(nom) ? 'clients' : nom === 'outils' ? 'reglages' : nom)));
@@ -902,6 +963,7 @@ async function pageFormulaire(id) {
         <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="maps.app.goo.gl/…"></label>
         <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} <span>Ma position</span></button>
         <p class="aide" id="texte-position"></p>
+        <div class="autour" id="autour" hidden></div>
       </section>
 
       <section class="section">
@@ -1026,6 +1088,8 @@ async function pageFormulaire(id) {
   }
 
   app.querySelector('#choix-categorie').onclick = () => choisirCategorie(f, majCategorie);
+  // Nouvel endroit : on commence par la catégorie (elle décide où il va chez le client : hôtel, resto, activité).
+  if (!existant && !f.categorie) setTimeout(() => { if (location.hash.startsWith('#/ajouter') && feuille.hidden) { choisirCategorie(f, majCategorie); autourDansFeuille(); } }, 120);
   app.querySelector('#choix-pays').onclick = () => choisirPays(!f.ville);
   app.querySelector('#choix-ville').onclick = () => choisirVille(false);
 
@@ -1153,6 +1217,7 @@ async function pageFormulaire(id) {
       }
       afficherPosition();
       if (!auto) toast(`Position prise ✓${f.precision ? ` (± ${f.precision} m)` : ''}`);
+      proposerAutour(f.lat, f.lng, f.precision);
     };
     const rate = (err) => {
       fini();
@@ -1171,6 +1236,73 @@ async function pageFormulaire(id) {
   }
 
   app.querySelector('#ma-position').addEventListener('click', () => prendrePosition(false));
+
+  // « Tu es ici ? » : les vrais endroits autour (OpenStreetMap). Un toucher remplit ce qui est vide.
+  let autourCtrl = null;
+  async function proposerAutour(lat, lng, precision = 30, nomCherche = '') {
+    const zone = app.querySelector('#autour');
+    if (!zone || existant || f.categorie === 'trajets') return;
+    autourCtrl?.abort();
+    autourCtrl = new AbortController();
+    zone.hidden = false;
+    zone.innerHTML = `<p class="autour-titre">${icone('search', { taille: 14 })} Recherche des endroits autour…</p>`;
+    let liste = [];
+    try { liste = await autour.endroitsAutour(lat, lng, Math.min(150, Math.max(50, (precision || 30) + 30)), { signal: autourCtrl.signal }); }
+    catch (err) { if (err?.name === 'AbortError') return; zone.hidden = true; return; }
+    if (!document.body.contains(zone)) return;
+    if (!liste.length) { zone.hidden = true; return; }
+    const exact = nomCherche && liste.find((e) => sansAccents(e.nom) === sansAccents(nomCherche));
+    if (exact) { remplirDepuis(exact); zone.hidden = true; return; }
+    zone.innerHTML = `<p class="autour-titre">${icone('map-pin', { taille: 14 })} Tu es ici ?</p>
+      <div class="autour-liste">${liste.map((e, k) => `<button type="button" class="autour-choix" data-autour="${k}">${iconeCat(e.categorie, { taille: 16 })}<span><b>${esc(e.nom)}</b><small>${esc([e.sousType || e.type || TAXONOMIE[e.categorie]?.nom, e.distance < 9999 ? `${e.distance} m` : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`;
+    zone.querySelectorAll('[data-autour]').forEach((b) => { b.onclick = () => { remplirDepuis(liste[+b.dataset.autour]); zone.hidden = true; }; });
+    listeAutour = liste;
+    autourDansFeuille();
+  }
+  // La feuille « Catégorie » est ouverte : on propose aussi en haut de la feuille.
+  let listeAutour = [];
+  function autourDansFeuille() {
+    const zone = app.querySelector('#autour');
+    const tuiles = listeAutour.length && !feuille.hidden && !f.categorie && feuille.querySelector('.tuiles');
+    if (!zone || !tuiles || feuille.querySelector('.autour')) return;
+    const bloc = document.createElement('div');
+    bloc.className = 'autour autour-feuille';
+    bloc.innerHTML = zone.innerHTML;
+    tuiles.before(bloc);
+    bloc.querySelectorAll('[data-autour]').forEach((b) => { b.onclick = (ev) => { ev.stopPropagation(); fermerFeuille(); remplirDepuis(listeAutour[+b.dataset.autour]); zone.hidden = true; }; });
+  }
+  function remplirDepuis(e) {
+    const remplis = [];
+    const mettre = (el, v) => { if (el && v && !el.value.trim()) { el.value = v; el.classList.remove('vient-remplir'); void el.offsetWidth; el.classList.add('vient-remplir'); remplis.push(el); } };
+    mettre(champ('nom'), e.nom);
+    mettre(champ('adresse'), e.adresse);
+    mettre(champ('telephone'), e.telephone);
+    for (const [k, v] of [['site', e.site], ['instagram', e.instagram], ['facebook', e.facebook], ['email', e.email]]) {
+      if (!v) continue;
+      const el = form.querySelector(`[data-contact="${k}"]`);
+      if (el) mettre(el, v); else if (!f.contacts[k]) f.contacts[k] = v;
+    }
+    if (!f.categorie && e.categorie) {
+      f.categorie = e.categorie; f.type = e.type || ''; f.sousType = e.sousType || '';
+      if (!feuille.hidden && feuille.querySelector('.tuiles')) fermerFeuille();
+      majCategorie();
+    }
+    // Le lien Google Maps : vers cet endroit précis (nom + adresse), si c'était le lien automatique.
+    const lien = champ('lienMaps');
+    if (!lien.value.trim() || lien.value.trim() === lienAuto()) {
+      lien.value = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([e.nom, e.adresse].filter(Boolean).join(', '))}`;
+    }
+    toast(`${esc(e.nom)} : rempli`);
+  }
+  // Lien Google Maps collé : on lit le nom et la position s'ils y sont.
+  champ('lienMaps').addEventListener('change', () => {
+    const info = autour.lireLienMaps(champ('lienMaps').value);
+    if (info.url && info.url !== champ('lienMaps').value.trim()) champ('lienMaps').value = info.url;
+    if (info.nom && !champ('nom').value.trim()) { champ('nom').value = info.nom; champ('nom').classList.add('vient-remplir'); }
+    if (info.lat) { f.lat = info.lat; f.lng = info.lng; f.precision = 20; afficherPosition(); }
+    const lat = info.lat ?? f.lat; const lng = info.lng ?? f.lng;
+    if (lat) proposerAutour(lat, lng, 40, info.nom || champ('nom').value.trim());
+  });
 
   // Le client choisi (seulement si « Pour un client » est coché).
   function majClient() {
@@ -1941,7 +2073,7 @@ function parler(texte, voix) {
 }
 
 async function pageOutil(id) {
-  const titres = { phrases: 'Phrases utiles', pitch: 'Présenter mon agence', convertir: 'Convertir un prix', carte: 'Ma carte de contact', alertes: 'Alerte nouvelle demande' };
+  const titres = { phrases: 'Phrases utiles', pitch: 'Présenter mon agence', convertir: 'Convertir un prix', carte: 'Ma carte de contact', alertes: 'Alerte nouvelle demande', style: 'Apparence' };
   if (!titres[id]) return location.replace('#/reglages');
   const pays = await paysCourant();
   const choix = await db.lireReglage('langueOutils', null);
@@ -2035,6 +2167,20 @@ async function pageOutil(id) {
       });
     };
     dessiner();
+  } else if (id === 'style') {
+    const dessiner = () => {
+      const st = styleAppli.styleActuel(); const mode = styleAppli.modeActuel(); const sombre = styleAppli.estSombre();
+      zone.innerHTML = `
+        <div class="segments modes-style" role="radiogroup">${styleAppli.MODES.map(([k, l]) => `<button type="button" class="segment ${k === mode ? 'choisi' : ''}" data-mode="${k}" role="radio" aria-checked="${k === mode}">${k === 'light' ? icone('sun', { taille: 16 }) : k === 'dark' ? icone('moon', { taille: 16 }) : icone('smartphone', { taille: 16 })} ${l}</button>`).join('')}</div>
+        <ul class="grille-styles">${styleAppli.STYLES.map((x) => { const [fond, acc, encre] = sombre ? x.sombre : x.clair; return `
+          <li><button type="button" class="tuile-style ${x.n === st ? 'choisie' : ''}" data-style="${x.n}" aria-pressed="${x.n === st}" style="--t-fond:${fond};--t-acc:${acc};--t-encre:${encre}">
+            <span class="ts-apercu"><b style="font-family:'${x.police}',var(--police)">Aa</b><i></i><i></i><em></em>${x.n === st ? `<span class="ts-coche">${icone('check', { taille: 14 })}</span>` : ''}</span>
+            <span class="ts-nom">${esc(x.nom)}</span>
+          </button></li>`; }).join('')}</ul>`;
+      zone.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => { styleAppli.appliquer(styleAppli.styleActuel(), b.dataset.mode, { enFondu: true }); dessiner(); }; });
+      zone.querySelectorAll('[data-style]').forEach((b) => { b.onclick = () => { styleAppli.appliquer(+b.dataset.style, styleAppli.modeActuel(), { enFondu: true }); dessiner(); }; });
+    };
+    dessiner();
   } else if (id === 'alertes') {
     zone.innerHTML = `
       <ol class="etapes-alerte">
@@ -2118,6 +2264,13 @@ async function pageReglages() {
       <h2 class="section-titre">Notifications</h2>
       <ul class="liste-choix liste-reglages">
         ${ligneReglage('#/outils/alertes', 'bell', 'Alerte nouvelle demande', (await db.lireReglage('alerteActive', false)) ? 'Activée' : '')}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">Apparence</h2>
+      <ul class="liste-choix liste-reglages">
+        ${ligneReglage('#/outils/style', 'sparkles', 'Style', styleAppli.STYLES.find((x) => x.n === styleAppli.styleActuel())?.nom)}
       </ul>
     </section>
 
