@@ -7,7 +7,7 @@ import { icone, iconeCat } from './icones.js';
 import { TAXONOMIE } from './taxonomie.js';
 import {
   GROUPES_CHOIX, NOMS_JOURS, QUOTAS_DEFAUT, TOUS_LES_JOURS, HEURE_PAR_DEFAUT,
-  reglagesEnvoi, groupePour, estEnvoye, dateLongue, jourLocal,
+  reglagesEnvoi, groupePour, estEnvoye, dateLongue, jourLocal, hotelsPremierSoir,
 } from './carnet-commun.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,7 +33,7 @@ export const FUSEAUX = [
 // « 3 hôtels · 3 restos · 3 activités, tous les jours à 19 h »
 export function resumeReglages(c) {
   const r = reglagesEnvoi(c);
-  const quoi = ORDRE.filter((g) => r.quotas[g] > 0).map((g) => `${r.quotas[g]} ${COURTS[g][r.quotas[g] > 1 ? 1 : 0]}`).join(' · ') || 'rien';
+  const quoi = ORDRE.filter((g) => r.quotas[g] > 0).map((g) => `${r.quotas[g]} ${COURTS[g][r.quotas[g] > 1 ? 1 : 0]}${g === 'dormir' && hotelsPremierSoir(c) ? ' (1er soir)' : ''}`).join(' · ') || 'rien';
   const quand = r.jours.length === 7 ? 'tous les jours' : ORDRE_JOURS.filter((j) => r.jours.includes(j)).map((j) => NOMS_JOURS[j].toLowerCase()).join(', ');
   return `${quoi}, ${quand} à ${r.heure} h`;
 }
@@ -67,6 +67,7 @@ export function blocReglages(c) {
             <button type="button" data-quota="${g}" data-pas="1" aria-label="Plus" ${r.quotas[g] >= 9 ? 'disabled' : ''}>${icone('plus', { taille: 16 })}</button>
           </span>
         </div>`).join('')}
+      <label class="av-interrupteur"><span>Hôtels chaque soir</span><input type="checkbox" data-hotels ${hotelsPremierSoir(c) ? '' : 'checked'}></label>
       <p class="av-etiquette">Quels jours</p>
       <div class="av-jours">${ORDRE_JOURS.map((j) => `<button type="button" class="${r.jours.includes(j) ? 'on' : ''}" data-jour="${j}" aria-pressed="${r.jours.includes(j)}">${NOMS_JOURS[j]}</button>`).join('')}</div>
       <div class="av-deux">
@@ -77,7 +78,7 @@ export function blocReglages(c) {
 }
 
 export function brancherReglages(zone, c, { sauver, recharger }) {
-  const envoi = () => { c.envoi = { quotas: { ...QUOTAS_DEFAUT, ...(c.envoi?.quotas || {}) }, jours: [...(c.envoi?.jours?.length ? c.envoi.jours : TOUS_LES_JOURS)] }; return c.envoi; };
+  const envoi = () => { c.envoi = { ...(c.envoi || {}), quotas: { ...QUOTAS_DEFAUT, ...(c.envoi?.quotas || {}) }, jours: [...(c.envoi?.jours?.length ? c.envoi.jours : TOUS_LES_JOURS)] }; return c.envoi; };
   zone.querySelectorAll('[data-quota]').forEach((b) => {
     b.onclick = async () => {
       const e = envoi();
@@ -94,6 +95,8 @@ export function brancherReglages(zone, c, { sauver, recharger }) {
       await sauver(); recharger();
     };
   });
+  const hotels = zone.querySelector('[data-hotels]');
+  if (hotels) hotels.onchange = async () => { c.envoi = { ...envoi(), hotelsTousLesSoirs: hotels.checked }; await sauver(); recharger(); };
   zone.querySelectorAll('[data-reglage]').forEach((s) => {
     s.onchange = async () => {
       if (s.dataset.reglage === 'heure') c.heure = +s.value; else c.fuseau = s.value;
@@ -104,7 +107,7 @@ export function brancherReglages(zone, c, { sauver, recharger }) {
 
 // ---------- À venir ----------
 // endroits : Map id → endroit. Retourne le HTML du bloc.
-export function blocAVenir(c, endroits, { montrer = 4, prenom = 'ton client' } = {}) {
+export function blocAVenir(c, endroits, { montrer = 4, prenom = 'ton client', resume = true, conseilCompact = false } = {}) {
   const r = reglagesEnvoi(c);
   const groupe = (i) => groupePour(endroits.get(i.endroitId)?.categorie, r.quotas);
   const attente = c.items.filter((i) => endroits.has(i.endroitId) && !estEnvoye(i));
@@ -120,12 +123,13 @@ export function blocAVenir(c, endroits, { montrer = 4, prenom = 'ton client' } =
         <span class="av-txt">
           <b>${esc(e.nom)}</b>
           <small>${esc(e.sousType || e.type || TAXONOMIE[e.categorie]?.nom || '')}${e.photos?.length ? ` · ${pluriel(e.photos.length, 'photo')}` : ' · sans photo'}</small>
-          <button type="button" class="av-mot" data-mot="${esc(i.id)}">${i.mot ? `« ${esc(i.mot)} »` : `+ Petit conseil pour ${esc(prenom)}`}</button>
+          ${i.mot || !conseilCompact ? `<button type="button" class="av-mot" data-mot="${esc(i.id)}">${i.mot ? `« ${esc(i.mot)} »` : `+ Petit conseil pour ${esc(prenom)}`}</button>` : ''}
         </span>
         <span class="av-actions">
           ${envoi ? `<button type="button" data-monter="${esc(i.id)}" aria-label="Plus tôt" title="Plus tôt" ${k <= 0 ? 'disabled' : ''}>${icone('arrow-up', { taille: 15 })}</button>
           <button type="button" data-descendre="${esc(i.id)}" aria-label="Plus tard" title="Plus tard" ${k < 0 || k >= memes.length - 1 ? 'disabled' : ''}>${icone('arrow-down', { taille: 15 })}</button>
           <button type="button" data-remplacer="${esc(i.id)}" aria-label="Remplacer" title="Remplacer par un autre">${icone('refresh-cw', { taille: 15 })}</button>` : ''}
+          ${conseilCompact && !i.mot ? `<button type="button" data-mot="${esc(i.id)}" aria-label="Conseil" title="Conseil pour ${esc(prenom)}">${icone('message-circle', { taille: 15 })}</button>` : ''}
           <button type="button" data-retirer="${esc(i.id)}" aria-label="Retirer" title="Retirer">${icone('x', { taille: 15 })}</button>
         </span>
       </li>`;
@@ -152,7 +156,7 @@ export function blocAVenir(c, endroits, { montrer = 4, prenom = 'ton client' } =
   const autres = envois.slice(montrer);
   return `
     <div class="av">
-      <p class="av-resume">${icone('settings', { taille: 14 })} ${esc(resumeReglages(c))}</p>
+      ${resume ? `<p class="av-resume">${icone('settings', { taille: 14 })} ${esc(resumeReglages(c))}</p>` : ''}
       ${envois.length ? envois.slice(0, montrer).map(carteEnvoi).join('') : `
         <p class="av-vide">${icone('inbox', { taille: 22 })}<span><b>Rien en attente</b></span></p>`}
       ${autres.length ? `<p class="av-suite">Ensuite : ${pluriel(attente.filter((i) => autres.includes(i.livraison)).length, 'endroit')} sur ${pluriel(autres.length, 'autre envoi', 'autres envois')}, jusqu'au ${esc(dateLongue(autres[autres.length - 1], r.fuseau))}.</p>` : ''}

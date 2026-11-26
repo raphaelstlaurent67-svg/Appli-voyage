@@ -4,6 +4,8 @@
 // À la fin, ses réponses deviennent un lien : en cliquant dessus, Raph crée le voyage dans le Studio.
 
 import './clavier.js';
+import { tirerPourRecharger } from './tirer.js';
+tirerPourRecharger();
 import { paysDuContinent } from './monde.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
@@ -11,7 +13,7 @@ import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
 import { RELAIS, canalDemande, chiffrerJson, enBase64Url } from './carnet-commun.js';
-import { MARQUE, DEMANDE_PUBLIQUE } from './marque.js';
+import { MARQUE, DEMANDE_PUBLIQUE, ALERTE } from './marque.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
@@ -655,7 +657,7 @@ function datesTotal(zone) {
   const n = d.duree;
   const fin = finVoyage();
   const premierMois = moisDe(iso(new Date()));
-  const mois = Array.from({ length: 15 }, (_, i) => decalerMois(premierMois, i));
+  const mois = Array.from({ length: 12 }, (_, i) => decalerMois(premierMois, i));
   if (!moisAffiche) moisAffiche = moisDe(d.depart || (d.mois ? `${d.mois}-01` : ajouterJours(iso(new Date()), 30)));
   const exemple = nomPays(d.pays[0]?.nom || (d.langue === 'en' ? 'Japan' : 'Japon'));
   zone.innerHTML = `
@@ -794,12 +796,12 @@ function etapeStyle(zone) {
 }
 
 // ---------- 4. Envies ----------
-// Idées précises sous une envie, seulement si un pays connu est choisi : toutes (7) pour un pays,
-// 4 par pays s'il y en a plusieurs (2 pays au plus). Elles vont à la ligne : aucune n'est cachée.
+// Idées précises sous une envie, seulement si un pays connu est choisi : les 3 plus connues
+// par pays (2 pays au plus), une par ligne. Toucher une idée ajoute 1 au nombre ; la retoucher l'enlève.
 // Sans pays (ou « Surprenez-moi »), aucune idée : des idées générales ne servent à rien.
 function ideesEnvie(k) {
   return d.pays.map((p) => p.nom).filter(aDesIdees).slice(0, 2)
-    .map((p, i, liste) => ({ pays: liste.length > 1 ? nomPays(p) : '', idees: ideesPour(p, k, d.langue).slice(0, liste.length > 1 ? 4 : 8) }))
+    .map((p, i, liste) => ({ pays: liste.length > 1 ? nomPays(p) : '', idees: ideesPour(p, k, d.langue).slice(0, 3) }))
     .filter((g) => g.idees.length);
 }
 
@@ -836,9 +838,18 @@ function etapeEnvies(zone) {
     } else if (b.dataset.idee) {
       const k = b.dataset.idee;
       const l = d.idees[k] || [];
-      d.idees[k] = l.includes(b.dataset.fr) ? l.filter((x) => x !== b.dataset.fr) : [...l, b.dataset.fr];
+      const deja = l.includes(b.dataset.fr);
+      d.idees[k] = deja ? l.filter((x) => x !== b.dataset.fr) : [...l, b.dataset.fr];
+      d.envies[k] = borne((d.envies[k] || 0) + (deja ? -1 : 1), d.idees[k].length, 30);
+      if (!d.envies[k]) delete d.idees[k];
     } else if (b.dataset.plus) d.envies[b.dataset.plus] = Math.min(30, (d.envies[b.dataset.plus] || 0) + 1);
-    else if (b.dataset.moins) { const k = b.dataset.moins; d.envies[k] = Math.max(0, (d.envies[k] || 0) - 1); if (!d.envies[k]) delete d.idees[k]; }
+    else if (b.dataset.moins) {
+      // Jamais moins que le nombre d'idées cochées.
+      const k = b.dataset.moins;
+      const min = (d.idees[k] || []).length;
+      d.envies[k] = Math.max(min, (d.envies[k] || 0) - 1);
+      if (!d.envies[k]) delete d.idees[k];
+    }
     else return;
     garder();
     // Le défilement reste en place : on redessine sans faire sauter la page.
@@ -1102,6 +1113,21 @@ function marquerErreur(champ, message) {
   return undefined;
 }
 
+// Notification instantanée sur le téléphone de Raph (appli ntfy). Rien de privé : pas de courriel ni de téléphone.
+function alerter() {
+  if (!ALERTE) return;
+  const prenom = d.nom.trim().split(/\s+/)[0].slice(0, 30);
+  const ou = d.pays.length ? d.pays.map((x) => x.nom).join(', ') : d.regions.join(', ') || 'destination à définir';
+  const jours = totalJours();
+  const n = totalVoyageurs();
+  const texte = `${prenom} · ${ou}${jours ? ` · ${jours} jours` : ''} · ${n} voyageur${n > 1 ? 's' : ''}${d.telephone.trim() ? ' · a laissé son téléphone' : ''}`;
+  const q = new URLSearchParams({
+    title: `${MODE_TEST ? '(Essai) ' : ''}Nouvelle demande de voyage`, tags: 'airplane', priority: 'high',
+    click: new URL('./#/demandes', location.href).href,
+  });
+  fetch(`${RELAIS}/${ALERTE}?${q}`, { method: 'POST', body: texte.slice(0, 300) }).catch(() => {});
+}
+
 async function envoyer() {
   if (!d.nom.trim()) return marquerErreur('nom', t().errNom);
   if (!/^\S+@\S+\.\S+$/.test(d.courriel.trim())) return marquerErreur('courriel', t().errCourriel);
@@ -1133,6 +1159,7 @@ async function envoyer() {
         parRelais = (await fetch(`${RELAIS}/${canal}`, { method: 'POST', body: corps })).ok;
       } catch (_) { parRelais = false; }
     }
+    alerter();
     if (!POUR) { etat = parRelais ? 'ok' : 'manuel'; dessiner(); return; }
     // 2. Et par courriel (FormSubmit), en plus.
     try {

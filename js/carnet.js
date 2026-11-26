@@ -5,6 +5,8 @@
 // La clé ne quitte jamais le téléphone du client. Ses choix partent tout seuls à Raph, chiffrés.
 
 import './clavier.js';
+import { tirerPourRecharger } from './tirer.js';
+tirerPourRecharger();
 import { TAXONOMIE } from './taxonomie.js';
 import { icone, iconeCat } from './icones.js';
 import * as commun from './carnet-commun.js';
@@ -150,11 +152,15 @@ function signalerVisite() {
   if (Date.now() - memoire.lire(`ping-${cleLocale}`, 0) > 20 * 60 * 1000) envoyerChoix();
 }
 
-const choixDe = (quand, g) => etat.choix.soirs[quand]?.[g];
+const choixDe = (quand, g) => commun.listeChoix(etat.choix.soirs[quand]?.[g]).filter((v) => v !== 'aucun');
+const aChoisi = (quand, g, id) => choixDe(quand, g).includes(id);
+// Toucher : choisit (jusqu'à 2 par groupe ; un 3e remplace le plus ancien), toucher encore : retire.
 function choisir(quand, g, valeur) {
   const s = { ...(etat.choix.soirs[quand] || {}) };
-  if (s[g] === valeur) delete s[g];
-  else s[g] = valeur;
+  let l = choixDe(quand, g);
+  if (l.includes(valeur)) l = l.filter((v) => v !== valeur);
+  else l = [...l, valeur].slice(-commun.MAX_CHOIX);
+  if (l.length) s[g] = l; else delete s[g];
   etat.choix.soirs = { ...etat.choix.soirs, [quand]: s };
   sauverChoix();
 }
@@ -220,7 +226,7 @@ function soirees() {
   return { livres, enRoute, liste: liste.reverse() };
 }
 const groupesDuSoir = (items) => ORDRE_GROUPES.filter((g) => items.some((i) => groupeDe(i) === g));
-const soirComplet = (s) => { const gs = groupesDuSoir(s.items); return gs.length > 0 && gs.every((g) => choixDe(s.quand, g) && choixDe(s.quand, g) !== 'aucun'); };
+const soirComplet = (s) => { const gs = groupesDuSoir(s.items); return gs.length > 0 && gs.every((g) => choixDe(s.quand, g).length); };
 
 // ---------- La page ----------
 function rendre() {
@@ -292,7 +298,7 @@ function pageSoirees(liste) {
         <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)}</p>
       </div>`;
   }
-  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré.</p>';
+  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré, ou deux.</p>';
   return aide + liste.map((s, n) => {
     const gs = groupesDuSoir(s.items);
     const complet = soirComplet(s);
@@ -322,8 +328,8 @@ function pageSoirees(liste) {
 // Une petite carte : on la touche pour la choisir. Le « i » ouvre la fiche complète.
 function mini(i, quand, g) {
   const photo = i.photos?.[0];
-  const moi = g !== 'savoir' && choixDe(quand, g) === i.id;
-  const autre = g !== 'savoir' && choixDe(quand, g) && !moi;
+  const moi = g !== 'savoir' && aChoisi(quand, g, i.id);
+  const autre = g !== 'savoir' && choixDe(quand, g).length >= commun.MAX_CHOIX && !moi;
   return `
     <article class="mini ${moi ? 'prise' : ''} ${autre ? 'pas-prise' : ''}" ${g !== 'savoir' ? `data-choisir="${esc(i.id)}" data-quand="${esc(quand)}" data-groupe="${g}" role="button" aria-pressed="${moi}"` : `data-ouvrir="${esc(i.id)}"`}>
       <div class="mini-photo ${photo ? '' : 'sans'}">
@@ -340,9 +346,8 @@ function mini(i, quand, g) {
 // « Mon voyage » : tout ce que le client a choisi, soir après soir.
 function pageResume(liste) {
   const d = etat.donnees;
-  const parSoir = [...liste].reverse().map((s) => ({ s, gs: groupesDuSoir(s.items).filter((g) => choixDe(s.quand, g)) })).filter((x) => x.gs.length);
-  const ligne = (s, g) => {
-    const v = choixDe(s.quand, g);
+  const parSoir = [...liste].reverse().map((s) => ({ s, gs: groupesDuSoir(s.items).filter((g) => choixDe(s.quand, g).length) })).filter((x) => x.gs.length);
+  const ligne = (s, g) => choixDe(s.quand, g).map((v) => {
     const i = s.items.find((x) => x.id === v);
     return `
       <li ${i ? `data-ouvrir="${esc(i.id)}"` : ''}>
@@ -350,7 +355,7 @@ function pageResume(liste) {
         <span class="ligne-txt"><b>${i ? esc(i.nom) : 'Aucun ne me plaisait'}</b><small>${GROUPES[g].court}${i ? ` · ${etiquette(i)}` : ''}</small></span>
         ${i ? `<span class="coche">${icone('check', { taille: 16, epaisseur: 2.6 })}</span>` : ''}
       </li>`;
-  };
+  }).join('');
   return `
     <div class="choix">
       <div class="choix-tete">
@@ -398,7 +403,7 @@ function ouvrirFiche(itemId) {
   const g = groupeDe(i);
   const carteUrl = lienCarte(i);
   const site = lienWeb(i.site);
-  const moi = g !== 'savoir' && choixDe(s.quand, g) === i.id;
+  const moi = g !== 'savoir' && aChoisi(s.quand, g, i.id);
   feuille.innerHTML = `
     <div class="voile" data-fermer></div>
     <div class="fiche" role="dialog" aria-modal="true" aria-label="${esc(i.nom)}">
@@ -575,7 +580,7 @@ function erreur(titre, texte) {
   // Démo : les soirées passées sont déjà complétées ; les choix faits à la main restent par-dessus.
   if (DEMO && etat.donnees.choixDemo) {
     const ids = new Set(etat.donnees.items.map((i) => i.id));
-    const encoreLa = Object.fromEntries(Object.entries(etat.choix.soirs).filter(([, s]) => Object.values(s).every((v) => v === 'aucun' || ids.has(v))));
+    const encoreLa = Object.fromEntries(Object.entries(etat.choix.soirs).filter(([, s]) => Object.values(s).every((v) => commun.listeChoix(v).every((x) => x === 'aucun' || ids.has(x)))));
     etat.choix.soirs = { ...etat.donnees.choixDemo.soirs, ...encoreLa };
   }
   document.title = `Votre voyage${etat.donnees.ville ? ` · ${etat.donnees.ville}` : ''}`;

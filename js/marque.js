@@ -8,3 +8,7 @@ export const DEPOT_DONNEES = 'appli-voyage-donnees';
 // Le lien public du formulaire (bio Instagram, site…) : demande.html tout court.
 // Les demandes arrivent dans l'appli (Clients > Demandes) et dans le Studio.
 export const DEMANDE_PUBLIQUE = { id: 'public', cle: '6uM6adax3RnnRBPuy_jG61bry9Et3wvG0EOURk18voA' };
+// Notification instantanée sur le téléphone de Raph à chaque nouvelle demande
+// (appli gratuite « ntfy », sans compte : s'abonner à ce sujet, voir Réglages > Notifications).
+// Le message ne contient que le prénom, la destination, la durée et le nombre de voyageurs.
+export const ALERTE = 'av-u72iknsv9of7uypbzmzyplad';

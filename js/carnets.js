@@ -8,7 +8,7 @@ import { DEPOT_PUBLIC } from './marque.js';
 import { avecEssai } from './essai.js';
 import {
   DEPOT_CARNETS, BRANCHE_CARNETS, RELAIS, HEURE_PAR_DEFAUT, FUSEAU_PAR_DEFAUT,
-  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, lienClient, planifier, reglagesEnvoi, groupePour, estEnvoye, QUOTAS_DEFAUT, TOUS_LES_JOURS,
+  idCourt, nouvelleCle, chiffrer, chiffrerJson, dechiffrerJson, deBase64Url, enBase64Url, canalChoix, cheminPublic, lienClient, planifier, scoreEndroit, quotasDuSoir, reglagesEnvoi, groupePour, estEnvoye, QUOTAS_DEFAUT, TOUS_LES_JOURS,
 } from './carnet-commun.js';
 
 const API = 'https://api.github.com';
@@ -58,7 +58,7 @@ export function ajouterItem(c, endroitId, mot = '') {
 // Recalcule l'heure d'envoi de tout ce qui n'est pas encore parti.
 export async function replanifier(c) {
   const parId = avecEssai(await db.tous('endroits'));
-  return planifier(c, (i) => parId.get(i.endroitId)?.categorie);
+  return planifier(c, (i) => parId.get(i.endroitId)?.categorie, new Date(), (i) => scoreEndroit(parId.get(i.endroitId)));
 }
 
 export async function enregistrer(c) {
@@ -73,8 +73,9 @@ export async function enregistrer(c) {
 // Pratique pendant un appel. Retourne combien d'endroits sont partis.
 export async function envoyerMaintenant(c) {
   const parId = avecEssai(await db.tous('endroits'));
-  planifier(c, (i) => parId.get(i.endroitId)?.categorie);
-  const { quotas } = reglagesEnvoi(c);
+  planifier(c, (i) => parId.get(i.endroitId)?.categorie, new Date(), (i) => scoreEndroit(parId.get(i.endroitId)));
+  const dejaHotel = c.items.some((i) => estEnvoye(i) && parId.get(i.endroitId)?.categorie === 'hebergement');
+  const quotas = quotasDuSoir(c, dejaHotel);
   const attente = c.items.filter((i) => parId.has(i.endroitId) && !estEnvoye(i))
     .sort((a, b) => (a.livraison || '9').localeCompare(b.livraison || '9'));
   const pris = {};

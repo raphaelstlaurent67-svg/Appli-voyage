@@ -813,3 +813,10 @@ body[data-page="outils"] { padding-bottom: 24px; }
 .fiche h1, .demande-tete h2 { overflow-wrap: anywhere; }
 .carnet-sur { flex-wrap: wrap; }
 .carnet-sur .pub { flex-basis: 100%; margin: 2px 0 0; }
+
+/* Alerte nouvelle demande */
+.etapes-alerte { list-style: none; counter-reset: e; margin: 0; padding: 0; display: grid; gap: 12px; }
+.etapes-alerte li { counter-increment: e; display: grid; gap: 10px; padding: 14px 14px 14px 52px; position: relative; border: 1px solid var(--bordure); border-radius: 14px; background: var(--surface); }
+.etapes-alerte li::before { content: counter(e); position: absolute; left: 14px; top: 13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--surface-3); }
+.etapes-alerte b { font-size: 15px; }
+.sujet-alerte { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); word-break: break-all; user-select: all; -webkit-user-select: all; }
