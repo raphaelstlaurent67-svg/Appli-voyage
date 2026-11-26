@@ -2038,8 +2038,8 @@ async function pageOutil(id) {
   } else if (id === 'alertes') {
     zone.innerHTML = `
       <ol class="etapes-alerte">
-        <li><b>Installer l'appli ntfy</b><a class="bouton-secondaire" href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">${icone('external-link', { taille: 17 })} App Store</a></li>
-        <li><b>Dans ntfy, toucher + et coller ce nom</b><code class="sujet-alerte">${esc(ALERTE)}</code><button type="button" class="bouton-secondaire" id="copier-sujet">${icone('copy', { taille: 17 })} Copier</button></li>
+        <li><b>Ouvrir ntfy dans Safari, puis Partager › Sur l'écran d'accueil</b><a class="bouton-secondaire" href="https://ntfy.sh/app" target="_blank" rel="noopener">${icone('external-link', { taille: 17 })} Ouvrir ntfy.sh/app</a></li>
+        <li><b>L'ouvrir depuis l'écran d'accueil, toucher + et coller ce nom, puis autoriser les notifications</b><code class="sujet-alerte">${esc(ALERTE)}</code><button type="button" class="bouton-secondaire" id="copier-sujet">${icone('copy', { taille: 17 })} Copier</button></li>
         <li><b>Recevoir un essai</b><button type="button" class="bouton-principal" id="essai-alerte">${icone('bell', { taille: 18 })} Envoyer un essai</button></li>
       </ol>`;
     zone.querySelector('#copier-sujet').onclick = async () => {
