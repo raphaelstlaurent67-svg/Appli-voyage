@@ -15,6 +15,7 @@ import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import * as essai from './essai.js';
 import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE, ALERTE } from './marque.js';
+import { messageAppel, lienTexto, lienCourriel } from './appel.js';
 import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './phrases.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 
@@ -1579,14 +1580,8 @@ async function pageDemande(lienId) {
   const incontournables = [d.incontournable?.trim(), ...(d.pays || []).filter((p) => p.incontournable?.trim()).map((p) => `${p.nom} : ${p.incontournable.trim()}`)].filter(Boolean);
   const tel = (d.telephone || '').replace(/[^\d+]/g, '');
   const info = (ico, etiquette, valeur) => `<li>${icone(ico, { taille: 19 })}<div><span class="etiquette">${etiquette}</span><b>${esc(valeur)}</b></div></li>`;
-  // Réponse rapide déjà écrite : proposer un appel.
-  const moiNom = await db.lireReglage('nomFiche', '');
-  const prenomClient = (d.nom || '').trim().split(/\s+/)[0];
-  const ouCourt = d.pays?.length ? d.pays.map((p) => p.nom).join(', ') : '';
-  const reponse = d.langue === 'en'
-    ? `Hi ${prenomClient}, ${moiNom ? `${moiNom.split(/\s+/)[0]} here from ${MARQUE}. ` : ''}Thanks for your travel request! Do you have 15 minutes for a quick call this week? Tell me what time works for you.`
-    : `Bonjour ${prenomClient}, ${moiNom ? `ici ${moiNom.split(/\s+/)[0]} de ${MARQUE}. ` : ''}Merci pour votre demande de voyage ! Auriez-vous 15 minutes cette semaine pour un appel ? Dites-moi le moment qui vous convient.`;
-  const sujet = d.langue === 'en' ? `Your trip${ouCourt ? ` to ${ouCourt}` : ''}` : `Votre voyage${ouCourt ? ` : ${ouCourt}` : ''}`;
+  // Réponse rapide déjà écrite : proposer un appel de 15 minutes.
+  const reponse = messageAppel({ nom: d.nom, langue: d.langue, signe: (await db.lireReglage('nomFiche', '')) || undefined });
 
   app.innerHTML = `
     <header class="entete-form">${retour}<h1>Demande</h1><span class="rond vide-rond"></span></header>
@@ -1596,8 +1591,8 @@ async function pageDemande(lienId) {
         <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
       </div>
       ${tel || d.courriel ? `<div class="actions">
-        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a><a class="action" href="sms:${esc(tel)}&body=${encodeURIComponent(reponse)}"><span>${icone('message-circle')}</span>Texto</a>` : ''}
-        ${d.courriel ? `<a class="action" href="mailto:${esc(d.courriel)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(reponse)}"><span>${icone('mail')}</span>Courriel</a>` : ''}
+        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a><a class="action" href="${esc(lienTexto(tel, reponse))}"><span>${icone('message-circle')}</span>Texto</a>` : ''}
+        ${d.courriel ? `<a class="action" href="${esc(lienCourriel(d.courriel, d.langue, reponse))}"><span>${icone('mail')}</span>Courriel</a>` : ''}
       </div>` : ''}
       <section class="bloc-fiche">
         <h2>Le voyage</h2>

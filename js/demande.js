@@ -14,6 +14,7 @@ import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
 import { RELAIS, canalDemande, chiffrerJson, enBase64Url } from './carnet-commun.js';
 import { MARQUE, DEMANDE_PUBLIQUE, ALERTE } from './marque.js';
+import { messageAppel, lienTexto, lienCourriel } from './appel.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
@@ -1120,10 +1121,16 @@ function alerter() {
   const ou = d.pays.length ? d.pays.map((x) => x.nom).join(', ') : d.regions.join(', ') || 'destination à définir';
   const jours = totalJours();
   const n = totalVoyageurs();
-  const texte = `${prenom} · ${ou}${jours ? ` · ${jours} jours` : ''} · ${n} voyageur${n > 1 ? 's' : ''}${d.telephone.trim() ? ' · a laissé son téléphone' : ''}`;
+  const texte = `${prenom} · ${ou}${jours ? ` · ${jours} jours` : ''} · ${n} voyageur${n > 1 ? 's' : ''}${d.telephone.trim() ? ' · touche pour lui texter' : ''}`;
+  // Boutons dans la notification : Texto (ou Courriel) déjà écrit pour proposer un appel, et l'agenda.
+  const message = messageAppel({ nom: d.nom, langue: d.langue });
+  const tel = d.telephone.trim();
+  const contact = tel ? ['Texto', lienTexto(tel, message)] : d.courriel.trim() ? ['Courriel', lienCourriel(d.courriel, d.langue, message)] : null;
+  const actions = [contact && `view, ${contact[0]}, ${contact[1]}`, 'view, Mon agenda, https://calendar.google.com/calendar/r/week', `view, Voir la demande, ${new URL('./#/demandes', location.href).href}`].filter(Boolean).join('; ');
   const q = new URLSearchParams({
     title: `${MODE_TEST ? '(Essai) ' : ''}Nouvelle demande de voyage`, tags: 'airplane', priority: 'high',
-    click: new URL('./#/demandes', location.href).href,
+    click: contact ? contact[1] : new URL('./#/demandes', location.href).href,
+    actions,
   });
   fetch(`${RELAIS}/${ALERTE}?${q}`, { method: 'POST', body: texte.slice(0, 300) }).catch(() => {});
 }
