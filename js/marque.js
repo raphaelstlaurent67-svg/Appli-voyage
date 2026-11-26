@@ -12,3 +12,7 @@ export const DEMANDE_PUBLIQUE = { id: 'public', cle: '6uM6adax3RnnRBPuy_jG61bry9
 // (appli gratuite « ntfy », sans compte : s'abonner à ce sujet, voir Réglages > Notifications).
 // Le message ne contient que le prénom, la destination, la durée et le nombre de voyageurs.
 export const ALERTE = 'av-u72iknsv9of7uypbzmzyplad';
+// Le prénom qui signe les textos aux clients.
+export const CONSEILLER = 'Raphaël';
+// Lien de prise de rendez-vous Google Agenda (page de réservation gratuite). Vide = « Dites-moi le moment ».
+export const LIEN_RDV = '';
