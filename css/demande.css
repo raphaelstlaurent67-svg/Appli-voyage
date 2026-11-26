@@ -511,3 +511,16 @@ body:has(.retour-apercu) .haut-ligne .marque { padding-left: 92px; }
 body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 input, textarea, [contenteditable], .selectionnable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 img { -webkit-user-drag: none; }
+
+/* Mois de départ : les 12 prochains mois, tous visibles (pas besoin de faire défiler). */
+.mois-rangee, .mois-rangee.mois-grille { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; overflow: visible; margin: 0; padding: 0; scroll-snap-type: none; }
+.mois-rangee .mois-puce { width: auto; }
+@media (min-width: 680px) { .mois-rangee { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* Idées : une par ligne */
+.idees-liste { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.idee {
+  display: flex; width: 100%; gap: 8px; padding: 11px 12px; border-radius: 12px;
+  font-size: 14px; max-width: none;
+}
+.idee .ico { flex: none; }

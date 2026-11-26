@@ -141,9 +141,12 @@ export const GROUPES_CHOIX = {
 export const groupeDeCategorie = (cat) => Object.keys(GROUPES_CHOIX).find((g) => GROUPES_CHOIX[g].cats.includes(cat)) || 'savoir';
 
 // Tous les choix du client, soir par soir : [{ quand, groupe, itemId }] (itemId = 'aucun' s'il n'a rien aimé).
+// Jusqu'à 2 choix par groupe (ex. : un resto pour le dîner, un pour le souper). Ancien format : un seul id.
+export const MAX_CHOIX = 2;
+export const listeChoix = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 export function choixRetenus(carnet) {
   const soirs = carnet?.choix?.soirs || {};
-  return Object.keys(soirs).sort().flatMap((quand) => Object.keys(GROUPES_CHOIX).filter((g) => soirs[quand][g]).map((g) => ({ quand, groupe: g, itemId: soirs[quand][g] })));
+  return Object.keys(soirs).sort().flatMap((quand) => Object.keys(GROUPES_CHOIX).flatMap((g) => listeChoix(soirs[quand][g]).map((itemId) => ({ quand, groupe: g, itemId }))));
 }
 // Les endroits choisis par le client : ils doivent être dans son voyage, à 100 %.
 export function endroitsChoisis(carnet) {
@@ -194,21 +197,61 @@ export function prochainsEnvois(apres, reglages, combien) {
   return liste;
 }
 
-// Donne à chaque endroit pas encore envoyé son heure d'envoi. catDe(item) → catégorie de l'endroit.
-export function planifier(c, catDe, maintenant = new Date()) {
+// Les hôtels : seulement au premier envoi (le client choisit où dormir une fois), sauf si Raph le change.
+export const hotelsPremierSoir = (c) => c?.envoi?.hotelsTousLesSoirs !== true;
+
+// Le « meilleur » endroit d'abord : coup de cœur, confort, photos, description.
+export function scoreEndroit(e) {
+  if (!e) return 0;
+  return (e.coupDeCoeur ? 10 : 0) + (Number(e.confort) || 0) + Math.min(e.photos?.length || 0, 4) * 1.5 + ((e.description || '').trim().length > 30 ? 1.5 : 0);
+}
+
+// Un endroit qui vient d'entrer dans la file prend sa place selon sa qualité, parmi ceux pas encore planifiés
+// de son groupe. Les déplacements faits à la main par Raph (plus tôt / plus tard) restent tels quels.
+function placerNouveaux(c, catDe, scoreDe, quotas, maintenant) {
+  for (const i of c.items.filter((x) => !x.place)) {
+    i.place = true;
+    if (estEnvoye(i, maintenant)) continue;
+    const g = groupePour(catDe(i), quotas);
+    const s = scoreDe(i);
+    const autres = c.items.filter((x) => x !== i && x.place && !estEnvoye(x, maintenant) && groupePour(catDe(x), quotas) === g);
+    const devant = autres.find((x) => scoreDe(x) < s);
+    if (!devant) continue;
+    c.items.splice(c.items.indexOf(i), 1);
+    c.items.splice(c.items.indexOf(devant), 0, i);
+  }
+}
+
+// Ce que contient le prochain envoi : 1er soir = hôtels + restos + activités ; ensuite restos + activités.
+export function quotasDuSoir(c, dejaHotel) {
   const r = reglagesEnvoi(c);
+  return hotelsPremierSoir(c) && dejaHotel ? { ...r.quotas, dormir: 0 } : r.quotas;
+}
+
+// Donne à chaque endroit pas encore envoyé son heure d'envoi. catDe(item) → catégorie de l'endroit.
+// scoreDe(item) → qualité (facultatif) : les meilleurs partent en premier.
+export function planifier(c, catDe, maintenant = new Date(), scoreDe = null) {
+  const r = reglagesEnvoi(c);
+  if (scoreDe) placerNouveaux(c, catDe, scoreDe, r.quotas, maintenant);
   const parGroupe = {};
   const savoir = [];
+  let hotelEnvoye = false;
   for (const i of c.items) {
-    if (estEnvoye(i, maintenant)) continue;
     const g = groupePour(catDe(i), r.quotas);
+    if (estEnvoye(i, maintenant)) { if (g === 'dormir') hotelEnvoye = true; continue; }
     if (g === 'savoir') savoir.push(i); else (parGroupe[g] ||= []).push(i);
   }
+  const unSeulSoir = (g) => g === 'dormir' && hotelsPremierSoir(c);
   let besoin = 1;
-  for (const [g, liste] of Object.entries(parGroupe)) if (r.quotas[g] > 0) besoin = Math.max(besoin, Math.ceil(liste.length / r.quotas[g]));
+  for (const [g, liste] of Object.entries(parGroupe)) if (r.quotas[g] > 0 && !unSeulSoir(g)) besoin = Math.max(besoin, Math.ceil(liste.length / r.quotas[g]));
   const envois = prochainsEnvois(maintenant, r, Math.min(besoin, 120));
   for (const [g, liste] of Object.entries(parGroupe)) {
     const q = r.quotas[g];
+    if (unSeulSoir(g)) {
+      // Les hôtels partent tous au premier envoi ; les autres restent de côté (Raph peut les envoyer).
+      liste.forEach((i, k) => { i.livraison = !hotelEnvoye && k < q && envois[0] ? envois[0].toISOString() : null; });
+      continue;
+    }
     liste.forEach((i, k) => { i.livraison = q > 0 && envois[Math.floor(k / q)] ? envois[Math.floor(k / q)].toISOString() : null; });
   }
   for (const i of savoir) i.livraison = envois[0] ? envois[0].toISOString() : null;

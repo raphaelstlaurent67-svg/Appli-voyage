@@ -1,4 +1,6 @@
 import './clavier.js';
+import { tirerPourRecharger } from './tirer.js';
+tirerPourRecharger();
 import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, CONTACTS_RARES, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
@@ -12,7 +14,7 @@ import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from 
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import * as essai from './essai.js';
-import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE } from './marque.js';
+import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE, ALERTE } from './marque.js';
 import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './phrases.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 
@@ -569,6 +571,17 @@ function carte(e) {
 
 // ---------- Appui long, menu d'un endroit, choix du client ----------
 // Appui long (½ seconde) sur un élément : ouvre le menu de l'appli au lieu du menu du téléphone.
+// Quand on lâche après un appui long, le téléphone envoie un « clic » à l'endroit du doigt :
+// il tomberait sur le menu qui vient de s'ouvrir (et le fermerait). On l'ignore.
+let clicFantome = null; // { t, x, y } : où et quand le doigt s'est levé
+document.addEventListener('click', (ev) => {
+  const f = clicFantome;
+  if (!f || Date.now() > f.t) return;
+  // Seulement le clic qui tombe là où le doigt s'est levé (un vrai toucher ailleurs passe).
+  if (ev.clientX === 0 && ev.clientY === 0 ? true : Math.abs(ev.clientX - f.x) < 30 && Math.abs(ev.clientY - f.y) < 30) {
+    ev.preventDefault(); ev.stopPropagation(); clicFantome = null;
+  }
+}, true);
 function appuiLong(racine, selecteur, quandAppui) {
   let minuterie = null;
   let depart = null;
@@ -599,7 +612,11 @@ function appuiLong(racine, selecteur, quandAppui) {
     annuler();
     racine.querySelectorAll('.appui').forEach((x) => x.classList.remove('appui'));
     if (declenche && ev.cancelable) ev.preventDefault(); // pas de clic après un appui long
-    if (declenche) setTimeout(() => { declenche = false; }, 450);
+    if (declenche) {
+      const t = ev.changedTouches?.[0];
+      clicFantome = t ? { t: Date.now() + 600, x: t.clientX, y: t.clientY } : null;
+      setTimeout(() => { declenche = false; }, 450);
+    }
   };
   racine.addEventListener('touchend', fin);
   racine.addEventListener('touchcancel', fin);
@@ -832,10 +849,13 @@ async function pageFormulaire(id) {
     ? structuredClone(existant)
     : { id: db.nouvelId(), pays: lieu.pays || '', ville: lieu.ville || '', devise: lieu.devise || DEVISE_DU_PAYS[lieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
   brouillon = null;
-  // « Pour un client » : décoché par défaut. Coché, on choisit le client dans la liste.
+  // « Pour un client » : coché d'office pour le client en repérage. Coché, on choisit le client dans la liste.
   const clients = f.contributeurId ? [] : await clientsActifs();
   const clientDepart = existant ? clients.find((c) => c.items.some((i) => i.endroitId === f.id)) || null : null;
-  let clientChoisi = clientDepart;
+  // Un client « En repérage » : tout nouvel endroit va dans sa file (on peut décocher).
+  const actifId = await db.lireReglage('carnetActif', null);
+  const enReperage = !existant ? clients.find((c) => c.id === actifId) || null : null;
+  let clientChoisi = clientDepart || enReperage;
   const itemClient = clientDepart?.items.find((i) => i.endroitId === f.id);
   const dernierClient = await db.lireReglage('dernierClient', null);
   const pellicule = await db.lireReglage('pellicule', true);
@@ -910,10 +930,10 @@ async function pageFormulaire(id) {
       <section class="section section-client">
         <label class="interrupteur">
           <span><b>${icone('send', { taille: 18 })} Pour un client</b></span>
-          <input type="checkbox" name="pourClient" ${clientDepart ? 'checked' : ''}>
+          <input type="checkbox" name="pourClient" ${clientChoisi ? 'checked' : ''}>
           <i aria-hidden="true"></i>
         </label>
-        <div id="zone-pour-client" ${clientDepart ? '' : 'hidden'}>
+        <div id="zone-pour-client" ${clientChoisi ? '' : 'hidden'}>
           <button type="button" class="selecteur" id="choix-client"></button>
           <label class="champ"><span>Conseil pour le client</span><textarea name="motClient" rows="2" placeholder="Demande la chambre du 6e">${esc(itemClient?.mot)}</textarea></label>
         </div>
@@ -1330,7 +1350,7 @@ async function pageClients(onglet = 'clients') {
     await db.ecrire('carnets', c);
     await db.ecrireReglage('carnetActif', c.id);
     sync.marquer(sync.cheminCarnet(c.id));
-    aller(`#/carnet/${c.id}/reglages`);
+    aller(`#/carnet/${c.id}`);
   };
   app.querySelector('#nouveau').onclick = nouveauClient;
   const vide = zone.querySelector('#nouveau-vide');
@@ -1523,7 +1543,6 @@ async function clientDepuisDemande(lien, d) {
   if (d.courriel) c.client.courriel = d.courriel;
   c.lienId = lien.id;
   await db.ecrire('carnets', c);
-  await db.ecrireReglage('carnetActif', c.id);
   sync.marquer(sync.cheminCarnet(c.id));
   const frais = (await db.lire('liens', lien.id)) || lien;
   frais.carnetId = c.id;
@@ -1560,6 +1579,14 @@ async function pageDemande(lienId) {
   const incontournables = [d.incontournable?.trim(), ...(d.pays || []).filter((p) => p.incontournable?.trim()).map((p) => `${p.nom} : ${p.incontournable.trim()}`)].filter(Boolean);
   const tel = (d.telephone || '').replace(/[^\d+]/g, '');
   const info = (ico, etiquette, valeur) => `<li>${icone(ico, { taille: 19 })}<div><span class="etiquette">${etiquette}</span><b>${esc(valeur)}</b></div></li>`;
+  // Réponse rapide déjà écrite : proposer un appel.
+  const moiNom = await db.lireReglage('nomFiche', '');
+  const prenomClient = (d.nom || '').trim().split(/\s+/)[0];
+  const ouCourt = d.pays?.length ? d.pays.map((p) => p.nom).join(', ') : '';
+  const reponse = d.langue === 'en'
+    ? `Hi ${prenomClient}, ${moiNom ? `${moiNom.split(/\s+/)[0]} here from ${MARQUE}. ` : ''}Thanks for your travel request! Do you have 15 minutes for a quick call this week? Tell me what time works for you.`
+    : `Bonjour ${prenomClient}, ${moiNom ? `ici ${moiNom.split(/\s+/)[0]} de ${MARQUE}. ` : ''}Merci pour votre demande de voyage ! Auriez-vous 15 minutes cette semaine pour un appel ? Dites-moi le moment qui vous convient.`;
+  const sujet = d.langue === 'en' ? `Your trip${ouCourt ? ` to ${ouCourt}` : ''}` : `Votre voyage${ouCourt ? ` : ${ouCourt}` : ''}`;
 
   app.innerHTML = `
     <header class="entete-form">${retour}<h1>Demande</h1><span class="rond vide-rond"></span></header>
@@ -1569,8 +1596,8 @@ async function pageDemande(lienId) {
         <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
       </div>
       ${tel || d.courriel ? `<div class="actions">
-        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a><a class="action" href="sms:${esc(tel)}"><span>${icone('message-circle')}</span>Texto</a>` : ''}
-        ${d.courriel ? `<a class="action" href="mailto:${esc(d.courriel)}"><span>${icone('mail')}</span>Courriel</a>` : ''}
+        ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a><a class="action" href="sms:${esc(tel)}&body=${encodeURIComponent(reponse)}"><span>${icone('message-circle')}</span>Texto</a>` : ''}
+        ${d.courriel ? `<a class="action" href="mailto:${esc(d.courriel)}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(reponse)}"><span>${icone('mail')}</span>Courriel</a>` : ''}
       </div>` : ''}
       <section class="bloc-fiche">
         <h2>Le voyage</h2>
@@ -1602,7 +1629,7 @@ async function pageDemande(lienId) {
     b.disabled = true;
     const c = await clientDepuisDemande(lien, d);
     toast(`${c.client.prenom || 'Client'} ajouté ✓`);
-    aller(`#/carnet/${c.id}/reglages`);
+    aller(`#/carnet/${c.id}`);
   };
 }
 
@@ -1647,7 +1674,7 @@ async function pageCarnet(id, sous) {
     </header>
 
     <section class="carnet-entete">
-      <p class="carnet-sur">${icone('map-pin', { taille: 15 })} ${esc(c.ville || 'Ville')}<span class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</span></p>
+      <p class="carnet-sur">${icone('map-pin', { taille: 15 })} ${esc(c.ville || c.pays || 'Ville')}<span class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</span></p>
       <label class="interrupteur carte-interrupteur">
         <span><b>En repérage</b></span>
         <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
@@ -1673,9 +1700,8 @@ async function pageCarnet(id, sous) {
 
     <section class="section" id="a-venir">
       <h2 class="section-titre">${icone('clock', { taille: 20 })} À venir</h2>
-      ${aVenir.blocAVenir(c, parId, { prenom })}
-      ${aAjouter.length ? `<button class="bouton-principal bouton-bloc" id="ajouter-tous">${icone('plus', { taille: 18 })} Ajouter mes ${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''}${c.ville ? ` de ${esc(c.ville)}` : ''}</button>` : ''}
-      <button class="bouton-secondaire bouton-bloc" id="ajouter-existant">${icone('plus', { taille: 18 })} Ajouter un endroit</button>
+      ${aVenir.blocAVenir(c, parId, { prenom, resume: false, conseilCompact: true })}
+      <button class="lien lien-icone" id="ajouter-existant">${icone('plus', { taille: 15 })} Ajouter un endroit</button>
     </section>
 
     ${soirs.length ? `
@@ -1686,12 +1712,8 @@ async function pageCarnet(id, sous) {
         <ul class="items-carnet">${faits.filter((i) => i.livraison === s).map((i) => ligneItem(c, i, parId.get(i.endroitId), { attente: false })).join('')}</ul>`).join('')}
     </section>` : ''}
 
-    <section class="section envoi-rapide">
-      <button class="bouton-principal bouton-bloc" id="envoyer-maintenant">${icone('send', { taille: 18 })} Envoyer maintenant</button>
-    </section>
-
     <details class="section" id="reglages-carnet" ${reglagesOuverts || sous === 'envoi' ? 'open' : ''}>
-      <summary>Réglages</summary>
+      <summary>Réglages <small>${esc(aVenir.resumeReglages(c))}</small></summary>
       <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" autocapitalize="words"></label>
       <div class="deux">
         <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" autocapitalize="words"></label>
@@ -1721,7 +1743,16 @@ async function pageCarnet(id, sous) {
   if (!c.publication?.publieLe || c.publication?.erreur) carnets.publierBientot(c.id, 300);
 
   app.querySelector('#repere').onchange = async (ev) => {
-    if (ev.target.checked) { c.actif = true; await db.ecrireReglage('carnetActif', c.id); await sauver(); toast(`Tes prochains endroits iront à ${prenom}`); } else { await db.ecrireReglage('carnetActif', null); toast('Repérage en pause'); }
+    if (ev.target.checked) {
+      c.actif = true;
+      await db.ecrireReglage('carnetActif', c.id);
+      // Ses endroits déjà repérés dans sa ville entrent dans sa file tout seuls.
+      const deja = c.ville ? aAjouter : [];
+      for (const e of deja) carnets.ajouterItem(c, e.id);
+      await sauver();
+      toast(deja.length ? `${deja.length} endroit${deja.length > 1 ? 's' : ''} ajouté${deja.length > 1 ? 's' : ''} · les prochains iront à ${prenom}` : `Tes prochains endroits iront à ${prenom}`);
+      if (deja.length) recharger();
+    } else { await db.ecrireReglage('carnetActif', null); toast('Repérage en pause'); }
   };
   // Copier : seulement son lien, rien d'autre.
   app.querySelector('#copier-lien').onclick = async () => {
@@ -1768,16 +1799,6 @@ async function pageCarnet(id, sous) {
   aVenir.brancherAVenir(zoneAVenir, c, parId, { sauver, recharger, choisirEndroit, editerMot, ajouterItem: carnets.ajouterItem, toast });
   aVenir.brancherReglages(app.querySelector('#envoi-carnet'), c, { sauver, recharger });
 
-  // Envoyer maintenant : la prochaine série part tout de suite (pendant un appel, par exemple).
-  app.querySelector('#envoyer-maintenant').onclick = async (ev) => {
-    const b = ev.currentTarget;
-    b.disabled = true;
-    const n = await carnets.envoyerMaintenant(c);
-    if (!n) { b.disabled = false; toast('Rien en attente. Ajoute des endroits ou l’essai de Montréal.'); return; }
-    const frais = await db.lire('carnets', c.id);
-    toast(frais?.publication?.erreur ? 'Pas envoyé : vérifie ta connexion' : `${n} choix envoyé${n > 1 ? 's' : ''} : il les voit déjà`);
-    recharger();
-  };
   // L'essai de Montréal : 2 soirées de vrais choix à Montréal, envoyées à son heure, pour essayer.
   app.querySelector('#essai-montreal').onclick = async () => {
     if (enEssai) {
@@ -1791,15 +1812,6 @@ async function pageCarnet(id, sous) {
     recharger();
   };
 
-  const tous = app.querySelector('#ajouter-tous');
-  if (tous) {
-    tous.onclick = async () => {
-      for (const e of aAjouter) carnets.ajouterItem(c, e.id);
-      await sauver();
-      toast(`${aAjouter.length} endroit${aAjouter.length > 1 ? 's' : ''} dans sa file`);
-      recharger();
-    };
-  }
   app.querySelector('#ajouter-existant').onclick = () => {
     const deja = new Set(c.items.map((i) => i.endroitId));
     const proposes = [...etat.endroits].filter((e) => !deja.has(e.id) && !e.contributeurId).sort((a, b) => (b.creeLe || '').localeCompare(a.creeLe || ''));
@@ -1934,7 +1946,7 @@ function parler(texte, voix) {
 }
 
 async function pageOutil(id) {
-  const titres = { phrases: 'Phrases utiles', pitch: 'Présenter mon agence', convertir: 'Convertir un prix', carte: 'Ma carte de contact' };
+  const titres = { phrases: 'Phrases utiles', pitch: 'Présenter mon agence', convertir: 'Convertir un prix', carte: 'Ma carte de contact', alertes: 'Alerte nouvelle demande' };
   if (!titres[id]) return location.replace('#/reglages');
   const pays = await paysCourant();
   const choix = await db.lireReglage('langueOutils', null);
@@ -2028,6 +2040,25 @@ async function pageOutil(id) {
       });
     };
     dessiner();
+  } else if (id === 'alertes') {
+    zone.innerHTML = `
+      <ol class="etapes-alerte">
+        <li><b>Installer l'appli ntfy</b><a class="bouton-secondaire" href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">${icone('external-link', { taille: 17 })} App Store</a></li>
+        <li><b>Dans ntfy, toucher + et coller ce nom</b><code class="sujet-alerte">${esc(ALERTE)}</code><button type="button" class="bouton-secondaire" id="copier-sujet">${icone('copy', { taille: 17 })} Copier</button></li>
+        <li><b>Recevoir un essai</b><button type="button" class="bouton-principal" id="essai-alerte">${icone('bell', { taille: 18 })} Envoyer un essai</button></li>
+      </ol>`;
+    zone.querySelector('#copier-sujet').onclick = async () => {
+      try { await navigator.clipboard.writeText(ALERTE); toast('Copié'); } catch (_) { toast('Copie impossible'); }
+    };
+    zone.querySelector('#essai-alerte').onclick = async () => {
+      const q = new URLSearchParams({ title: 'Nouvelle demande de voyage', tags: 'airplane', priority: 'high', click: new URL('./#/demandes', location.href).href });
+      try {
+        const r = await fetch(`https://ntfy.sh/${ALERTE}?${q}`, { method: 'POST', body: 'Essai · tout fonctionne' });
+        if (!r.ok) throw new Error();
+        await db.ecrireReglage('alerteActive', true);
+        toast('Essai envoyé');
+      } catch (_) { toast('Pas de connexion'); }
+    };
   } else if (id === 'carte') {
     const moi = { nom: await db.lireReglage('nomFiche', ''), courriel: await db.lireReglage('courrielFiche', ''), tel: await db.lireReglage('telFiche', ''), insta: await db.lireReglage('instaFiche', '') };
     if (!moi.nom && !moi.tel && !moi.courriel) {
@@ -2085,6 +2116,13 @@ async function pageReglages() {
         ${ligneReglage('#/outils/pitch', 'megaphone', 'Présenter mon agence')}
         ${ligneReglage('#/outils/convertir', 'coins', 'Convertir un prix')}
         ${ligneReglage('#/outils/carte', 'id-card', 'Ma carte de contact')}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">Notifications</h2>
+      <ul class="liste-choix liste-reglages">
+        ${ligneReglage('#/outils/alertes', 'bell', 'Alerte nouvelle demande', (await db.lireReglage('alerteActive', false)) ? 'Activée' : '')}
       </ul>
     </section>
 

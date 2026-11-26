@@ -62,3 +62,5 @@
   .av-actions button { width: 27px; height: 27px; }
   .av-vignette { width: 40px; height: 40px; }
 }
+.av-interrupteur { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; margin-top: 8px; border-radius: 12px; background: var(--av-fond); font-weight: 600; font-size: 14.5px; }
+.av-interrupteur input { width: 20px; height: 20px; accent-color: var(--accent, #136f63); }
