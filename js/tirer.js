@@ -1,5 +1,6 @@
 // Tirer vers le bas pour recharger (application installée sur l'écran d'accueil).
-export function tirerPourRecharger() {
+// rafraichir() (facultatif) : met la page à jour sans tout recharger (pas d'écran vide).
+export function tirerPourRecharger(rafraichir = null) {
   const installee = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
   if (!installee || !('ontouchstart' in window)) return;
   const SEUIL = 80;
@@ -39,7 +40,12 @@ export function tirerPourRecharger() {
     rond.style.transition = 'transform .2s, opacity .2s';
     if (dy >= SEUIL) {
       rond.classList.add('tourne'); rond.style.transform = 'translateY(30px)';
-      setTimeout(() => location.reload(), 250);
+      if (!rafraichir) { setTimeout(() => location.reload(), 250); return; }
+      const debutT = Date.now();
+      Promise.resolve().then(rafraichir).catch(() => {}).then(() => {
+        // Le rond tourne au moins un instant, puis repart en douceur.
+        setTimeout(() => { rond.classList.remove('tourne'); rond.style.opacity = 0; rond.style.transform = 'translateY(-60px)'; }, Math.max(0, 450 - (Date.now() - debutT)));
+      });
     } else { rond.style.opacity = 0; rond.style.transform = 'translateY(-60px)'; }
   }, { passive: true });
 }

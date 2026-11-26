@@ -226,7 +226,8 @@ function soirees() {
   return { livres, enRoute, liste: liste.reverse() };
 }
 const groupesDuSoir = (items) => ORDRE_GROUPES.filter((g) => items.some((i) => groupeDe(i) === g));
-const soirComplet = (s) => { const gs = groupesDuSoir(s.items); return gs.length > 0 && gs.every((g) => choixDe(s.quand, g).length); };
+const repondu = (quand, g) => commun.listeChoix(etat.choix.soirs[quand]?.[g]).length > 0; // choisi, ou « aucun »
+const soirComplet = (s) => { const gs = groupesDuSoir(s.items); return gs.length > 0 && gs.every((g) => repondu(s.quand, g)); };
 
 // ---------- La page ----------
 function rendre() {
@@ -244,7 +245,7 @@ function rendre() {
       ${couverture ? `<img class="couv-img" data-p="${esc(couverture)}" alt="">` : ''}
       <div class="couv-haut">
         <span class="marque">${esc(MARQUE)}</span>
-        ${d.actif ? '<span class="direct"><i></i> En repérage</span>' : '<span class="direct fini">Repérage terminé</span>'}
+        ${d.actif ? '<span class="direct"><i></i> En repérage</span>' : ''}
       </div>
       <div class="couv-bas">
         <h1>Votre voyage</h1>
@@ -298,49 +299,214 @@ function pageSoirees(liste) {
         <p>Chaque soir à ${commun.formatHeure(d.heure ?? 19)}</p>
       </div>`;
   }
-  const aide = soirComplet(liste[0]) ? '' : '<p class="aide-choix">Touchez votre préféré, ou deux.</p>';
-  return aide + liste.map((s, n) => {
-    const gs = groupesDuSoir(s.items);
+  return liste.map((s, n) => {
+    const gs = ORDRE_PARCOURS.filter((g) => s.items.some((i) => groupeDe(i) === g));
     const complet = soirComplet(s);
+    const faits = gs.filter((g) => repondu(s.quand, g)).length;
     const savoir = s.items.filter((i) => groupeDe(i) === 'savoir');
+    const resume = gs.map((g) => {
+      const pris = choixDe(s.quand, g).map((v) => s.items.find((x) => x.id === v)).filter(Boolean);
+      return `<li>${icone(GROUPES[g].ico, { taille: 16 })}<span><small>${GROUPES[g].titre}</small><b>${pris.length ? pris.map((i) => esc(i.nom)).join(' · ') : 'Aucun'}</b></span></li>`;
+    }).join('');
     return `
       <section class="soir ${n === 0 ? 'dernier' : ''}" data-soir="${esc(s.quand)}">
         <header class="soir-tete">
           <p class="soir-date"><span>Soir ${s.numero}</span> ${esc(commun.dateLongue(s.quand, d.fuseau))}${complet ? `<em class="complet">${icone('check', { taille: 13, epaisseur: 3 })} Complété</em>` : ''}</p>
         </header>
-        ${gs.map((g) => {
-          const options = s.items.filter((i) => groupeDe(i) === g);
-          return `
-            <div class="groupe" data-groupe-bloc="${g}">
-              <h4>${icone(GROUPES[g].ico, { taille: 16 })} ${GROUPES[g].titre}</h4>
-              <div class="minis">${options.map((i) => mini(i, s.quand, g)).join('')}</div>
-            </div>`;
-        }).join('')}
+        ${gs.length ? (complet ? `
+          <ul class="resume-soir">${resume}</ul>
+          <button class="btn-doux btn-large" data-commencer="${esc(s.quand)}">${icone('pencil', { taille: 16 })} Modifier mes choix</button>` : `
+          <div class="invitation">
+            <div class="invitation-photos">${s.items.filter((i) => i.photos?.length && groupeDe(i) !== 'savoir').slice(0, 3).map((i) => `<img data-p="${esc(i.photos[0])}" alt="">`).join('')}</div>
+            <b>${pluriel(s.items.filter((i) => groupeDe(i) !== 'savoir').length, 'trouvaille')} à découvrir</b>
+            <p>${gs.map((g) => GROUPES[g].titre).join(' · ')}</p>
+            <button class="btn-plein" data-commencer="${esc(s.quand)}">${faits ? 'Continuer' : 'Commencer'} ${icone('arrow-right', { taille: 18 })}</button>
+            <small>${pluriel(gs.length, 'étape')} · environ 2 minutes</small>
+          </div>`) : ''}
         ${savoir.length ? `
           <div class="groupe">
             <h4>${icone('info', { taille: 16 })} Bon à savoir</h4>
-            <div class="minis">${savoir.map((i) => mini(i, s.quand, 'savoir')).join('')}</div>
+            <div class="minis">${savoir.map((i) => mini(i)).join('')}</div>
           </div>` : ''}
       </section>`;
   }).join('');
 }
 
-// Une petite carte : on la touche pour la choisir. Le « i » ouvre la fiche complète.
-function mini(i, quand, g) {
+// « Bon à savoir » : une petite carte qui ouvre la fiche.
+function mini(i) {
   const photo = i.photos?.[0];
-  const moi = g !== 'savoir' && aChoisi(quand, g, i.id);
-  const autre = g !== 'savoir' && choixDe(quand, g).length >= commun.MAX_CHOIX && !moi;
   return `
-    <article class="mini ${moi ? 'prise' : ''} ${autre ? 'pas-prise' : ''}" ${g !== 'savoir' ? `data-choisir="${esc(i.id)}" data-quand="${esc(quand)}" data-groupe="${g}" role="button" aria-pressed="${moi}"` : `data-ouvrir="${esc(i.id)}"`}>
+    <article class="mini" data-ouvrir="${esc(i.id)}">
       <div class="mini-photo ${photo ? '' : 'sans'}">
         ${photo ? `<img data-p="${esc(photo)}" alt="" loading="lazy">` : iconeCat(i.categorie, { taille: 26, epaisseur: 1.4 })}
-        ${moi ? `<span class="sceau">${icone('check', { taille: 18, epaisseur: 3 })}</span>` : ''}
-        <button class="mini-info" data-ouvrir="${esc(i.id)}" aria-label="Voir ${esc(i.nom)}">${icone('info', { taille: 15 })}</button>
       </div>
       <b>${esc(i.nom)}</b>
-      <small>${etiquette(i)}${i.prix ? ` · ${'$'.repeat(i.prix)}` : ''}</small>
+      <small>${etiquette(i)}</small>
       ${i.mot ? `<p class="mini-mot">${esc(i.mot)}</p>` : ''}
     </article>`;
+}
+
+// ---------- Le parcours du soir : une étape par groupe, 0, 1 ou 2 choix ----------
+const ORDRE_PARCOURS = ['faire', 'dormir', 'manger', 'sortir'];
+const parcours = { quand: null, etapes: [], k: 0, zone: null };
+function ouvrirParcours(quand) {
+  const s = soirees().liste.find((x) => x.quand === quand);
+  if (!s) return;
+  parcours.quand = quand;
+  parcours.etapes = ORDRE_PARCOURS.filter((g) => s.items.some((i) => groupeDe(i) === g));
+  const premiere = parcours.etapes.findIndex((g) => !repondu(quand, g));
+  parcours.k = soirComplet(s) || premiere < 0 ? 0 : premiere;
+  let z = document.getElementById('parcours');
+  if (!z) { z = document.createElement('div'); z.id = 'parcours'; z.setAttribute('role', 'dialog'); z.setAttribute('aria-modal', 'true'); document.body.appendChild(z); brancherParcours(z); }
+  parcours.zone = z;
+  z.hidden = false;
+  document.documentElement.classList.add('parcours-ouvert');
+  dessinerEtape(0);
+  requestAnimationFrame(() => z.classList.add('ouvert'));
+  try { history.pushState({ parcours: 1 }, ''); } catch (_) { /* rien */ }
+}
+function fermerParcours(depuisHistorique = false) {
+  const z = parcours.zone;
+  if (!z || z.hidden) return;
+  z.classList.remove('ouvert');
+  document.documentElement.classList.remove('parcours-ouvert');
+  setTimeout(() => { z.hidden = true; z.innerHTML = ''; }, 260);
+  if (!depuisHistorique && history.state?.parcours) history.back();
+  redessinerContenu();
+}
+window.addEventListener('popstate', () => { if (parcours.zone && !parcours.zone.hidden) fermerParcours(true); });
+
+function carteChoix(i, g) {
+  const pris = aChoisi(parcours.quand, g, i.id);
+  const site = lienWeb(i.site);
+  const carte = lienCarte(i);
+  return `
+    <article class="option-choix ${pris ? 'prise' : ''}" data-prendre="${esc(i.id)}" role="button" aria-pressed="${pris}">
+      <div class="oc-photo ${i.photos?.length ? '' : 'sans'}">
+        ${i.photos?.length ? `<img data-p="${esc(i.photos[0])}" alt="">` : iconeCat(i.categorie, { taille: 34, epaisseur: 1.3 })}
+        <span class="oc-coche">${icone('check', { taille: 20, epaisseur: 3 })}</span>
+        ${i.coupDeCoeur ? `<span class="oc-coeur">${icone('heart', { taille: 13 })} Coup de cœur</span>` : ''}
+      </div>
+      <div class="oc-corps">
+        <b>${esc(i.nom)}</b>
+        <small>${etiquette(i)}${i.ville ? ` · ${esc(i.ville)}` : ''}</small>
+        ${meta(i)}
+        ${i.mot ? `<p class="oc-mot"><span class="avatar">${initiale(etat.donnees.raph)}</span>${esc(i.mot)}</p>` : ''}
+        <div class="oc-liens">
+          ${site ? `<a href="${esc(site)}" target="_blank" rel="noopener" data-lien>${icone('globe', { taille: 15 })} Site web</a>` : ''}
+          ${carte ? `<a href="${esc(carte)}" target="_blank" rel="noopener" data-lien>${icone('map', { taille: 15 })} Carte</a>` : ''}
+          <button type="button" data-ouvrir="${esc(i.id)}">${icone('info', { taille: 15 })} Détails</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+function dessinerEtape(sens) {
+  const z = parcours.zone;
+  const s = soirees().liste.find((x) => x.quand === parcours.quand);
+  if (!s) { fermerParcours(); return; }
+  const n = parcours.etapes.length;
+  if (parcours.k >= n) { dessinerFin(s); return; }
+  const g = parcours.etapes[parcours.k];
+  const options = s.items.filter((i) => groupeDe(i) === g);
+  const nb = choixDe(parcours.quand, g).length;
+  const derniere = parcours.k === n - 1;
+  z.innerHTML = `
+    <div class="pc-haut">
+      <button class="pc-rond" data-pc="fermer" aria-label="Fermer">${icone('x', { taille: 20 })}</button>
+      <div class="pc-barres">${parcours.etapes.map((x, k) => `<i class="${k < parcours.k ? 'fait' : k === parcours.k ? 'ici' : ''}"></i>`).join('')}</div>
+      <span class="pc-num">${parcours.k + 1}/${n}</span>
+    </div>
+    <div class="pc-etape ${sens > 0 ? 'de-droite' : sens < 0 ? 'de-gauche' : 'apparait'}">
+      <p class="pc-sur">${icone(GROUPES[g].ico, { taille: 16 })} Soir ${s.numero}</p>
+      <h2>${GROUPES[g].titre}</h2>
+      <p class="pc-aide">Choisissez-en 1 ou 2. Ou aucun.</p>
+      <div class="pc-options">${options.map((i) => carteChoix(i, g)).join('')}</div>
+    </div>
+    <div class="pc-bas">
+      ${parcours.k > 0 ? `<button class="pc-retour" data-pc="retour" aria-label="Étape précédente">${icone('chevron-left', { taille: 22 })}</button>` : ''}
+      <button class="btn-plein pc-suivant" data-pc="suivant">${nb ? `${derniere ? 'Terminer' : 'Suivant'} · ${pluriel(nb, 'choix', 'choix')}` : 'Aucun ne me plaît'} ${icone(derniere && nb ? 'check' : 'arrow-right', { taille: 18 })}</button>
+    </div>`;
+  afficherPhotos(z);
+  z.querySelector('.pc-etape').scrollTop = 0;
+  z.scrollTop = 0;
+}
+
+function dessinerFin(s) {
+  const z = parcours.zone;
+  const lignes = parcours.etapes.map((g) => {
+    const pris = choixDe(s.quand, g).map((v) => s.items.find((x) => x.id === v)).filter(Boolean);
+    return `<li>${icone(GROUPES[g].ico, { taille: 18 })}<span><small>${GROUPES[g].titre}</small><b>${pris.length ? pris.map((i) => esc(i.nom)).join(' · ') : 'Aucun'}</b></span></li>`;
+  }).join('');
+  z.innerHTML = `
+    <div class="pc-haut"><button class="pc-rond" data-pc="fermer" aria-label="Fermer">${icone('x', { taille: 20 })}</button><div class="pc-barres">${parcours.etapes.map(() => '<i class="fait"></i>').join('')}</div><span class="pc-num"></span></div>
+    <div class="pc-etape pc-fin de-droite">
+      <div class="pc-sceau">${icone('check', { taille: 38, epaisseur: 2.6 })}</div>
+      <h2>C’est noté !</h2>
+      <p class="pc-aide">${esc(etat.donnees.raph || 'Votre conseiller')} reçoit vos choix.</p>
+      <ul class="resume-soir">${lignes}</ul>
+    </div>
+    <div class="pc-bas"><button class="btn-plein pc-suivant" data-pc="fermer">Fermer</button></div>`;
+  confettis(z.querySelector('.pc-sceau'));
+  vibrer([18, 60, 18]);
+}
+
+function allerEtape(delta) {
+  const n = parcours.etapes.length;
+  const k = parcours.k + delta;
+  if (k < 0 || k > n) return;
+  if (delta > 0 && parcours.k < n) {
+    const g = parcours.etapes[parcours.k];
+    if (!choixDe(parcours.quand, g).length) {
+      // Aucun ne lui plaît : on le note, l'étape est faite.
+      const soir = { ...(etat.choix.soirs[parcours.quand] || {}), [g]: ['aucun'] };
+      etat.choix.soirs = { ...etat.choix.soirs, [parcours.quand]: soir };
+      sauverChoix();
+    }
+  }
+  parcours.k = k;
+  vibrer(8);
+  dessinerEtape(delta);
+}
+
+function brancherParcours(z) {
+  z.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-lien]')) return; // Site web, Carte : s'ouvrent normalement
+    const info = ev.target.closest('[data-ouvrir]');
+    if (info) { ev.stopPropagation(); ouvrirFiche(info.dataset.ouvrir); return; }
+    const pc = ev.target.closest('[data-pc]');
+    if (pc) {
+      ev.stopPropagation();
+      if (pc.dataset.pc === 'fermer') fermerParcours();
+      else if (pc.dataset.pc === 'retour') allerEtape(-1);
+      else allerEtape(1);
+      return;
+    }
+    const carte = ev.target.closest('[data-prendre]');
+    if (!carte) return;
+    ev.stopPropagation();
+    const g = parcours.etapes[parcours.k];
+    const avant = choixDe(parcours.quand, g);
+    if (!avant.includes(carte.dataset.prendre) && avant.length >= commun.MAX_CHOIX) toast('2 au maximum : le premier est retiré');
+    choisir(parcours.quand, g, carte.dataset.prendre);
+    vibrer();
+    // Mise à jour sur place (pas de saut) : les coches et le bouton.
+    const pris = choixDe(parcours.quand, g);
+    z.querySelectorAll('[data-prendre]').forEach((c) => { const on = pris.includes(c.dataset.prendre); c.classList.toggle('prise', on); c.setAttribute('aria-pressed', on); });
+    carte.classList.remove('rebond'); void carte.offsetWidth; carte.classList.add('rebond');
+    const derniere = parcours.k === parcours.etapes.length - 1;
+    z.querySelector('.pc-suivant').innerHTML = `${pris.length ? `${derniere ? 'Terminer' : 'Suivant'} · ${pluriel(pris.length, 'choix', 'choix')}` : 'Aucun ne me plaît'} ${icone(derniere && pris.length ? 'check' : 'arrow-right', { taille: 18 })}`;
+  });
+  // Glisser à gauche / à droite pour changer d'étape.
+  let x0 = null; let y0 = null;
+  z.addEventListener('touchstart', (ev) => { if (ev.touches.length === 1) { x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; } }, { passive: true });
+  z.addEventListener('touchend', (ev) => {
+    if (x0 == null) return;
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - x0; const dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) allerEtape(dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 
 // « Mon voyage » : tout ce que le client a choisi, soir après soir.
@@ -418,7 +584,6 @@ function ouvrirFiche(itemId) {
         ${i.mot ? `<blockquote class="mot-raph grand"><span class="avatar">${initiale(etat.donnees.raph)}</span><p>${esc(i.mot)}</p></blockquote>` : ''}
         ${i.description ? `<p class="desc">${esc(i.description)}</p>` : ''}
         <div class="fiche-actions">
-          ${g !== 'savoir' ? `<button class="choisir grand ${moi ? 'on' : ''}" data-choisir="${esc(i.id)}" data-quand="${esc(s.quand)}" data-groupe="${g}">${moi ? `${icone('check', { taille: 17, epaisseur: 2.8 })} Mon choix` : 'Je choisis celui-ci'}</button>` : ''}
           ${carteUrl ? `<a class="btn-doux" href="${esc(carteUrl)}" target="_blank" rel="noopener">${icone('map', { taille: 16 })} Carte</a>` : ''}
           ${site ? `<a class="btn-doux" href="${esc(site)}" target="_blank" rel="noopener">${icone('globe', { taille: 16 })} Site</a>` : ''}
         </div>
@@ -457,29 +622,15 @@ function redessinerContenu() {
   brancherMessage();
 }
 
+// Une photo qui ne charge pas (hors ligne) : on cache l'icône d'image brisée.
+document.addEventListener('error', (ev) => { if (ev.target?.tagName === 'IMG') ev.target.classList.add('img-ko'); }, true);
+
 document.addEventListener('click', (ev) => {
+  if (parcours.zone && parcours.zone.contains(ev.target)) return;
+  const go = ev.target.closest('[data-commencer]');
+  if (go) { ev.stopPropagation(); ouvrirParcours(go.dataset.commencer); return; }
   const info = ev.target.closest('[data-ouvrir]');
-  if (info && !feuille.contains(info) && (info.classList.contains('mini-info') || !ev.target.closest('[data-choisir]'))) { ev.stopPropagation(); ouvrirFiche(info.dataset.ouvrir); return; }
-  const b = ev.target.closest('[data-choisir]');
-  if (!b) return;
-  ev.stopPropagation();
-  const { quand, groupe } = b.dataset;
-  const s = soirees().liste.find((x) => x.quand === quand);
-  const avant = s && soirComplet(s);
-  choisir(quand, groupe, b.dataset.choisir);
-  vibrer();
-  if (!feuille.hidden) fermerFiche();
-  const haut = racine.querySelector(`[data-soir="${CSS.escape(quand)}"] [data-groupe-bloc="${groupe}"]`)?.getBoundingClientRect().top;
-  redessinerContenu();
-  const bloc = racine.querySelector(`[data-soir="${CSS.escape(quand)}"] [data-groupe-bloc="${groupe}"]`);
-  if (bloc && haut != null) window.scrollBy(0, bloc.getBoundingClientRect().top - haut);
-  if (s && soirComplet(s) && !avant) {
-    const tete = racine.querySelector(`[data-soir="${CSS.escape(quand)}"] .soir-tete`);
-    if (bloc) confettis(bloc);
-    vibrer([18, 60, 18]);
-    toast(`${icone('check', { taille: 16 })} Soirée complétée`);
-    tete?.classList.add('fete');
-  }
+  if (info && !feuille.contains(info)) { ev.stopPropagation(); ouvrirFiche(info.dataset.ouvrir); }
 });
 
 function brancherMessage() {
