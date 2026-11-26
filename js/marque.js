@@ -5,3 +5,6 @@ export const MARQUE = 'Voyage sur mesure';
 export const DEPOT_PUBLIC = 'raphaelstlaurent67-svg/Appli-voyage';
 // Le dossier privé où partent les endroits, les photos et les clients.
 export const DEPOT_DONNEES = 'appli-voyage-donnees';
+// Le lien public du formulaire (bio Instagram, site…) : demande.html tout court.
+// Les demandes arrivent dans l'appli (Clients > Demandes) et dans le Studio.
+export const DEMANDE_PUBLIQUE = { id: 'public', cle: '6uM6adax3RnnRBPuy_jG61bry9Et3wvG0EOURk18voA' };

@@ -464,3 +464,8 @@ html.dans-appli #carnet { padding-bottom: 24px; }
 .retour-apercu .ico { width: 20px; height: 20px; }
 body:has(.retour-apercu) .couv-haut { padding-left: 104px; }
 .carte-douce p:empty { display: none; }
+
+/* Comme une appli : un appui long n'ouvre pas la sélection de texte ni le menu du téléphone. */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea, [contenteditable], .selectionnable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img { -webkit-user-drag: none; }

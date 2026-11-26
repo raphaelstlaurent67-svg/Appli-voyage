@@ -77,7 +77,14 @@ body {
   padding-bottom: calc(var(--nav) + 96px + env(safe-area-inset-bottom));
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
+  /* Comme une vraie appli : un appui long ne sélectionne pas le texte de la page
+     et n'ouvre pas le menu du téléphone (c'est le menu de l'appli qui s'ouvre). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea, [contenteditable], .selectionnable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img { -webkit-user-drag: none; }
 body.fige { overflow: hidden; }
 body[data-page="ajouter"], body[data-page="modifier"] { padding-bottom: 24px; }
 #app { max-width: 720px; margin: 0 auto; padding-inline: 20px; }
@@ -709,3 +716,100 @@ body.mode-selection .nav, body.mode-selection .bouton-ajouter { display: none; }
 .vide-demande b { color: var(--encre); font-size: 1.1rem; }
 body[data-page="demande"] .nav, body[data-page="demande"] .bouton-ajouter { display: none; }
 body[data-page="demande"] { padding-bottom: 24px; }
+
+/* ---------- Clients : deux onglets (Clients, Demandes) ---------- */
+.rond-accent { background: var(--accent); color: var(--accent-encre); width: 42px; height: 42px; }
+.rond-accent:active { transform: scale(.94); }
+.onglets-page { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--surface-2); margin-bottom: 6px; }
+.onglets-page a { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border-radius: 9px; font-weight: 650; font-size: .95rem; color: var(--doux); text-decoration: none; transition: background .15s, color .15s; }
+.onglets-page a.choisi { background: var(--surface); color: var(--encre); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.onglets-page i { font-style: normal; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: var(--accent-encre); font-size: .72rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+.carnet-avatar .ico { color: #f4c88f; }
+.avatar-pale { background: var(--surface-2); color: var(--doux); }
+.avatar-pale .ico { color: var(--doux); }
+.liste-demandes { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.ligne-demande { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: var(--rayon); text-decoration: none; color: var(--encre); background: var(--surface); border: 1px solid var(--bordure); box-shadow: var(--ombre); transition: transform .15s; }
+.ligne-demande.appui, .carnet-ligne.appui { transform: scale(.98); }
+.ligne-demande > .ico:last-child, .carnet-ligne > .ico:last-child { color: var(--pale); }
+.etat-lien { flex: none; font-size: .72rem; font-weight: 700; padding: 4px 9px; border-radius: 99px; background: var(--surface-2); color: var(--doux); }
+.etat-lien.recue { background: var(--accent-pale); color: var(--accent); }
+.etat-lien.client { background: #eaf7ef; color: #1f7a44; }
+@media (prefers-color-scheme: dark) { .etat-lien.client { background: rgba(52, 211, 153, .12); color: #6ee7a8; } }
+#menu-confirmer { padding: 0 20px 20px; gap: 10px; }
+.confirmer p { display: grid; gap: 2px; }
+.confirmer p span { font-weight: 500; color: var(--doux); font-size: .9rem; }
+.liste-sobre { margin: 4px 0 0; }
+a.ligne { text-decoration: none; color: inherit; }
+.feuille-corps .deux .bouton-principal, .feuille-corps .deux .bouton-secondaire { padding: 0 10px; font-size: .95rem; }
+body[data-page="demandes"] .bouton-ajouter, body[data-page="demande"] .bouton-ajouter, body[data-page="carnet"] .bouton-ajouter { display: none; }
+
+/* ---------- Réglages : listes de liens ---------- */
+.liste-reglages { margin: -4px 0; }
+.ligne-reglage { justify-content: flex-start; gap: 14px; font-weight: 600; }
+.ligne-reglage > span { flex: 1; }
+.ligne-reglage small { color: var(--doux); font-weight: 500; font-size: .88rem; }
+.ligne-reglage > .ico:last-child { color: var(--pale); }
+.section-titre { font-size: 1.1rem; }
+label.bouton-secondaire { cursor: pointer; }
+.lien-centre { display: block; text-align: center; margin: 8px auto 0; }
+
+/* ---------- En voyage ---------- */
+.outil { display: flex; flex-direction: column; gap: 16px; padding: 16px 0 24px; }
+.puces-langues { display: flex; gap: 8px; overflow-x: auto; margin: 0 -20px; padding: 0 20px 2px; scrollbar-width: none; }
+.puces-langues::-webkit-scrollbar { display: none; }
+.puce-langue { flex: none; min-height: 38px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--bordure-forte); background: var(--surface); font-weight: 650; font-size: .9rem; cursor: pointer; }
+.puce-langue.choisie { background: var(--encre); border-color: var(--encre); color: var(--fond); }
+.urgences { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--rayon-petit); background: #fdecea; color: #a8321d; font-weight: 650; font-size: .92rem; }
+.urgences > span { flex: 1; }
+.urgences a { color: inherit; text-decoration: none; padding: 6px 12px; border-radius: 99px; background: rgba(255, 255, 255, .7); }
+@media (prefers-color-scheme: dark) { .urgences { background: rgba(255, 120, 90, .14); color: #ffb4a0; } .urgences a { background: rgba(0, 0, 0, .25); } }
+.phrases { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.phrase { position: relative; width: 100%; text-align: left; display: grid; gap: 3px; padding: 14px 52px 14px 16px; border-radius: var(--rayon); border: 1px solid var(--bordure); background: var(--surface); cursor: pointer; transition: transform .1s; }
+.phrase:active { transform: scale(.98); background: var(--surface-2); }
+.phrase-fr { font-size: .8rem; font-weight: 650; color: var(--doux); }
+.phrase b { font-size: 1.12rem; line-height: 1.3; }
+.phrase i { color: var(--doux); font-size: .9rem; }
+.phrase-son { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-pale); color: var(--accent); }
+.pitch { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--rayon); background: linear-gradient(140deg, #1d1b22, #2a2027); color: #f4f0ea; }
+.pitch-texte { margin: 0; font-size: 1.25rem; line-height: 1.45; font-weight: 600; }
+.pitch .bouton-secondaire { background: transparent; border-color: rgba(255, 255, 255, .35); color: #f4f0ea; }
+.pitch-fr { margin: 0; color: var(--doux); font-size: .92rem; }
+.pitch-plein { position: fixed; inset: 0; z-index: 50; background: #fff; color: #111; display: flex; align-items: center; padding: calc(60px + env(safe-area-inset-top)) 28px 40px; overflow-y: auto; }
+.pitch-plein p { margin: auto 0; font-size: 1.9rem; line-height: 1.35; font-weight: 700; }
+.pitch-plein .rond { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 16px; background: #eee; color: #111; }
+.convertir { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.conv-ligne { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--rayon); border: 1px solid var(--bordure-forte); background: var(--surface); }
+.conv-ligne span { display: grid; font-weight: 800; font-size: 1.1rem; min-width: 110px; }
+.conv-ligne small { font-weight: 500; font-size: .78rem; color: var(--doux); }
+.conv-ligne input { flex: 1; min-width: 0; width: 100%; border: 0; background: none; text-align: right; font-size: 1.6rem; font-weight: 700; padding: 0; }
+.conv-ligne input:focus { outline: none; }
+.conv-ligne:focus-within { border-color: var(--encre); }
+.conv-fleche { justify-self: center; color: var(--doux); }
+.carte-contact { padding: 24px; border-radius: 20px; background: linear-gradient(140deg, #1d1b22, #2a2027); color: #f4f0ea; display: grid; gap: 10px; box-shadow: var(--ombre); }
+.carte-contact-marque { font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f4c88f; }
+.carte-contact h2 { font-size: 1.6rem; }
+.carte-contact ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.carte-contact li { display: flex; align-items: center; gap: 10px; }
+.carte-contact .ico { color: #f4c88f; }
+body[data-page="outils"] .bouton-ajouter, body[data-page="outils"] .nav { display: none; }
+body[data-page="outils"] { padding-bottom: 24px; }
+/* « Pour un client » : même style clair que le reste du formulaire */
+.section-client { background: var(--surface-2); color: var(--encre); }
+.section-client .ico { color: var(--accent); }
+.section-client textarea { background: var(--surface); border-color: var(--bordure-forte); color: var(--encre); }
+.section-client .selecteur { background: var(--surface); border-color: var(--bordure-forte); color: var(--encre); }
+.section-client .selecteur.a-remplir { border-color: var(--accent); }
+.section-client .selecteur-texte small, .section-client .champ small { color: var(--doux); }
+.section-client .chevron-texte { color: var(--encre); }
+
+/* Noms très longs : jamais plus large que l'écran */
+.cartes { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 560px) { .cartes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cartes > li, .carte { min-width: 0; }
+.carnet-txt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carnet-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.carnets > li, .liste-demandes > li { min-width: 0; }
+.entete-form h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fiche h1, .demande-tete h2 { overflow-wrap: anywhere; }
+.carnet-sur { flex-wrap: wrap; }
+.carnet-sur .pub { flex-basis: 100%; margin: 2px 0 0; }

@@ -11,7 +11,7 @@ import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
 import { RELAIS, canalDemande, chiffrerJson, enBase64Url } from './carnet-commun.js';
-import { MARQUE } from './marque.js';
+import { MARQUE, DEMANDE_PUBLIQUE } from './marque.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
@@ -30,6 +30,28 @@ const LIEN = (() => {
   const cle = new URLSearchParams(location.hash.slice(1)).get('k') || '';
   return id && cle ? { id, cle } : null;
 })();
+// Sans lien personnel (bio Instagram, site…) : la demande passe par le lien public.
+const LIEN_ENVOI = LIEN || DEMANDE_PUBLIQUE;
+// Contre les envois en masse : un champ caché que seuls les robots remplissent,
+// un minimum de temps passé sur le formulaire, et quelques envois par appareil par jour.
+// Début du remplissage (gardé si la page se recharge, pour ne pas bloquer un vrai client).
+let OUVERT_LE = Date.now();
+try { OUVERT_LE = +localStorage.getItem('debutDemande') || OUVERT_LE; localStorage.setItem('debutDemande', String(OUVERT_LE)); } catch (_) { /* rien */ }
+function envoiSuspect() {
+  if (document.querySelector('#site-web-pot')?.value) return true;
+  const debut = OUVERT_LE;
+  OUVERT_LE = Date.now();
+  try { localStorage.removeItem('debutDemande'); } catch (_) { /* rien */ }
+  if (!MODE_TEST && Date.now() - debut < 20000) return true;
+  try {
+    const jour = Date.now() - 864e5;
+    const envois = JSON.parse(localStorage.getItem('envoisDemande') || '[]').filter((x) => x > jour);
+    if (envois.length >= 3 && !MODE_TEST) return true;
+    envois.push(Date.now());
+    localStorage.setItem('envoisDemande', JSON.stringify(envois));
+  } catch (_) { /* rien */ }
+  return false;
+}
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
 const MODE_TEST = params.has('test');
@@ -839,6 +861,7 @@ function etapeToi(zone) {
   zone.innerHTML = `
     <p class="intro">${t().introToi}</p>
     <label class="champ"><span>${t().nom} ${REQUIS}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
+    <input id="site-web-pot" name="site-web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
     <label class="champ"><span>${t().courriel} ${REQUIS}</span><input data-champ="courriel" type="email" inputmode="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
     <label class="champ"><span>${t().tel}</span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
     <label class="champ"><span>${t().message}</span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
@@ -1096,14 +1119,17 @@ async function envoyer() {
   const lien = `${new URL('studio/', location.href).href}#/demande/${code}`;
   garder(); // le brouillon envoyé ne sera pas rouvert la prochaine fois
   // Envoi automatique : la demande part directement au courriel de Raph (FormSubmit, gratuit).
-  let etat = POUR || LIEN ? 'envoi' : 'manuel';
+  let etat = 'envoi';
+  const suspect = envoiSuspect();
   const envoyerAuto = async () => {
+    // Robot ou envoi en rafale : on affiche « envoyé », mais rien ne part.
+    if (suspect) { await new Promise((r) => setTimeout(r, 900)); etat = 'ok'; dessiner(); return; }
     // 1. Directement dans l'appli de Raph (relais gratuit, chiffré avec la clé du lien).
     let parRelais = false;
-    if (LIEN) {
+    {
       try {
-        const canal = await canalDemande(LIEN.id, LIEN.cle);
-        const corps = enBase64Url(await chiffrerJson(LIEN.cle, { code, nom: d.nom.trim(), envoyeLe: d.envoyeLe }));
+        const canal = await canalDemande(LIEN_ENVOI.id, LIEN_ENVOI.cle);
+        const corps = enBase64Url(await chiffrerJson(LIEN_ENVOI.cle, { code, nom: d.nom.trim().slice(0, 80), envoyeLe: d.envoyeLe }));
         parRelais = (await fetch(`${RELAIS}/${canal}`, { method: 'POST', body: corps })).ok;
       } catch (_) { parRelais = false; }
     }

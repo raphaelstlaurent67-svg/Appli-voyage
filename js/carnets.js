@@ -185,7 +185,7 @@ export async function publier(id) {
     if (!c) return null;
     const cfg = await sync.lireConfig();
     c.publication = c.publication || { photos: {} };
-    if (!cfg) { c.publication.erreur = "Branche d'abord l'envoi automatique (Réglages) : c'est lui qui met le carnet en ligne."; await db.ecrire('carnets', c); prevenir(c); return c; }
+    if (!cfg) { c.publication.erreur = 'Pas en ligne : brancher le Studio (Réglages)'; await db.ecrire('carnets', c); prevenir(c); return c; }
     if (!navigator.onLine) { c.publication.erreur = 'hors-ligne'; await db.ecrire('carnets', c); prevenir(c); return c; }
     try {
       await assurerBranche(cfg.jeton);

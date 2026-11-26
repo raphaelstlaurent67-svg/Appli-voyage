@@ -224,3 +224,6 @@ section[id] { scroll-margin-top: 72px; }
   .chiffres-int > div:first-child, .chiffres-int > div:nth-child(3) { padding-left: 0; }
   .gains, .etapes-4, .regles-qualite, .grille-form { grid-template-columns: 1fr; }
 }
+
+/* Sur téléphone : pas de sélection de texte en appuyant longtemps sur un bouton ou une carte. */
+a, button, .carte, img { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }

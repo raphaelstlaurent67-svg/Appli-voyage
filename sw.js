@@ -1,12 +1,12 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v52';
+const VERSION = 'v53';
 const FICHIERS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'js/icones.js', 'js/sync.js', 'js/monde.js',
   'demande.html', 'js/contact.js',
   'css/demande.css',
   'js/demande.js', 'js/clavier.js', 'js/idees-pays.js', 'js/marque.js',
-  'js/code-demande.js', 'js/installer.js', 'demande.webmanifest', 'icons/demande.svg', 'fonts/figtree.woff2', 'fonts/newsreader.woff2', 'js/photos.js', 'contribuer.html', 'contribuer.webmanifest', 'css/contribuer.css', 'js/contribuer.js', 'js/exif.js',
+  'js/code-demande.js', 'js/phrases.js', 'js/installer.js', 'demande.webmanifest', 'icons/demande.svg', 'fonts/figtree.woff2', 'fonts/newsreader.woff2', 'js/photos.js', 'contribuer.html', 'contribuer.webmanifest', 'css/contribuer.css', 'js/contribuer.js', 'js/exif.js',
   'generateur.html', 'studio/', 'studio/index.html', 'studio/manifest.webmanifest', 'css/generateur.css', 'css/client.css', 'js/generateur.js', 'js/verification.js', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'carnet.html', 'carnet.webmanifest', 'css/carnet.css', 'js/carnet.js', 'js/carnets.js', 'js/carnet-commun.js', 'js/carnet-demo.js', 'js/accueil.js', 'js/a-venir.js', 'css/a-venir.css', 'js/liens-demande.js', 'js/essai.js', 'icons/carnet.svg', 'icons/carnet-192.png', 'icons/carnet-512.png',
   'manifest.webmanifest', 'icons/studio.svg', 'icons/studio-192.png', 'icons/studio-512.png', 'icons/icone.svg', 'icons/icone-192.png', 'icons/icone-512.png',

@@ -7,59 +7,58 @@ export const TAXONOMIE = {
     couleur: '#5b5bd6',
     nom: 'Hébergement', icone: '🛏️',
     types: {
-      'Auberge': ['Dortoir', 'Chambre privée', 'Auberge festive', 'Auberge tranquille', 'Capsule'],
-      'Hôtel': ['Économique', '3 étoiles', 'Boutique hôtel', '4-5 étoiles', 'Resort', 'Hôtel historique'],
-      "Chez l'habitant": ['Guesthouse', 'Homestay', "Maison d'hôtes", 'Minshuku', 'Ferme'],
-      'Location': ['Appartement/Airbnb', 'Maison', 'Villa privée'],
-      'Traditionnel': ['Ryokan', 'Séjour au temple', 'Hanok (Corée)'],
-      'Nature': ['Bungalow de plage', 'Eco-lodge', 'Camping', 'Glamping', 'Cabane dans les arbres', 'Bateau-maison'],
+      'Hôtel': ['Économique', '3 étoiles', 'Boutique', '4-5 étoiles', 'Tout-inclus', 'Historique'],
+      'Auberge': ['Dortoir', 'Chambre privée', 'Capsule'],
+      "Chez l'habitant": ['Gîte', "Maison d'hôtes", 'Ferme'],
+      'Location': ['Appartement', 'Maison', 'Villa', 'Chalet'],
+      'Nature': ['Camping', 'Glamping', 'Éco-lodge', 'Bungalow de plage', 'Cabane', 'Refuge'],
+      'Traditionnel': ['Ryokan', 'Riad', 'Monastère'],
     },
   },
   restos: {
     couleur: '#e8590c',
     nom: 'Restos', icone: '🍜',
     types: {
-      'Rue': ['Stand', 'Marché de nuit', 'Food court', 'Food truck'],
-      'Restaurant': ['Local familial', 'Chaîne locale', 'International', 'Végé/végane', 'Halal', 'Gastronomique', 'Rooftop'],
-      'Spécialité': ['Ramen', 'Sushi', 'BBQ coréen', 'Hot pot', 'Dim sum', 'Pho', 'Curry', 'Fruits de mer'],
-      'Café': ['Café', 'Café à thème (chats…)', 'Salon de thé', 'Pâtisserie', 'Bar à jus'],
-      'Expérience': ['Cours de cuisine', 'Visite gourmande', "Repas chez l'habitant", 'Dîner-croisière'],
+      'Restaurant': ['Familial', 'Bistro', 'Gastronomique', 'International', 'Végé', 'Terrasse', 'Rooftop'],
+      'Spécialité': ['Fruits de mer', 'Grillades', 'Pizza', 'Sushi', 'Tapas'],
+      'Rue': ['Stand', 'Marché', 'Food truck', 'Food court'],
+      'Café': ['Café', 'Boulangerie', 'Pâtisserie', 'Brunch', 'Salon de thé'],
+      'Expérience': ['Cours de cuisine', 'Visite gourmande', "Repas chez l'habitant", 'Dégustation'],
     },
   },
   sport: {
     couleur: '#2f9e44',
     nom: 'Sport', icone: '🏃',
     types: {
-      'Raquette': ['Tennis', 'Pickleball', 'Padel', 'Badminton', 'Squash', 'Ping-pong'],
-      'Eau': ['Surf', 'Plongée', 'Snorkeling', 'Kayak', 'Paddle', 'Kitesurf', 'Rafting', 'Voile', 'Pêche', 'Jet ski'],
-      'Montagne': ['Randonnée', 'Trek', 'Escalade', 'Vélo de montagne', 'Ski', 'Snowboard'],
-      'Combat': ['Muay-thaï', 'Boxe', 'Kung-fu', 'Karaté', 'Taekwondo'],
-      'Forme': ['Yoga', 'Pilates', 'Gym', 'Course', 'CrossFit'],
-      'Sensations fortes': ['Zipline', "Saut à l'élastique", 'Parapente', 'Montgolfière', 'Quad', 'Karting'],
+      'Eau': ['Surf', 'Plongée', 'Snorkeling', 'Kayak', 'Paddle', 'Kitesurf', 'Rafting', 'Voile', 'Pêche'],
+      'Montagne': ['Randonnée', 'Trek', 'Escalade', 'Vélo de montagne', 'Ski', 'Planche à neige'],
+      'Raquette': ['Tennis', 'Pickleball', 'Padel', 'Badminton', 'Squash'],
+      'Forme': ['Yoga', 'Gym', 'Course', 'Pilates'],
+      'Sensations fortes': ['Tyrolienne', 'Parapente', 'Montgolfière', 'Saut en parachute', 'Quad', 'Karting'],
+      'Combat': ['Boxe', 'Muay-thaï', 'Arts martiaux'],
+      'Voir un match': ['Hockey', 'Soccer', 'Baseball', 'Basketball', 'Football'],
       'Autres': ['Golf', 'Équitation', 'Vélo en ville', 'Bowling'],
-      'Voir un match': ['Sumo', 'Baseball', 'Soccer', 'Muay-thaï', 'Cricket'],
     },
   },
   visites: {
     couleur: '#b8860b',
     nom: 'Visites', icone: '🏛️',
     types: {
-      'Culture': ['Temple', 'Pagode', 'Palais', 'Château', 'Ruines', 'Vieille ville', 'Village traditionnel'],
-      'Art': ['Musée', 'Galerie', 'Statue', 'Street art', 'Architecture'],
-      'Paysages': ['Point de vue', 'Montagne', 'Volcan', 'Cascade', 'Rizière', 'Lac', 'Grotte', 'Plage', 'Île'],
-      'Randonnée': ['Facile', 'Moyenne', 'Difficile', 'Plusieurs jours'],
-      'Animaux': ['Safari', 'Sanctuaire éthique', 'Aquarium', "Observation d'oiseaux", 'Plongée avec des animaux'],
-      'Ville': ['Quartier typique', 'Marché', 'Centre commercial', 'Tour avec vue', 'Visite guidée'],
-      'Excursion': ['Croisière', 'Tour en bateau', "Tour d'îles", 'Journée guidée'],
+      'Culture': ['Vieille ville', 'Château', 'Palais', 'Église', 'Temple', 'Ruines', 'Village'],
+      'Art': ['Musée', 'Galerie', 'Street art', 'Architecture'],
+      'Paysages': ['Point de vue', 'Plage', 'Montagne', 'Cascade', 'Lac', 'Parc national', 'Île', 'Grotte'],
+      'Ville': ['Quartier', 'Marché', 'Magasinage', 'Visite guidée'],
+      'Excursion': ['Journée guidée', 'Croisière', 'Tour en bateau'],
+      'Animaux': ['Safari', 'Sanctuaire', 'Aquarium', 'Observation'],
     },
   },
   experiences: {
     couleur: '#d6336c',
     nom: 'Expériences', icone: '✨',
     types: {
-      'Détente': ['Spa', 'Massage', 'Onsen/bains chauds'],
-      'Spirituel': ['Méditation', 'Retraite', 'Cérémonie', 'Séjour au monastère'],
-      'Atelier': ['Poterie', 'Calligraphie', 'Couture', 'Batik'],
+      'Détente': ['Spa', 'Massage', 'Bains thermaux'],
+      'Atelier': ['Cuisine', 'Poterie', 'Peinture', 'Artisanat'],
+      'Spirituel': ['Méditation', 'Retraite', 'Cérémonie'],
       'Famille': ["Parc d'attractions", 'Parc aquatique', 'Zoo'],
     },
   },
@@ -67,24 +66,22 @@ export const TAXONOMIE = {
     couleur: '#7048e8',
     nom: 'Vie nocturne', icone: '🌙',
     types: {
-      'Bar relax': ['Lounge', 'Cocktails', 'Speakeasy', 'Rooftop', 'Vin', 'Whisky', 'Saké', 'Micro-brasserie', 'Bar de plage', 'Pub'],
-      'Pour danser': ['Boîte de nuit', 'Club électro', 'Club hip-hop', 'Bar dansant', 'Beach party', 'Pool party'],
+      'Bar': ['Cocktails', 'Vin', 'Microbrasserie', 'Rooftop', 'Speakeasy', 'Bar de plage', 'Pub'],
+      'Pour danser': ['Boîte de nuit', 'Bar dansant', 'Beach party'],
       'Musique': ['Musique live', 'Jazz', 'Karaoké'],
-      'Local': ['Izakaya', 'Bar de ruelle', 'Pojangmacha', 'Bar à bière de rue'],
-      'Spectacle': ['Cabaret', 'Théâtre traditionnel', "Marionnettes sur l'eau"],
-      'Autres': ['Bar à thème', 'Bar LGBTQ+', 'Tournée des bars'],
+      'Spectacle': ['Cabaret', 'Théâtre', 'Concert', 'Humour'],
     },
   },
   trajets: {
     couleur: '#1c7ed6',
     nom: 'Trajets', icone: '🚆',
     types: {
-      'Avion': ['Low-cost', 'Régulier'],
+      'Avion': ['Régulier', 'Low-cost'],
       'Train': ['Grande vitesse', 'De nuit', 'Régional'],
-      'Bus': ['VIP', 'De nuit', 'Local'],
-      'Bateau': ['Ferry', 'Bateau rapide', 'Bateau privé'],
-      'En ville': ['Métro', 'Taxi', 'Grab/Uber', 'Tuk-tuk', 'Moto-taxi', 'Scooter', 'Vélo'],
-      'Privé': ['Chauffeur', 'Voiture de location', 'Transfert aéroport'],
+      'Bus': ['Confort', 'De nuit', 'Local'],
+      'Bateau': ['Traversier', 'Bateau rapide', 'Bateau privé'],
+      'Voiture': ['Location', 'Chauffeur', 'Transfert aéroport'],
+      'En ville': ['Métro', 'Taxi', 'Uber', 'Vélo', 'Scooter'],
     },
   },
   autre: {
@@ -96,9 +93,12 @@ export const TAXONOMIE = {
 };
 
 // Valeur approximative de 1 unité de chaque monnaie en dollars canadiens.
-// Modifiable dans l'écran Réglages de l'appli.
 export const TAUX_PAR_DEFAUT = {
-  CAD: 1, USD: 1.37, EUR: 1.5,
+  CAD: 1, USD: 1.37, EUR: 1.6, GBP: 1.85, CHF: 1.72, MXN: 0.075,
+  DOP: 0.022, CRC: 0.0027, CUP: 0.057, JMD: 0.0087, BSD: 1.37, XCD: 0.51, GTQ: 0.18, BZD: 0.68, PAB: 1.37,
+  PEN: 0.39, ARS: 0.0011, BRL: 0.25, COP: 0.00035, CLP: 0.0015, UYU: 0.034, BOB: 0.2,
+  MAD: 0.15, TND: 0.47, EGP: 0.028, ZAR: 0.078, KES: 0.0106, TZS: 0.00055, XOF: 0.0024, MUR: 0.03,
+  AUD: 0.91, NZD: 0.8, XPF: 0.0134, ISK: 0.011, NOK: 0.135, SEK: 0.145, DKK: 0.21, CZK: 0.065, HUF: 0.0041, PLN: 0.37, RON: 0.31, HRK: 0.21,
   JPY: 0.0093, KRW: 0.001, CNY: 0.19, TWD: 0.043, HKD: 0.175,
   THB: 0.041, VND: 0.000054, KHR: 0.00034, LAK: 0.000064, MMK: 0.00065,
   MYR: 0.31, SGD: 1.05, IDR: 0.000085, PHP: 0.024,
@@ -110,6 +110,17 @@ export const TAUX_PAR_DEFAUT = {
 
 // Monnaie proposée automatiquement selon le pays choisi.
 export const DEVISE_DU_PAYS = {
+  'Canada': 'CAD', 'États-Unis': 'USD', 'Mexique': 'MXN', 'Cuba': 'CUP', 'République dominicaine': 'DOP', 'Costa Rica': 'CRC',
+  'Jamaïque': 'JMD', 'Bahamas': 'BSD', 'Guatemala': 'GTQ', 'Belize': 'BZD', 'Panama': 'USD', 'Porto Rico': 'USD',
+  'Sainte-Lucie': 'XCD', 'Grenade': 'XCD', 'Antigua-et-Barbuda': 'XCD', 'Guadeloupe': 'EUR', 'Martinique': 'EUR',
+  'Pérou': 'PEN', 'Argentine': 'ARS', 'Brésil': 'BRL', 'Colombie': 'COP', 'Chili': 'CLP', 'Uruguay': 'UYU', 'Bolivie': 'BOB', 'Équateur': 'USD',
+  'France': 'EUR', 'Belgique': 'EUR', 'Luxembourg': 'EUR', 'Monaco': 'EUR', 'Espagne': 'EUR', 'Portugal': 'EUR', 'Italie': 'EUR', 'Grèce': 'EUR',
+  'Allemagne': 'EUR', 'Autriche': 'EUR', 'Pays-Bas': 'EUR', 'Irlande': 'EUR', 'Finlande': 'EUR', 'Malte': 'EUR', 'Chypre': 'EUR', 'Croatie': 'EUR',
+  'Slovénie': 'EUR', 'Slovaquie': 'EUR', 'Estonie': 'EUR', 'Lettonie': 'EUR', 'Lituanie': 'EUR', 'Monténégro': 'EUR', 'Andorre': 'EUR', 'Vatican': 'EUR', 'Saint-Marin': 'EUR',
+  'Royaume-Uni': 'GBP', 'Suisse': 'CHF', 'Liechtenstein': 'CHF', 'Islande': 'ISK', 'Norvège': 'NOK', 'Suède': 'SEK', 'Danemark': 'DKK',
+  'Tchéquie': 'CZK', 'Hongrie': 'HUF', 'Pologne': 'PLN', 'Roumanie': 'RON',
+  'Maroc': 'MAD', 'Tunisie': 'TND', 'Égypte': 'EGP', 'Afrique du Sud': 'ZAR', 'Kenya': 'KES', 'Tanzanie': 'TZS', 'Sénégal': 'XOF', 'Maurice': 'MUR',
+  'Australie': 'AUD', 'Nouvelle-Zélande': 'NZD', 'Polynésie française': 'XPF',
   'Japon': 'JPY', 'Corée du Sud': 'KRW', 'Chine': 'CNY', 'Taïwan': 'TWD', 'Hong Kong': 'HKD', 'Macao': 'MOP',
   'Thaïlande': 'THB', 'Vietnam': 'VND', 'Cambodge': 'USD', 'Laos': 'LAK', 'Myanmar': 'MMK',
   'Malaisie': 'MYR', 'Singapour': 'SGD', 'Indonésie': 'IDR', 'Philippines': 'PHP', 'Brunei': 'BND', 'Timor oriental': 'USD',
@@ -126,10 +137,18 @@ export const CONTACTS = [
   ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['line', 'LINE'], ['wechat', 'WeChat'],
   ['kakao', 'KakaoTalk'], ['zalo', 'Zalo'],
 ];
+// Montrés dans le formulaire seulement s'ils sont déjà remplis.
+export const CONTACTS_RARES = ['line', 'wechat', 'kakao', 'zalo'];
 
 // Nom de chaque monnaie, affiché à côté de son code.
 export const NOMS_DEVISES = {
-  CAD: 'Dollar canadien', USD: 'Dollar américain', EUR: 'Euro',
+  CAD: 'Dollar canadien', USD: 'Dollar américain', EUR: 'Euro', GBP: 'Livre sterling', CHF: 'Franc suisse', MXN: 'Peso mexicain',
+  DOP: 'Peso dominicain', CRC: 'Colón costaricien', CUP: 'Peso cubain', JMD: 'Dollar jamaïcain', BSD: 'Dollar des Bahamas', XCD: 'Dollar des Caraïbes orientales',
+  GTQ: 'Quetzal', BZD: 'Dollar du Belize', PAB: 'Balboa', PEN: 'Sol péruvien', ARS: 'Peso argentin', BRL: 'Réal brésilien', COP: 'Peso colombien',
+  CLP: 'Peso chilien', UYU: 'Peso uruguayen', BOB: 'Boliviano', MAD: 'Dirham marocain', TND: 'Dinar tunisien', EGP: 'Livre égyptienne',
+  ZAR: 'Rand', KES: 'Shilling kényan', TZS: 'Shilling tanzanien', XOF: 'Franc CFA', MUR: 'Roupie mauricienne', AUD: 'Dollar australien',
+  NZD: 'Dollar néo-zélandais', XPF: 'Franc pacifique', ISK: 'Couronne islandaise', NOK: 'Couronne norvégienne', SEK: 'Couronne suédoise',
+  DKK: 'Couronne danoise', CZK: 'Couronne tchèque', HUF: 'Forint', PLN: 'Zloty', RON: 'Leu roumain', HRK: 'Kuna',
   JPY: 'Yen japonais', KRW: 'Won sud-coréen', CNY: 'Yuan chinois', TWD: 'Dollar taïwanais', HKD: 'Dollar de Hong Kong', MOP: 'Pataca de Macao',
   THB: 'Baht thaïlandais', VND: 'Dong vietnamien', KHR: 'Riel cambodgien', LAK: 'Kip laotien', MMK: 'Kyat birman',
   MYR: 'Ringgit malaisien', SGD: 'Dollar de Singapour', IDR: 'Roupie indonésienne', PHP: 'Peso philippin', BND: 'Dollar de Brunei',
@@ -140,8 +159,8 @@ export const NOMS_DEVISES = {
   KZT: 'Tenge kazakh', KGS: 'Som kirghize', UZS: 'Sum ouzbek', TJS: 'Somoni tadjik', TMT: 'Manat turkmène', MNT: 'Tugrik mongol',
 };
 
-// Monnaies des pays où tu vas le plus, montrées en premier.
-export const DEVISES_FAVORITES = ['JPY', 'THB', 'KRW', 'NPR', 'PHP', 'VND'];
+// Monnaies les plus courantes, montrées en premier.
+export const DEVISES_FAVORITES = ['USD', 'EUR', 'MXN', 'GBP', 'CHF', 'JPY'];
 
 // Spécialités culinaires selon le pays : remplacent la liste générale « Spécialité » des restos.
 export const SPECIALITES_PAYS = {

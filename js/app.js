@@ -1,5 +1,5 @@
 import './clavier.js';
-import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
+import { TAXONOMIE, TAUX_PAR_DEFAUT, DEVISE_DU_PAYS, CONTACTS, CONTACTS_RARES, NOMS_DEVISES, DEVISES_FAVORITES, sousTypes } from './taxonomie.js';
 import { trierFr } from './lieux.js';
 import { CONTINENTS, VILLES_MONDE, paysDuContinent } from './monde.js';
 import * as sync from './sync.js';
@@ -12,7 +12,8 @@ import { dateLongue, formatHeure, choixRetenus, GROUPES_CHOIX, estEnvoye } from 
 import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import * as essai from './essai.js';
-import { DEPOT_DONNEES, DEPOT_PUBLIC } from './marque.js';
+import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE } from './marque.js';
+import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './phrases.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 
 // ---------- État de l'appli ----------
@@ -246,13 +247,12 @@ function choisirCategorie(f, quandFini) {
   let type = f.type;
 
   const etape1 = () => ouvrirFeuille(`
-    ${enteteFeuille('Quelle catégorie ?')}
+    ${enteteFeuille('Catégorie')}
     <div class="tuiles">
       ${Object.entries(TAXONOMIE).map(([k, c]) => `
         <button type="button" class="tuile ${k === f.categorie ? 'choisie' : ''}" style="--c:${c.couleur}" data-cat="${k}">
           <span class="tuile-icone">${iconeCat(k, { taille: 24 })}</span>
           <span class="tuile-nom">${esc(c.nom)}</span>
-          <span class="tuile-sous">${Object.keys(c.types).length ? `${Object.keys(c.types).length} types` : 'Pas sûr où le classer'}</span>
         </button>`).join('')}
     </div>`, clic);
 
@@ -264,7 +264,6 @@ function choisirCategorie(f, quandFini) {
         ${Object.keys(c.types).map((t) => [t, sousTypes(cat, t, f.pays)]).map(([t, sous]) => `
           <button type="button" class="tuile ${cat === f.categorie && t === f.type ? 'choisie' : ''}" data-type="${esc(t)}">
             <span class="tuile-nom">${esc(t)}</span>
-            <span class="tuile-sous">${esc(sous.slice(0, 3).join(', '))}${sous.length > 3 ? '…' : ''}</span>
           </button>`).join('')}
       </div>`, clic);
   };
@@ -282,10 +281,10 @@ function choisirCategorie(f, quandFini) {
         <button type="button" class="tuile tuile-autre" data-autre><span class="tuile-nom">${icone('plus', { taille: 16 })} Autre</span></button>
       </div>
       <div class="autre-saisie" hidden>
-        <input id="autre-nom" placeholder="Nom du sous-type" autocomplete="off">
+        <input id="autre-nom" placeholder="Autre" autocomplete="off" enterkeyhint="done">
         <button type="button" class="bouton-principal" data-autre-ok>OK</button>
       </div>
-      <button type="button" class="lien-discret" data-sans-sous>Garder seulement « ${esc(type)} »</button>`, clic);
+      <button type="button" class="lien-discret" data-sans-sous>Passer</button>`, clic);
     const champ = feuille.querySelector('#autre-nom');
     champ.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); feuille.querySelector('[data-autre-ok]').click(); } });
   };
@@ -356,22 +355,45 @@ function sauverFiltres() {
 }
 
 // ---------- Navigation ----------
+// Chaque page garde son rang dans l'historique : le bouton Retour revient vraiment à la page d'avant
+// (liste, client, demande…), et seulement s'il n'y en a pas, à la page « parent ».
+let rang = -1;
+function noterRang() {
+  const n = history.state?.rang;
+  if (Number.isInteger(n)) rang = n;
+  else { rang = rang < 0 ? 0 : rang + 1; history.replaceState({ rang }, ''); }
+}
 function aller(route) { location.hash = route; }
+// Revenir en arrière ; « parent » sert quand l'appli vient de s'ouvrir sur cette page.
+function revenir(parent = '#/') {
+  if (rang > 0) history.back();
+  else location.replace(parent);
+}
+// Tous les boutons Retour (data-retour-page) passent par revenir().
+document.addEventListener('click', (ev) => {
+  const a = ev.target.closest('[data-retour-page]');
+  if (!a) return;
+  ev.preventDefault();
+  revenir(a.getAttribute('href') || a.dataset.retourPage || '#/');
+});
 
 async function router() {
+  noterRang();
   fermerFeuille();
   const [, page, id] = (location.hash || '#/').split('/');
   const nom = page || 'liste';
   document.body.dataset.page = nom;
   document.body.classList.remove('mode-selection');
-  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === (nom === 'carnet' || nom === 'demande' ? 'clients' : nom)));
+  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('actif', a.dataset.page === (['carnet', 'demande', 'demandes'].includes(nom) ? 'clients' : nom === 'outils' ? 'reglages' : nom)));
   window.scrollTo(0, 0);
   if (page === 'ajouter') return pageFormulaire(null);
   if (page === 'modifier') return pageFormulaire(id);
   if (page === 'endroit') return pageFiche(id);
   if (page === 'villes') return pageVilles();
   if (page === 'reglages') return pageReglages();
+  if (page === 'outils') return pageOutil(id);
   if (page === 'clients') return pageClients();
+  if (page === 'demandes') return pageClients('demandes');
   if (page === 'voyage') return pageMonVoyage(id, location.hash.split('/')[3] || '');
   if (page === 'demande') return pageDemande(id);
   if (page === 'carnet') return pageCarnet(id, (location.hash.split('/')[3] || ''));
@@ -564,6 +586,7 @@ function appuiLong(racine, selecteur, quandAppui) {
       declenche = true;
       el.classList.remove('appui');
       if (navigator.vibrate) navigator.vibrate(15);
+      try { window.getSelection()?.removeAllRanges(); } catch (_) { /* rien */ }
       quandAppui(el);
     }, 480);
   }, { passive: true });
@@ -576,6 +599,7 @@ function appuiLong(racine, selecteur, quandAppui) {
     annuler();
     racine.querySelectorAll('.appui').forEach((x) => x.classList.remove('appui'));
     if (declenche && ev.cancelable) ev.preventDefault(); // pas de clic après un appui long
+    if (declenche) setTimeout(() => { declenche = false; }, 450);
   };
   racine.addEventListener('touchend', fin);
   racine.addEventListener('touchcancel', fin);
@@ -641,20 +665,16 @@ async function supprimerEndroit(e) {
 
 function menuEndroit(e, { apres } = {}) {
   const carteUrl = lienCarte(e);
-  const ligneMenu = (action, ico, texte, classe = '') => `<li><button type="button" class="ligne ligne-menu ${classe}" data-action="${action}">${icone(ico, { taille: 20 })}<span>${texte}</span></button></li>`;
   ouvrirFeuille(`
     ${enteteFeuille(esc(e.nom))}
     <ul class="liste-choix">
       ${ligneMenu('modifier', 'pencil', 'Modifier')}
-      ${e.contributeurId ? '' : ligneMenu('client', 'send', 'Pour un client…')}
+      ${e.contributeurId ? '' : ligneMenu('client', 'send', 'Pour un client')}
       ${ligneMenu('coeur', 'heart', e.coupDeCoeur ? 'Retirer le coup de cœur' : 'Coup de cœur')}
       ${carteUrl ? ligneMenu('carte', 'map', 'Ouvrir dans Google Maps') : ''}
       ${ligneMenu('supprimer', 'trash-2', 'Supprimer', 'ligne-danger')}
     </ul>
-    <div class="confirmer" id="menu-confirmer" hidden>
-      <p>Supprimer « ${esc(e.nom)} » ? C'est définitif.</p>
-      <button type="button" class="bouton-danger plein" data-action="oui">Oui, supprimer</button>
-    </div>`, async (ev) => {
+    ${confirmerHtml(`Supprimer « ${esc(e.nom)} » ?`, '', 'Supprimer')}`, async (ev) => {
     const b = ev.target.closest('[data-action]');
     if (!b) return;
     const a = b.dataset.action;
@@ -669,7 +689,8 @@ function menuEndroit(e, { apres } = {}) {
       toast(e.coupDeCoeur ? 'Coup de cœur ✓' : 'Coup de cœur retiré');
       if (apres) apres();
     } else if (a === 'carte') { fermerFeuille(); window.open(carteUrl, '_blank', 'noopener'); }
-    else if (a === 'supprimer') { feuille.querySelector('#menu-confirmer').hidden = false; b.closest('ul').hidden = true; }
+    else if (a === 'supprimer') montrerConfirmer(b);
+    else if (a === 'non') cacherConfirmer();
     else if (a === 'oui') {
       await supprimerEndroit(e);
       fermerFeuille();
@@ -682,7 +703,7 @@ function menuEndroit(e, { apres } = {}) {
 // ---------- Fiche d'un endroit ----------
 async function pageFiche(id) {
   const e = etat.endroits.find((x) => x.id === id);
-  if (!e) return aller('#/');
+  if (!e) return location.replace('#/');
   const cat = TAXONOMIE[e.categorie] || TAXONOMIE.autre;
   const cad = enCAD(e.montant, e.devise);
   const carteUrl = lienCarte(e);
@@ -698,7 +719,7 @@ async function pageFiche(id) {
     <div class="fiche-haut" style="--c:${cat.couleur}">
       ${photos.length ? `<div class="galerie" id="galerie">${photos.map((p) => `<img data-photo="${esc(p)}" alt="">`).join('')}</div>` : `<div class="fiche-icone">${iconeCat(e.categorie, { taille: 64, epaisseur: 1.2 })}</div>`}
       <div class="fiche-boutons">
-        <a class="rond rond-flottant" href="#/" aria-label="Retour">${icone('chevron-left', { taille: 20, epaisseur: 2.4 })}</a>
+        <a class="rond rond-flottant" href="#/" data-retour-page aria-label="Retour">${icone('chevron-left', { taille: 20, epaisseur: 2.4 })}</a>
         <span class="fiche-boutons-droite">
           <a class="rond rond-flottant" href="#/modifier/${esc(e.id)}" aria-label="Modifier">${icone('pencil', { taille: 18 })}</a>
           <button type="button" class="rond rond-flottant" id="menu-fiche" aria-label="Plus">${icone('ellipsis', { taille: 20 })}</button>
@@ -787,22 +808,22 @@ async function pageFiche(id) {
     };
   };
   majZoneClient();
-  app.querySelector('#menu-fiche').onclick = () => menuEndroit(e, { apres: (efface) => (efface ? aller('#/') : pageFiche(e.id)) });
-  appuiLong(app, '.galerie img', () => menuEndroit(e, { apres: (efface) => (efface ? aller('#/') : pageFiche(e.id)) }));
+  app.querySelector('#menu-fiche').onclick = () => menuEndroit(e, { apres: (efface) => (efface ? revenir('#/') : pageFiche(e.id)) });
+  appuiLong(app, '.galerie img', () => menuEndroit(e, { apres: (efface) => (efface ? revenir('#/') : pageFiche(e.id)) }));
   const demander = (oui) => { app.querySelector('#supprimer').hidden = oui; app.querySelector('#confirmer').hidden = !oui; };
   app.querySelector('#supprimer').onclick = () => demander(true);
   app.querySelector('#non-supprimer').onclick = () => demander(false);
   app.querySelector('#oui-supprimer').onclick = async () => {
     await supprimerEndroit(e);
     toast('Endroit supprimé');
-    aller('#/');
+    revenir('#/');
   };
 }
 
 // ---------- Formulaire d'ajout / modification ----------
 async function pageFormulaire(id) {
   const existant = id ? etat.endroits.find((x) => x.id === id) : null;
-  if (id && !existant) return aller('#/');
+  if (id && !existant) return location.replace('#/');
   const dernierLieu = await db.lireReglage('dernierLieu', {});
   // Pays fixé dans Réglages > Où je suis : il est déjà rempli, et la dernière ville aussi si elle est dans ce pays.
   const paysFixe = etat.region.pays;
@@ -827,16 +848,15 @@ async function pageFormulaire(id) {
 
   app.innerHTML = `
     <header class="entete-form">
-      <a class="rond" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}" aria-label="Annuler">${icone('x')}</a>
+      <a class="rond" href="${existant ? `#/endroit/${esc(f.id)}` : '#/'}" data-retour-page aria-label="Annuler">${icone('x')}</a>
       <h1>${existant ? 'Modifier' : 'Nouvel endroit'}</h1>
       <span class="rond vide-rond"></span>
     </header>
     <form id="formulaire" class="formulaire" autocomplete="off" novalidate>
 
       <section class="section">
-        <h2 class="section-titre">C'est quoi ?</h2>
         <button type="button" class="selecteur selecteur-cat" id="choix-categorie"></button>
-        <label class="champ"><span>Nom</span><input name="nom" required value="${esc(f.nom)}" placeholder="Ex. : Chez Mama Noi"></label>
+        <label class="champ"><span>Nom</span><input name="nom" required value="${esc(f.nom)}" placeholder="Nom de l'endroit" autocapitalize="words" enterkeyhint="done"></label>
       </section>
 
       <section class="section">
@@ -850,38 +870,37 @@ async function pageFormulaire(id) {
       </section>
 
       <section class="section">
-        <h2 class="section-titre">Où ?</h2>
+        <h2 class="section-titre">Emplacement</h2>
         <div class="deux">
           <button type="button" class="selecteur" id="choix-pays"></button>
           <button type="button" class="selecteur" id="choix-ville"></button>
         </div>
         <div id="zone-trajet"></div>
-        <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier…"></label>
-        <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}" placeholder="+66 …"></label>
-        <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="Se remplit avec ta position"></label>
-        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} <span>Je suis ici : prendre ma position</span></button>
+        <label class="champ"><span>Adresse</span><input name="adresse" value="${esc(f.adresse)}" placeholder="Rue, quartier"></label>
+        <label class="champ"><span>Téléphone</span><input name="telephone" type="tel" value="${esc(f.telephone)}"></label>
+        <label class="champ"><span>Lien Google Maps</span><input name="lienMaps" type="url" inputmode="url" value="${esc(f.lienMaps)}" placeholder="maps.app.goo.gl/…"></label>
+        <button type="button" class="bouton-secondaire petit-bouton" id="ma-position">${icone('locate-fixed', { taille: 18 })} <span>Ma position</span></button>
         <p class="aide" id="texte-position"></p>
       </section>
 
       <section class="section">
-        <h2 class="section-titre">Combien ?</h2>
+        <h2 class="section-titre">Prix</h2>
         <p class="sous-titre">Budget</p>
         <div class="segments" id="prix">${[1, 2, 3, 4].map((n) => `<button type="button" class="segment" data-prix="${n}">${dollars(n)}</button>`).join('')}</div>
-        <p class="sous-titre">Prix réel</p>
+        <p class="sous-titre">Montant</p>
         <div class="montant">
-          <input name="montant" type="text" inputmode="decimal" value="${esc(f.montant)}" placeholder="Ex. : 300" aria-label="Montant">
+          <input name="montant" type="text" inputmode="decimal" value="${esc(f.montant)}" placeholder="0" aria-label="Montant">
           <span class="montant-devise" id="devise-actuelle"></span>
         </div>
         <div class="puces-devises" id="devises"></div>
         <p class="aide" id="conversion"></p>
-        <p class="sous-titre">Luxe / confort <small>(séparé du prix)</small></p>
+        <p class="sous-titre">Confort</p>
         <div class="segments" id="confort">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="segment" data-confort="${n}">${n}★</button>`).join('')}</div>
-        <p class="aide">1 = simple, 5 = haut de gamme</p>
       </section>
 
       <section class="section">
         <label class="interrupteur">
-          <span><b>${icone('heart', { taille: 18 })} Coup de cœur</b><small>Un endroit que tu recommandes à coup sûr</small></span>
+          <span><b>${icone('heart', { taille: 18 })} Coup de cœur</b></span>
           <input type="checkbox" name="coupDeCoeur" ${f.coupDeCoeur ? 'checked' : ''}>
           <i aria-hidden="true"></i>
         </label>
@@ -890,26 +909,26 @@ async function pageFormulaire(id) {
       ${clients.length ? `
       <section class="section section-client">
         <label class="interrupteur">
-          <span><b>${icone('send', { taille: 18 })} Pour un client</b><small>Il le reçoit dans ses choix</small></span>
+          <span><b>${icone('send', { taille: 18 })} Pour un client</b></span>
           <input type="checkbox" name="pourClient" ${clientDepart ? 'checked' : ''}>
           <i aria-hidden="true"></i>
         </label>
         <div id="zone-pour-client" ${clientDepart ? '' : 'hidden'}>
           <button type="button" class="selecteur" id="choix-client"></button>
-          <label class="champ"><span>Conseil <small>optionnel, il le lira</small></span><textarea name="motClient" rows="2" placeholder="Ex. : Demande la chambre du 6e.">${esc(itemClient?.mot)}</textarea></label>
+          <label class="champ"><span>Conseil pour le client</span><textarea name="motClient" rows="2" placeholder="Demande la chambre du 6e">${esc(itemClient?.mot)}</textarea></label>
         </div>
       </section>` : ''}
 
       <section class="section">
-        <h2 class="section-titre">Notes</h2>
-        <label class="champ"><span>Ce que fait l'endroit</span><textarea name="description" rows="3" placeholder="Visible par le client">${esc(f.description)}</textarea></label>
-        <label class="champ champ-prive"><span>${icone('lock', { taille: 15 })} Mes notes privées <small>jamais montrées au client</small></span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
+        <h2 class="section-titre">Description</h2>
+        <label class="champ"><span>Pour le client</span><textarea name="description" rows="3">${esc(f.description)}</textarea></label>
+        <label class="champ champ-prive"><span>${icone('lock', { taille: 15 })} Notes privées</span><textarea name="notes" rows="3">${esc(f.notes)}</textarea></label>
       </section>
 
       <details class="section" ${nbAutresContacts ? 'open' : ''}>
-        <summary>Plus de détails <small>WhatsApp, Instagram, date de visite…</small></summary>
-        <label class="champ"><span>Visité le <small>(rempli tout seul)</small></span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
-        ${CONTACTS.map(([k, lib]) => `<label class="champ"><span>${esc(lib)}</span><input data-contact="${k}" value="${esc(f.contacts[k])}"></label>`).join('')}
+        <summary>Contacts et visite</summary>
+        <label class="champ"><span>Visité le</span><input name="verifieLe" type="date" value="${esc(f.verifieLe)}"></label>
+        ${CONTACTS.filter(([k]) => !CONTACTS_RARES.includes(k) || f.contacts[k]).map(([k, lib]) => `<label class="champ"><span>${esc(lib)}</span><input data-contact="${k}" value="${esc(f.contacts[k])}"></label>`).join('')}
       </details>
 
       <div class="barre-enregistrer">
@@ -924,7 +943,7 @@ async function pageFormulaire(id) {
     const c = TAXONOMIE[f.categorie];
     const b = app.querySelector('#choix-categorie');
     if (!c) {
-      b.innerHTML = `<span class="selecteur-icone">${icone('plus', { taille: 22 })}</span><span class="selecteur-texte"><b>Choisir une catégorie</b><small>Hébergement, resto, activité, trajet…</small></span><span class="chevron">${icone('chevron-right', { taille: 18 })}</span>`;
+      b.innerHTML = `<span class="selecteur-icone">${icone('plus', { taille: 22 })}</span><span class="selecteur-texte"><b>Catégorie</b><small>Choisir</small></span><span class="chevron">${icone('chevron-right', { taille: 18 })}</span>`;
       b.style.removeProperty('--c');
       b.classList.add('a-remplir');
     } else {
@@ -945,9 +964,9 @@ async function pageFormulaire(id) {
     if (f.categorie !== 'trajets') { zone.innerHTML = ''; return; }
     zone.innerHTML = `
       <div class="trajet-saisie">
-        <label class="champ"><span>Point de départ</span><input name="depart" value="${esc(f.depart)}" placeholder="Ex. : Gare de Bangkok"></label>
-        <label class="champ"><span>Point d'arrivée</span><input name="arrivee" value="${esc(f.arrivee)}" placeholder="Ex. : Chiang Mai"></label>
-        <label class="champ"><span>Durée</span><input name="duree" value="${esc(f.duree)}" placeholder="Ex. : 11 h"></label>
+        <label class="champ"><span>Départ</span><input name="depart" value="${esc(f.depart)}" placeholder="Gare centrale"></label>
+        <label class="champ"><span>Arrivée</span><input name="arrivee" value="${esc(f.arrivee)}" placeholder="Québec"></label>
+        <label class="champ"><span>Durée</span><input name="duree" value="${esc(f.duree)}" placeholder="3 h"></label>
       </div>`;
     zone.querySelectorAll('input').forEach((i) => { i.oninput = () => { f[i.name] = i.value; }; });
   }
@@ -1019,7 +1038,7 @@ async function pageFormulaire(id) {
 
   function majConversion() {
     const cad = enCAD(champ('montant').value, f.devise);
-    app.querySelector('#conversion').textContent = cad != null && f.devise !== 'CAD' ? `≈ ${formatCAD(cad)} (taux approximatif)` : '';
+    app.querySelector('#conversion').textContent = cad != null && f.devise !== 'CAD' ? `≈ ${formatCAD(cad)}` : '';
   }
 
   // Seulement 3 choix rapides : la monnaie du pays, le dollar américain et le dollar canadien.
@@ -1029,8 +1048,8 @@ async function pageFormulaire(id) {
     app.querySelector('#devise-actuelle').textContent = f.devise || '';
     app.querySelector('#devises').innerHTML = rapides.map((d) => `
       <button type="button" class="puce-devise ${d === f.devise ? 'choisie' : ''}" data-devise-rapide="${d}">
-        <b>${d}</b><small>${esc(d === locale ? `Monnaie locale` : NOMS_DEVISES[d] || '')}</small>
-      </button>`).join('') + '<button type="button" class="puce-devise autre" data-devise-autre><b>Autre…</b><small>Toutes les monnaies</small></button>';
+        <b>${d}</b><small>${esc(NOMS_DEVISES[d] || (d === locale ? 'Monnaie locale' : ''))}</small>
+      </button>`).join('') + '<button type="button" class="puce-devise autre" data-devise-autre><b>Autre</b><small>Toutes les monnaies</small></button>';
     majConversion();
   }
 
@@ -1042,7 +1061,7 @@ async function pageFormulaire(id) {
       valeurs: [...favorites, ...autres],
       choisie: f.devise,
       etiquette: (d) => `${d}, ${NOMS_DEVISES[d] || d}`,
-      placeholder: 'Chercher (ex. : baht, yen…)',
+      placeholder: 'Chercher une monnaie',
       quandChoisi: (d) => { f.devise = d; majDevises(); },
     });
   }
@@ -1065,7 +1084,7 @@ async function pageFormulaire(id) {
     if (priseIci && pellicule) f.aPellicule.push(...fichiers.filter((x) => peutPellicule([x])));
     ev.target.value = '';
     majPhotos();
-    app.querySelector('#aide-pellicule').innerHTML = f.aPellicule.length ? `${icone('download', { taille: 14 })} En enregistrant, touche « Enregistrer ${f.aPellicule.length > 1 ? `les ${f.aPellicule.length} images` : "l'image"} » pour l'avoir aussi dans ta pellicule.` : '';
+    app.querySelector('#aide-pellicule').innerHTML = f.aPellicule.length ? `${icone('download', { taille: 14 })} À l'enregistrement : « Enregistrer ${f.aPellicule.length > 1 ? `les ${f.aPellicule.length} images` : "l'image"} » pour ta pellicule` : '';
   };
   app.querySelector('#prendre-photo').addEventListener('change', (ev) => ajouterPhotos(ev, true));
   app.querySelector('#ajout-photos').addEventListener('change', (ev) => ajouterPhotos(ev, false));
@@ -1094,9 +1113,9 @@ async function pageFormulaire(id) {
     if (chercheEnCours) return;
     chercheEnCours = true;
     bouton.disabled = true;
-    bouton.querySelector('span').textContent = 'Recherche de ta position…';
+    bouton.querySelector('span').textContent = 'Localisation…';
     texte.textContent = '';
-    const fini = () => { chercheEnCours = false; if (document.body.contains(bouton)) { bouton.disabled = false; bouton.querySelector('span').textContent = 'Je suis ici : prendre ma position'; } };
+    const fini = () => { chercheEnCours = false; if (document.body.contains(bouton)) { bouton.disabled = false; bouton.querySelector('span').textContent = 'Ma position'; } };
     const reussi = (pos) => {
       fini();
       if (!document.body.contains(texte)) return;
@@ -1116,12 +1135,10 @@ async function pageFormulaire(id) {
     };
     const rate = (err) => {
       fini();
-      if (!document.body.contains(texte)) return;
+      if (!document.body.contains(texte) || auto) return;
       const msg = err.code === 1
-        ? "Position refusée. Sur iPhone : Réglages > Confidentialité > Service de localisation > Safari > « Lorsque l'app est active »."
-        : err.code === 3
-          ? 'La position prend trop de temps. Sors à découvert et réessaie.'
-          : "Impossible d'avoir ta position pour le moment. Réessaie.";
+        ? 'Localisation refusée : Réglages > Confidentialité > Service de localisation > Safari.'
+        : 'Position introuvable pour le moment.';
       texte.textContent = msg;
       if (!auto) toast(err.code === 1 ? 'Position refusée' : 'Pas de position, réessaie');
     };
@@ -1209,9 +1226,8 @@ async function pageFormulaire(id) {
     }
     // Un endroit déjà dans le carnet d'un client : son carnet se met à jour (photos, textes).
     for (const c of await db.tous('carnets')) if (c.id !== pourClient?.id && c.items.some((i) => i.endroitId === endroit.id)) carnets.publierBientot(c.id);
-    if (envoyeAuClient) { toast(`Enregistré ✓ et prévu pour ${pourClient.client?.prenom || 'le client'}`); aller(existant ? `#/endroit/${endroit.id}` : '#/'); return; }
-    toast(existant ? 'Modifications enregistrées' : 'Endroit ajouté ✓');
-    aller(existant ? `#/endroit/${endroit.id}` : '#/');
+    toast(envoyeAuClient ? `Enregistré, prévu pour ${pourClient.client?.prenom || 'le client'}` : existant ? 'Modifications enregistrées' : 'Endroit ajouté');
+    revenir(existant ? `#/endroit/${endroit.id}` : '#/');
   });
 
   majCategorie();
@@ -1241,9 +1257,9 @@ function pageMonVoyage(id, cle) {
 
 function etatPublication(c) {
   const p = c.publication || {};
-  if (p.erreur === 'hors-ligne') return { classe: 'attente', texte: 'Pas d’internet : le carnet se met en ligne dès que possible.' };
-  if (p.erreur) return { classe: 'erreur', texte: p.erreur };
-  if (p.publieLe) return { classe: 'ok', texte: `En ligne, à jour (${new Date(p.publieLe).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit' })})` };
+  if (p.erreur === 'hors-ligne') return { classe: 'attente', texte: 'Hors ligne' };
+  if (p.erreur) return { classe: 'erreur', texte: /Branche|brancher/i.test(p.erreur) ? 'Pas en ligne : brancher le Studio (Réglages)' : p.erreur };
+  if (p.publieLe) return { classe: 'ok', texte: 'En ligne' };
   return { classe: 'attente', texte: 'Mise en ligne…' };
 }
 const enAttente = (c) => c.items.filter((i) => !estEnvoye(i));
@@ -1258,117 +1274,86 @@ const depuis = (iso) => {
   return new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' });
 };
 
-async function pageClients() {
+async function pageClients(onglet = 'clients') {
   const tous = (await db.tous('carnets')).sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const actif = await db.lireReglage('carnetActif', null);
+  const liens = await liensDemande.tousLesLiens();
+  const nouvelles = liens.filter((l) => l.code && !l.carnetId && !l.vu).length;
+  const surDemandes = onglet === 'demandes';
   app.innerHTML = `
     <header class="entete-page entete-clients">
       <h1>Clients</h1>
       <span class="entete-actions">
-        ${tous.length ? '<button type="button" class="lien-exemple" id="selectionner">Sélectionner</button>' : ''}
-        <a class="lien-exemple" href="carnet.html?demo&apercu">${icone('eye', { taille: 16 })} Exemple</a>
+        <button type="button" class="lien-exemple" id="selectionner" hidden>Tout</button>
+        <button type="button" class="rond rond-accent" id="nouveau" aria-label="${surDemandes ? 'Nouveau lien de demande' : 'Nouveau client'}">${icone('plus', { taille: 22, epaisseur: 2.2 })}</button>
       </span>
     </header>
-    <button class="bouton-principal" id="nouveau-carnet">${icone('plus', { taille: 20 })} Nouveau client</button>
+    <div class="onglets-page" role="tablist">
+      <a href="#/clients" role="tab" class="${surDemandes ? '' : 'choisi'}" data-onglet>Clients</a>
+      <a href="#/demandes" role="tab" class="${surDemandes ? 'choisi' : ''}" data-onglet>Demandes${nouvelles ? `<i>${nouvelles}</i>` : ''}</a>
+    </div>
+    <div id="zone-onglet"></div>`;
+  app.querySelectorAll('[data-onglet]').forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); location.replace(a.getAttribute('href')); }; });
+  const zone = app.querySelector('#zone-onglet');
+  liensDemande.relever().then((r) => {
+    if (!r.length || !document.body.contains(zone)) return;
+    toast(r.length > 1 ? `${r.length} nouvelles demandes` : `Nouvelle demande : ${r[0].nom || r[0].client}`);
+    pageClients(onglet);
+  });
+  if (surDemandes) return ongletDemandes(zone, liens);
+
+  // ----- Onglet Clients -----
+  const sousTitre = (c) => [c.ville, nbChoix(c) ? plur(nbChoix(c), 'choix', 'choix') : ''].filter(Boolean).join(' · ');
+  zone.innerHTML = tous.length ? `
     <ul class="carnets" id="carnets">
       ${tous.map((c) => `
         <li><a class="carnet-ligne" href="#/carnet/${esc(c.id)}" data-id="${esc(c.id)}">
           <span class="coche-rond" aria-hidden="true">${icone('check', { taille: 16, epaisseur: 3 })}</span>
-          <span class="carnet-avatar">${esc((c.client?.nom || c.client?.prenom || '?').charAt(0).toUpperCase())}</span>
+          <span class="carnet-avatar">${esc((c.client?.nom || c.client?.prenom || '').charAt(0).toUpperCase()) || icone('user', { taille: 20 })}</span>
           <span class="carnet-txt">
-            <b>${esc(c.client?.nom || c.client?.prenom || 'Client sans nom')}${c.ville ? `, ${esc(c.ville)}` : ''}</b>
-            <small>${livres(c).length} livré${livres(c).length > 1 ? 's' : ''}${enAttente(c).length ? `, ${enAttente(c).length} en attente` : ''}${nbChoix(c) ? ` · ${icone('check', { taille: 12 })} ${nbChoix(c)} choisi${nbChoix(c) > 1 ? 's' : ''}` : ''}${c.choix?.vuLe ? ` · vu ${esc(depuis(c.choix.vuLe))}` : ''}</small>
+            <b>${esc(c.client?.nom || c.client?.prenom || 'Nouveau client')}</b>
+            ${sousTitre(c) ? `<small>${esc(sousTitre(c))}</small>` : ''}
           </span>
           ${c.id === actif && c.actif ? '<span class="pastille-direct">En repérage</span>' : !c.actif ? '<span class="pastille-fini">Terminé</span>' : ''}
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`).join('')}
     </ul>
-    ${tous.length ? '' : '<p class="petit vide-clients">Aucun client</p>'}
     <div class="barre-selection" id="barre-selection" hidden>
       <button type="button" class="bouton-secondaire" id="sel-annuler">Annuler</button>
       <button type="button" class="bouton-danger plein" id="sel-supprimer" disabled>${icone('trash-2', { taille: 18 })} <span>Supprimer</span></button>
-    </div>
+    </div>`
+    : `<div class="vide">${`<span class="vide-icone">${icone('users', { taille: 28 })}</span>`}<b>Aucun client</b><button type="button" class="bouton-principal bouton-vide" id="nouveau-vide">${icone('plus', { taille: 18 })} Nouveau client</button></div>`;
 
-    <section class="section carte-fiche">
-      <h2 class="section-titre">${icone('file-text', { taille: 20 })} Formulaire de demande</h2>
-      <label class="champ"><span>Nom du client <small>optionnel</small></span><input id="fiche-nom" placeholder="Ex. : Marie Tremblay" autocapitalize="words" autocomplete="off"></label>
-      <div class="trois">
-        <button class="bouton-principal" id="fiche-copier">${icone('copy', { taille: 17 })} Copier</button>
-        <button class="bouton-secondaire" id="fiche-envoyer">${icone('send', { taille: 17 })} Envoyer</button>
-        <a class="bouton-secondaire" id="fiche-voir" href="demande.html?apercu">${icone('eye', { taille: 17 })} Voir</a>
-      </div>
-      <ul class="liste-liens" id="liste-liens"></ul>
-      <details class="fiche-plus">
-        <summary>Mes coordonnées</summary>
-        <label class="champ"><span>Ton courriel</span><input id="fiche-courriel" type="email" value="${esc(await db.lireReglage('courrielFiche', ''))}" placeholder="toi@exemple.com"></label>
-        <label class="champ"><span>Ton cell</span><input id="fiche-tel" type="tel" value="${esc(await db.lireReglage('telFiche', ''))}" placeholder="514 555-1234"></label>
-      </details>
-    </section>`;
-  // Le lien du formulaire : un nouveau lien unique à chaque Copier ou Envoyer.
-  const nouveauLienFiche = () => liensDemande.preparerLien(location.href, {
-    client: app.querySelector('#fiche-nom').value,
-    pour: app.querySelector('#fiche-courriel').value.trim(),
-    tel: app.querySelector('#fiche-tel').value,
-  });
-  app.querySelector('#fiche-courriel').onchange = (ev) => db.ecrireReglage('courrielFiche', ev.target.value.trim());
-  app.querySelector('#fiche-tel').onchange = (ev) => db.ecrireReglage('telFiche', ev.target.value.trim());
-  const apres = async (lien) => { await liensDemande.garderLien(lien); app.querySelector('#fiche-nom').value = ''; majListeLiens(); };
-  app.querySelector('#fiche-copier').onclick = async () => {
-    const { lien, url } = nouveauLienFiche();
-    try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { window.prompt('Copie ce lien :', url); }
-    apres(lien);
+  const nouveauClient = async () => {
+    const dernier = await db.lireReglage('dernierLieu', {});
+    const c = carnets.nouveauCarnet({ ville: dernier.ville || '', pays: dernier.pays || etat.region.pays || '' });
+    await db.ecrire('carnets', c);
+    await db.ecrireReglage('carnetActif', c.id);
+    sync.marquer(sync.cheminCarnet(c.id));
+    aller(`#/carnet/${c.id}/reglages`);
   };
-  app.querySelector('#fiche-envoyer').onclick = async () => {
-    const { lien, url } = nouveauLienFiche();
-    try {
-      if (navigator.share) await navigator.share({ title: 'Votre voyage sur mesure', url });
-      else { await navigator.clipboard.writeText(url); toast('Nouveau lien copié'); }
-      apres(lien);
-    } catch (_) { /* annulé : le lien n'est pas gardé */ }
-  };
-  // Les liens envoyés, et ceux dont la demande est arrivée.
-  const majListeLiens = async () => {
-    const liens = (await liensDemande.tousLesLiens()).slice(0, 8);
-    const zone = app.querySelector('#liste-liens');
-    if (!zone) return;
-    zone.innerHTML = liens.map((l) => `
-      <li><a class="ligne-lien" href="#/demande/${esc(l.id)}" data-id="${esc(l.id)}"><span><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' }))}</small></span>
-        ${l.code ? `<em class="lien-recu">${l.carnetId ? `${icone('user-check', { taille: 13 })} Client` : `${icone('inbox', { taille: 13 })} Voir la demande`}</em>` : '<em>En attente</em>'}${icone('chevron-right', { taille: 16 })}</a></li>`).join('');
-  };
-  majListeLiens();
-  // Appui long sur un lien de formulaire : voir la demande ou l'effacer.
-  appuiLong(app.querySelector('#liste-liens'), 'a.ligne-lien', async (a) => {
-    const l = await db.lire('liens', a.dataset.id);
-    if (!l) return;
-    ouvrirFeuille(`${enteteFeuille(esc(l.nom || l.client || 'Lien'))}
-      <ul class="liste-choix">
-        ${l.code ? `<li><button type="button" class="ligne ligne-menu" data-action="voir">${icone('inbox', { taille: 20 })}<span>Voir la demande</span></button></li>` : ''}
-        <li><button type="button" class="ligne ligne-menu ligne-danger" data-action="effacer">${icone('trash-2', { taille: 20 })}<span>${l.code ? 'Effacer la demande' : 'Effacer le lien'}</span></button></li>
-      </ul>
-      <div class="confirmer" id="menu-confirmer" hidden><p>Effacer ? Le client ne pourra plus l'envoyer.</p><button type="button" class="bouton-danger plein" data-action="oui">Oui, effacer</button></div>`, async (ev) => {
-      const b = ev.target.closest('[data-action]');
-      if (!b) return;
-      if (b.dataset.action === 'voir') { fermerFeuille(); aller(`#/demande/${l.id}`); }
-      else if (b.dataset.action === 'effacer') { b.closest('ul').hidden = true; feuille.querySelector('#menu-confirmer').hidden = false; }
-      else if (b.dataset.action === 'oui') { await liensDemande.oublierLien(l.id); fermerFeuille(); toast('Effacé'); majListeLiens(); }
-    });
-  });
+  app.querySelector('#nouveau').onclick = nouveauClient;
+  const vide = zone.querySelector('#nouveau-vide');
+  if (vide) vide.onclick = nouveauClient;
+  if (!tous.length) return;
 
-  // Appui long sur un client : son menu. « Sélectionner » : en supprimer plusieurs d'un coup.
-  const ul = app.querySelector('#carnets');
+  // Appui long sur un client : son menu. « Sélectionner plusieurs » : en supprimer plusieurs d'un coup.
+  const ul = zone.querySelector('#carnets');
   let selection = null;
+  const bsel = app.querySelector('#selectionner');
   const majSelection = () => {
     const actifSel = !!selection;
     ul.classList.toggle('en-selection', actifSel);
-    app.querySelector('#barre-selection').hidden = !actifSel;
+    zone.querySelector('#barre-selection').hidden = !actifSel;
     document.body.classList.toggle('mode-selection', actifSel);
+    app.querySelector('#nouveau').hidden = actifSel;
+    bsel.hidden = !actifSel;
     ul.querySelectorAll('.carnet-ligne').forEach((a) => a.classList.toggle('coche', actifSel && selection.has(a.dataset.id)));
     const n = selection?.size || 0;
-    const bs = app.querySelector('#sel-supprimer');
+    const bs = zone.querySelector('#sel-supprimer');
     bs.disabled = !n;
     bs.querySelector('span').textContent = n ? `Supprimer (${n})` : 'Supprimer';
-    const bsel = app.querySelector('#selectionner');
-    if (bsel) bsel.textContent = actifSel ? (n === tous.length ? 'Aucun' : 'Tout') : 'Sélectionner';
+    bsel.textContent = n === tous.length ? 'Aucun' : 'Tout';
   };
   const entrerSelection = (id) => { selection = new Set(id ? [id] : []); majSelection(); };
   ul.addEventListener('click', (ev) => {
@@ -1378,18 +1363,16 @@ async function pageClients() {
     if (selection.has(a.dataset.id)) selection.delete(a.dataset.id); else selection.add(a.dataset.id);
     majSelection();
   });
-  const bsel = app.querySelector('#selectionner');
-  if (bsel) bsel.onclick = () => {
-    if (!selection) entrerSelection();
-    else { selection = selection.size === tous.length ? new Set() : new Set(tous.map((c) => c.id)); majSelection(); }
-  };
-  app.querySelector('#sel-annuler').onclick = () => { selection = null; majSelection(); };
-  app.querySelector('#sel-supprimer').onclick = (ev) => {
+  bsel.onclick = () => { selection = selection.size === tous.length ? new Set() : new Set(tous.map((c) => c.id)); majSelection(); };
+  zone.querySelector('#sel-annuler').onclick = () => { selection = null; majSelection(); };
+  zone.querySelector('#sel-supprimer').onclick = () => {
     const n = selection.size;
     if (!n) return;
     ouvrirFeuille(`${enteteFeuille(`Supprimer ${plur(n, 'client')} ?`)}
-      <p class="petit">Leur page ne s'ouvrira plus. C'est définitif.</p>
-      <button type="button" class="bouton-danger plein" data-action="oui">${icone('trash-2', { taille: 18 })} Oui, supprimer ${n > 1 ? `les ${n}` : ''}</button>`, async (e2) => {
+      <div class="feuille-corps">
+        <p class="petit">Leur page ne s'ouvrira plus.</p>
+        <button type="button" class="bouton-danger plein" data-action="oui">${icone('trash-2', { taille: 18 })} Supprimer</button>
+      </div>`, async (e2) => {
       if (!e2.target.closest('[data-action=oui]')) return;
       for (const c of tous.filter((x) => selection.has(x.id))) await effacerCarnet(c);
       fermerFeuille();
@@ -1402,17 +1385,16 @@ async function pageClients() {
     if (selection) return;
     const c = tous.find((x) => x.id === a.dataset.id);
     if (!c) return;
-    const nom = c.client?.nom || c.client?.prenom || 'Client sans nom';
-    const ligneM = (action, ico, texte, classe = '') => `<li><button type="button" class="ligne ligne-menu ${classe}" data-action="${action}">${icone(ico, { taille: 20 })}<span>${texte}</span></button></li>`;
+    const nom = c.client?.nom || c.client?.prenom || 'Nouveau client';
     ouvrirFeuille(`${enteteFeuille(esc(nom))}
       <ul class="liste-choix">
-        ${ligneM('ouvrir', 'user', 'Ouvrir')}
-        ${c.actif && c.id !== actif ? ligneM('reperage', 'map-pin', 'Mettre en repérage') : ''}
-        ${ligneM('fini', c.actif ? 'circle-check-big' : 'refresh-cw', c.actif ? 'Marquer terminé' : 'Remettre en cours')}
-        ${ligneM('selection', 'list', 'Sélectionner plusieurs')}
-        ${ligneM('supprimer', 'trash-2', 'Supprimer', 'ligne-danger')}
+        ${ligneMenu('ouvrir', 'user', 'Ouvrir')}
+        ${c.actif && c.id !== actif ? ligneMenu('reperage', 'map-pin', 'Mettre en repérage') : ''}
+        ${ligneMenu('fini', c.actif ? 'circle-check-big' : 'refresh-cw', c.actif ? 'Marquer terminé' : 'Remettre en cours')}
+        ${ligneMenu('selection', 'list', 'Sélectionner plusieurs')}
+        ${ligneMenu('supprimer', 'trash-2', 'Supprimer', 'ligne-danger')}
       </ul>
-      <div class="confirmer" id="menu-confirmer" hidden><p>Supprimer « ${esc(nom)} » ? Sa page ne s'ouvrira plus.</p><button type="button" class="bouton-danger plein" data-action="oui">Oui, supprimer</button></div>`, async (ev) => {
+      ${confirmerHtml(`Supprimer « ${esc(nom)} » ?`, 'Sa page ne s’ouvrira plus.', 'Supprimer')}`, async (ev) => {
       const b = ev.target.closest('[data-action]');
       if (!b) return;
       const act = b.dataset.action;
@@ -1420,19 +1402,105 @@ async function pageClients() {
       else if (act === 'reperage') { await db.ecrireReglage('carnetActif', c.id); fermerFeuille(); toast(`${c.client?.prenom || 'Client'} en repérage`); pageClients(); }
       else if (act === 'fini') { c.actif = !c.actif; c.modifieLe = new Date().toISOString(); await db.ecrire('carnets', c); sync.marquer(sync.cheminCarnet(c.id)); fermerFeuille(); toast(c.actif ? 'Remis en cours' : 'Marqué terminé'); pageClients(); }
       else if (act === 'selection') { fermerFeuille(); entrerSelection(c.id); }
-      else if (act === 'supprimer') { b.closest('ul').hidden = true; feuille.querySelector('#menu-confirmer').hidden = false; }
+      else if (act === 'supprimer') montrerConfirmer(b);
+      else if (act === 'non') cacherConfirmer();
       else if (act === 'oui') { await effacerCarnet(c); fermerFeuille(); toast('Client supprimé'); pageClients(); }
     });
   });
-  liensDemande.relever().then((r) => { if (r.length) { toast(`${r.length > 1 ? `${r.length} demandes reçues` : `Demande reçue : ${r[0].nom || r[0].client}`}`); majListeLiens(); } });
-  app.querySelector('#nouveau-carnet').onclick = async () => {
-    const dernier = await db.lireReglage('dernierLieu', {});
-    const c = carnets.nouveauCarnet({ ville: dernier.ville || '', pays: dernier.pays || etat.region.pays || '' });
-    await db.ecrire('carnets', c);
-    await db.ecrireReglage('carnetActif', c.id);
-    sync.marquer(sync.cheminCarnet(c.id));
-    aller(`#/carnet/${c.id}/reglages`);
-  };
+}
+
+// Petits morceaux communs des menus (appui long).
+const ligneMenu = (action, ico, texte, classe = '') => `<li><button type="button" class="ligne ligne-menu ${classe}" data-action="${action}">${icone(ico, { taille: 20 })}<span>${texte}</span></button></li>`;
+const confirmerHtml = (question, detail, oui) => `
+  <div class="confirmer" id="menu-confirmer" hidden>
+    <p><b>${question}</b>${detail ? `<span>${detail}</span>` : ''}</p>
+    <button type="button" class="bouton-danger plein" data-action="oui">${oui}</button>
+    <button type="button" class="bouton-secondaire" data-action="non">Annuler</button>
+  </div>`;
+function montrerConfirmer(b) { b.closest('ul').hidden = true; feuille.querySelector('#menu-confirmer').hidden = false; }
+function cacherConfirmer() { feuille.querySelector('.liste-choix').hidden = false; feuille.querySelector('#menu-confirmer').hidden = true; }
+
+// ----- Onglet Demandes : les formulaires envoyés et les demandes reçues -----
+function etatLien(l) {
+  if (l.carnetId) return ['client', 'Client'];
+  if (l.code) return ['recue', l.vu ? 'Reçue' : 'Nouvelle'];
+  return ['attente', 'Envoyé'];
+}
+async function ongletDemandes(zone, liens) {
+  zone.innerHTML = liens.length ? `
+    <ul class="liste-demandes" id="liste-liens">
+      ${liens.map((l) => { const [cl, txt] = etatLien(l); return `
+        <li><a class="ligne-demande" href="#/demande/${esc(l.id)}" data-id="${esc(l.id)}">
+          <span class="carnet-avatar ${l.code ? '' : 'avatar-pale'}">${l.code ? esc((l.nom || l.client || '?').charAt(0).toUpperCase()) : icone('send', { taille: 18 })}</span>
+          <span class="carnet-txt"><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.recuLe || l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${l.source === 'public' ? ' · lien public' : ''}</small></span>
+          <span class="etat-lien ${cl}">${txt}</span>
+          ${icone('chevron-right', { taille: 18 })}
+        </a></li>`; }).join('')}
+    </ul>`
+    : `<div class="vide"><span class="vide-icone">${icone('inbox', { taille: 28 })}</span><b>Aucune demande</b><button type="button" class="bouton-principal bouton-vide" id="nouveau-vide">${icone('plus', { taille: 18 })} Nouveau lien</button></div>`;
+  const nouveau = () => feuilleNouveauLien(() => pageClients('demandes'));
+  app.querySelector('#nouveau').onclick = nouveau;
+  const vide = zone.querySelector('#nouveau-vide');
+  if (vide) vide.onclick = nouveau;
+  // Appui long sur une demande : la voir ou l'effacer.
+  const ul = zone.querySelector('#liste-liens');
+  if (!ul) return;
+  appuiLong(ul, 'a.ligne-demande', async (a) => {
+    const l = await db.lire('liens', a.dataset.id);
+    if (!l) return;
+    ouvrirFeuille(`${enteteFeuille(esc(l.nom || l.client || 'Demande'))}
+      <ul class="liste-choix">
+        ${l.code ? ligneMenu('voir', 'inbox', 'Ouvrir la demande') : ''}
+        ${ligneMenu('effacer', 'trash-2', 'Supprimer', 'ligne-danger')}
+      </ul>
+      ${confirmerHtml('Supprimer cette demande ?', l.code ? '' : 'Le lien ne marchera plus.', 'Supprimer')}`, async (ev) => {
+      const b = ev.target.closest('[data-action]');
+      if (!b) return;
+      if (b.dataset.action === 'voir') { fermerFeuille(); aller(`#/demande/${l.id}`); }
+      else if (b.dataset.action === 'effacer') montrerConfirmer(b);
+      else if (b.dataset.action === 'non') cacherConfirmer();
+      else if (b.dataset.action === 'oui') { await liensDemande.oublierLien(l.id); fermerFeuille(); toast('Demande supprimée'); pageClients('demandes'); }
+    });
+  });
+}
+
+// Nouveau lien de formulaire : un lien unique par client (Copier ou Envoyer), ou le lien public.
+function feuilleNouveauLien(apres) {
+  ouvrirFeuille(`${enteteFeuille('Formulaire de demande')}
+    <div class="feuille-corps">
+      <label class="champ"><span>Nom du client</span><input id="fiche-nom" placeholder="Marie Tremblay" autocapitalize="words" autocomplete="off" enterkeyhint="done"></label>
+      <div class="deux">
+        <button type="button" class="bouton-principal" data-action="copier">${icone('copy', { taille: 17 })} Copier le lien</button>
+        <button type="button" class="bouton-secondaire" data-action="envoyer">${icone('send', { taille: 17 })} Envoyer</button>
+      </div>
+      <ul class="liste-choix liste-sobre">
+        ${ligneMenu('public', 'link', 'Copier le lien public')}
+        <li><a class="ligne ligne-menu" href="demande.html?apercu">${icone('eye', { taille: 20 })}<span>Aperçu du formulaire</span></a></li>
+      </ul>
+    </div>`, async (ev) => {
+    const b = ev.target.closest('[data-action]');
+    if (!b) return;
+    const courriel = await db.lireReglage('courrielFiche', '');
+    const tel = await db.lireReglage('telFiche', '');
+    if (b.dataset.action === 'public') {
+      const url = new URL('demande.html', location.href).href;
+      try { await navigator.clipboard.writeText(url); toast('Lien public copié'); } catch (_) { window.prompt('Copie ce lien :', url); }
+      return;
+    }
+    // Le lien est préparé tout de suite : le téléphone permet de copier seulement juste après le toucher.
+    const { lien, url } = liensDemande.preparerLien(location.href, { client: feuille.querySelector('#fiche-nom').value, pour: courriel, tel });
+    if (b.dataset.action === 'copier') {
+      try { await navigator.clipboard.writeText(url); toast(`Lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { window.prompt('Copie ce lien :', url); }
+    } else {
+      try {
+        if (navigator.share) await navigator.share({ title: 'Votre voyage sur mesure', url });
+        else { await navigator.clipboard.writeText(url); toast('Lien copié'); }
+      } catch (_) { return; /* annulé : le lien n'est pas gardé */ }
+    }
+    await liensDemande.garderLien(lien);
+    fermerFeuille();
+    apres();
+  });
 }
 
 // ---------- Une demande reçue (formulaire rempli par le client) ----------
@@ -1467,8 +1535,9 @@ async function clientDepuisDemande(lien, d) {
 
 async function pageDemande(lienId) {
   const lien = await db.lire('liens', lienId);
-  if (!lien) return aller('#/clients');
-  const retour = `<a class="rond" href="#/clients" aria-label="Retour">${icone('chevron-left')}</a>`;
+  if (!lien) return location.replace('#/demandes');
+  if (lien.code && !lien.vu) { lien.vu = true; await db.ecrire('liens', lien); }
+  const retour = `<a class="rond" href="#/demandes" data-retour-page aria-label="Retour">${icone('chevron-left')}</a>`;
   if (!lien.code) {
     app.innerHTML = `<header class="entete-form">${retour}<h1>${esc(lien.client || 'Demande')}</h1><span class="rond vide-rond"></span></header>
       <div class="vide-demande">${icone('hourglass', { taille: 30 })}<b>Pas encore remplie</b><span>Le lien a été envoyé le ${esc(new Date(lien.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}.</span></div>`;
@@ -1556,7 +1625,7 @@ function ligneItem(c, i, endroit, { attente }) {
 
 async function pageCarnet(id, sous) {
   let c = await db.lire('carnets', id);
-  if (!c) return aller('#/clients');
+  if (!c) return location.replace('#/clients');
   const actifId = await db.lireReglage('carnetActif', null);
   const prenom = c.client?.prenom || 'ton client';
   const lienClient = carnets.lien(c);
@@ -1572,15 +1641,15 @@ async function pageCarnet(id, sous) {
 
   app.innerHTML = `
     <header class="entete-form">
-      <a class="rond" href="#/clients" aria-label="Retour">${icone('chevron-left')}</a>
-      <h1>${esc(c.client?.prenom || 'Nouveau client')}</h1>
+      <a class="rond" href="#/clients" data-retour-page aria-label="Retour">${icone('chevron-left')}</a>
+      <h1>${esc(c.client?.nom || c.client?.prenom || 'Nouveau client')}</h1>
       <button type="button" class="rond rond-supprimer" id="supprimer-haut" aria-label="Supprimer ce client" title="Supprimer ce client">${icone('trash-2', { taille: 19 })}</button>
     </header>
 
     <section class="carnet-entete">
-      <p class="carnet-sur">${icone('map-pin', { taille: 15 })} ${esc(c.ville || 'Ville à choisir')}<span class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</span></p>
+      <p class="carnet-sur">${icone('map-pin', { taille: 15 })} ${esc(c.ville || 'Ville')}<span class="pub ${pub.classe}" id="pub">${esc(pub.texte)}</span></p>
       <label class="interrupteur carte-interrupteur">
-        <span><b>Je repère pour ${esc(prenom)}</b></span>
+        <span><b>En repérage</b></span>
         <input type="checkbox" id="repere" ${actifId === c.id && c.actif ? 'checked' : ''}>
         <i aria-hidden="true"></i>
       </label>
@@ -1619,23 +1688,23 @@ async function pageCarnet(id, sous) {
 
     <section class="section envoi-rapide">
       <button class="bouton-principal bouton-bloc" id="envoyer-maintenant">${icone('send', { taille: 18 })} Envoyer maintenant</button>
-      <button class="bouton-secondaire bouton-bloc" id="essai-montreal">${icone(enEssai ? 'x' : 'map-pin', { taille: 18 })} ${enEssai ? 'Arrêter l’essai de Montréal' : 'Envoyer l’essai de Montréal'}</button>
     </section>
 
     <details class="section" id="reglages-carnet" ${reglagesOuverts || sous === 'envoi' ? 'open' : ''}>
       <summary>Réglages</summary>
-      <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" placeholder="Ex. : Marc" autocapitalize="words"></label>
+      <label class="champ"><span>Prénom du client</span><input id="c-prenom" value="${esc(c.client?.prenom)}" autocapitalize="words"></label>
       <div class="deux">
-        <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" placeholder="Ex. : Montréal"></label>
-        <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" placeholder="Ex. : Canada"></label>
+        <label class="champ"><span>Ville</span><input id="c-ville" value="${esc(c.ville)}" autocapitalize="words"></label>
+        <label class="champ"><span>Pays</span><input id="c-pays" value="${esc(c.pays)}" autocapitalize="words"></label>
       </div>
-      <label class="champ"><span>Ton cell</span><input id="c-tel" type="tel" value="${esc(c.tel ?? telDefaut)}" placeholder="514 555-1234"></label>
+      <label class="champ"><span>Ton cell</span><input id="c-tel" type="tel" value="${esc(c.tel ?? telDefaut)}"></label>
       <label class="interrupteur">
         <span><b>Repérage terminé</b></span>
         <input type="checkbox" id="c-fini" ${c.actif ? '' : 'checked'}>
         <i aria-hidden="true"></i>
       </label>
       <div id="envoi-carnet">${aVenir.blocReglages(c)}</div>
+      <button class="bouton-secondaire bouton-bloc" id="essai-montreal">${icone(enEssai ? 'x' : 'map-pin', { taille: 18 })} ${enEssai ? 'Arrêter l’essai de Montréal' : 'Essai de Montréal'}</button>
       <button class="bouton-danger" id="supprimer-carnet">${icone('trash-2', { taille: 18 })} Supprimer ce client</button>
     </details>`;
 
@@ -1674,7 +1743,7 @@ async function pageCarnet(id, sous) {
     ouvrirFeuille(`
       ${enteteFeuille('Conseil')}
       <div class="feuille-corps">
-        <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Ex. : Demande la chambre du 6e, la vue est folle.">${esc(i.mot)}</textarea>
+        <textarea id="mot-item" rows="4" class="zone-mot" placeholder="Demande la chambre du 6e">${esc(i.mot)}</textarea>
         <button type="button" class="bouton-principal" id="ok-mot">Enregistrer</button>
       </div>`, (ev) => {
       if (!ev.target.closest('#ok-mot')) return;
@@ -1778,7 +1847,7 @@ async function pageCarnet(id, sous) {
     }
     await effacerCarnet(c);
     toast('Client supprimé');
-    aller('#/clients');
+    revenir('#/clients');
   };
   app.querySelector('#supprimer-haut').onclick = (ev) => supprimer(ev.currentTarget);
   app.querySelector('#supprimer-carnet').onclick = (ev) => supprimer(ev.currentTarget, `Toucher encore pour supprimer`);
@@ -1812,7 +1881,6 @@ async function pageVilles() {
   app.innerHTML = `
     <header class="entete-page">
       <h1>Villes</h1>
-      <p>Combien de jours tu conseilles dans chaque ville. Ça servira pour créer les itinéraires.</p>
     </header>
     <div class="villes">
       ${liste.map((v) => {
@@ -1830,7 +1898,7 @@ async function pageVilles() {
                 <button type="button" data-plus aria-label="Plus">+</button>
               </div>
             </div>
-            <textarea rows="2" placeholder="Notes sur la ville (privé)" data-champ="notes">${esc(info.notes)}</textarea>
+            <textarea rows="2" placeholder="Notes privées" data-champ="notes">${esc(info.notes)}</textarea>
           </div>`;
       }).join('') || `<p class="vide"><span class="vide-icone">${icone('building-2', { taille: 28 })}</span><b>Aucune ville</b></p>`}
     </div>`;
@@ -1855,44 +1923,203 @@ async function pageVilles() {
   });
 }
 
+// ---------- En voyage : phrases, présentation, conversion, carte ----------
+function parler(texte, voix) {
+  if (!('speechSynthesis' in window)) { toast('Lecture non disponible sur cet appareil'); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(texte);
+  u.lang = voix;
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}
+
+async function pageOutil(id) {
+  const titres = { phrases: 'Phrases utiles', pitch: 'Présenter mon agence', convertir: 'Convertir un prix', carte: 'Ma carte de contact' };
+  if (!titres[id]) return location.replace('#/reglages');
+  const pays = await paysCourant();
+  const choix = await db.lireReglage('langueOutils', null);
+  let langue = choix && choix.pays === pays ? choix.langue : langueDuPays(pays);
+  if (!LANGUES[langue]) langue = 'en';
+  app.innerHTML = `
+    <header class="entete-form">
+      <a class="rond" href="#/reglages" data-retour-page aria-label="Retour">${icone('chevron-left')}</a>
+      <h1>${titres[id]}</h1>
+      <span class="rond vide-rond"></span>
+    </header>
+    <div id="outil" class="outil"></div>`;
+  const zone = app.querySelector('#outil');
+  const puces = () => `<div class="puces-langues" role="tablist">${Object.entries(LANGUES).map(([k, l]) => `<button type="button" class="puce-langue ${k === langue ? 'choisie' : ''}" data-langue="${k}">${esc(l.nom)}</button>`).join('')}</div>`;
+  const brancherPuces = (redessiner) => zone.querySelectorAll('[data-langue]').forEach((b) => {
+    b.onclick = async () => { langue = b.dataset.langue; await db.ecrireReglage('langueOutils', { pays, langue }); redessiner(); };
+  });
+
+  if (id === 'phrases') {
+    const dessiner = () => {
+      const L = LANGUES[langue];
+      const voix = voixPays(langue, pays);
+      const urg = urgences(pays);
+      zone.innerHTML = `
+        ${puces()}
+        ${urg.length ? `<div class="urgences">${icone('siren', { taille: 18 })}<span>${esc(pays)}</span>${urg.map(([n, num]) => `<a href="tel:${num}">${esc(n)} <b>${num}</b></a>`).join('')}</div>` : ''}
+        <ul class="phrases">
+          ${PHRASES.map(([k, fr]) => { const [texte, prono] = L.phrases[k]; if (k === 'langue' && langue === 'en') fr = 'Parlez-vous français ?'; return `
+            <li><button type="button" class="phrase" data-dire="${esc(k)}">
+              <span class="phrase-fr">${esc(fr)}</span>
+              <b lang="${esc(voix)}">${esc(texte)}</b>
+              <i>${esc(prono)}</i>
+              <span class="phrase-son" aria-label="Écouter">${icone('volume-2', { taille: 18 })}</span>
+            </button></li>`; }).join('')}
+        </ul>`;
+      brancherPuces(dessiner);
+      zone.querySelectorAll('[data-dire]').forEach((b) => { b.onclick = () => parler(L.phrases[b.dataset.dire][0], voix); });
+    };
+    dessiner();
+  } else if (id === 'pitch') {
+    const dessiner = () => {
+      const L = LANGUES[langue];
+      const voix = voixPays(langue, pays);
+      zone.innerHTML = `
+        ${puces()}
+        <article class="pitch">
+          <p class="pitch-texte" lang="${esc(voix)}">${esc(L.pitch)}</p>
+          <div class="deux">
+            <button type="button" class="bouton-principal" id="ecouter">${icone('volume-2', { taille: 18 })} Écouter</button>
+            <button type="button" class="bouton-secondaire" id="grand">${icone('maximize-2', { taille: 18 })} Montrer</button>
+          </div>
+        </article>
+        <p class="pitch-fr">${esc(PITCH_FR)}</p>`;
+      brancherPuces(dessiner);
+      zone.querySelector('#ecouter').onclick = () => parler(L.pitch, voix);
+      zone.querySelector('#grand').onclick = () => {
+        const voile = document.createElement('div');
+        voile.className = 'pitch-plein';
+        voile.innerHTML = `<p lang="${esc(voix)}">${esc(L.pitch)}</p><button type="button" class="rond" aria-label="Fermer">${icone('x')}</button>`;
+        voile.onclick = () => voile.remove();
+        document.body.appendChild(voile);
+      };
+    };
+    dessiner();
+  } else if (id === 'convertir') {
+    let devise = DEVISE_DU_PAYS[pays] && DEVISE_DU_PAYS[pays] !== 'CAD' ? DEVISE_DU_PAYS[pays] : 'USD';
+    const nombre = (v) => parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+    const joli = (n) => (Number.isFinite(n) ? n.toLocaleString('fr-CA', { maximumFractionDigits: n < 10 ? 2 : 0 }) : '');
+    const dessiner = () => {
+      const rapides = uniques([DEVISE_DU_PAYS[pays] !== 'CAD' ? DEVISE_DU_PAYS[pays] : '', devise, 'USD', 'EUR']);
+      zone.innerHTML = `
+        <div class="convertir">
+          <label class="conv-ligne"><span>${esc(devise)}<small>${esc(NOMS_DEVISES[devise] || '')}</small></span><input id="conv-local" inputmode="decimal" placeholder="0" autocomplete="off" enterkeyhint="done"></label>
+          <span class="conv-fleche">${icone('arrow-left-right', { taille: 18 })}</span>
+          <label class="conv-ligne"><span>CAD<small>Dollar canadien</small></span><input id="conv-cad" inputmode="decimal" placeholder="0" autocomplete="off" enterkeyhint="done"></label>
+        </div>
+        <div class="puces-devises">${rapides.map((d) => `<button type="button" class="puce-devise ${d === devise ? 'choisie' : ''}" data-devise="${d}"><b>${d}</b><small>${esc(NOMS_DEVISES[d] || '')}</small></button>`).join('')}<button type="button" class="puce-devise autre" data-autre><b>Autre</b><small>Toutes les monnaies</small></button></div>
+        <p class="petit">Taux approximatif : 1 ${esc(devise)} = ${joli(etat.taux[devise])} $ CA</p>`;
+      const local = zone.querySelector('#conv-local');
+      const cad = zone.querySelector('#conv-cad');
+      local.oninput = () => { const n = nombre(local.value); cad.value = Number.isFinite(n) ? joli(n * etat.taux[devise]) : ''; };
+      cad.oninput = () => { const n = nombre(cad.value); local.value = Number.isFinite(n) ? joli(n / etat.taux[devise]) : ''; };
+      zone.querySelectorAll('[data-devise]').forEach((b) => { b.onclick = () => { devise = b.dataset.devise; dessiner(); }; });
+      zone.querySelector('[data-autre]').onclick = () => choisirDansListe({
+        titre: 'Monnaie',
+        valeurs: trierFr(Object.keys(etat.taux).filter((d) => d !== 'CAD')),
+        choisie: devise,
+        etiquette: (d) => `${d}, ${NOMS_DEVISES[d] || d}`,
+        placeholder: 'Chercher une monnaie',
+        quandChoisi: (d) => { devise = d; dessiner(); },
+      });
+    };
+    dessiner();
+  } else if (id === 'carte') {
+    const moi = { nom: await db.lireReglage('nomFiche', ''), courriel: await db.lireReglage('courrielFiche', ''), tel: await db.lireReglage('telFiche', ''), insta: await db.lireReglage('instaFiche', '') };
+    if (!moi.nom && !moi.tel && !moi.courriel) {
+      zone.innerHTML = `<div class="vide"><span class="vide-icone">${icone('id-card', { taille: 28 })}</span><b>Carte vide</b><a class="bouton-principal bouton-vide" href="#/reglages">Remplir mes coordonnées</a></div>`;
+      return;
+    }
+    const insta = moi.insta.replace(/^@/, '');
+    zone.innerHTML = `
+      <article class="carte-contact">
+        <span class="carte-contact-marque">${esc(MARQUE)}</span>
+        <h2>${esc(moi.nom || 'Mon nom')}</h2>
+        <ul>
+          ${moi.tel ? `<li>${icone('phone', { taille: 18 })}<span>${esc(moi.tel)}</span></li>` : ''}
+          ${moi.courriel ? `<li>${icone('mail', { taille: 18 })}<span>${esc(moi.courriel)}</span></li>` : ''}
+          ${insta ? `<li>${icone('camera', { taille: 18 })}<span>@${esc(insta)}</span></li>` : ''}
+        </ul>
+      </article>
+      <button type="button" class="bouton-principal" id="partager-carte">${icone('share', { taille: 18 })} Partager ma carte</button>
+      <a class="lien lien-centre" href="#/reglages">Modifier</a>`;
+    zone.querySelector('#partager-carte').onclick = async () => {
+      const v = (t) => String(t || '').replace(/[\r\n;,]/g, ' ');
+      const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${v(moi.nom)}`, `ORG:${v(MARQUE)}`, moi.tel ? `TEL;TYPE=CELL:${v(moi.tel)}` : '', moi.courriel ? `EMAIL:${v(moi.courriel)}` : '', insta ? `URL:https://instagram.com/${encodeURIComponent(insta)}` : '', 'END:VCARD'].filter(Boolean).join('\r\n');
+      const fichier = new File([vcf], `${sansAccents(moi.nom || 'contact').replace(/[^a-z0-9]+/g, '-')}.vcf`, { type: 'text/vcard' });
+      try {
+        if (navigator.canShare?.({ files: [fichier] })) await navigator.share({ files: [fichier] });
+        else { const a = document.createElement('a'); a.href = URL.createObjectURL(fichier); a.download = fichier.name; a.click(); }
+      } catch (_) { /* annulé */ }
+    };
+  }
+}
+
 // ---------- Réglages ----------
+async function paysCourant() {
+  if (etat.region.pays) return etat.region.pays;
+  return (await db.lireReglage('dernierLieu', {})).pays || '';
+}
+const ligneReglage = (href, ico, texte, detail = '') => `<li><a class="ligne ligne-reglage" href="${href}">${icone(ico, { taille: 20 })}<span>${texte}</span>${detail ? `<small>${esc(detail)}</small>` : ''}${icone('chevron-right', { taille: 18 })}</a></li>`;
+
 async function pageReglages() {
   const derniere = await db.lireReglage('derniereSauvegarde', null);
   const nbPhotos = etat.endroits.reduce((n, e) => n + (e.photos?.length || 0), 0);
   const envoi = await sync.etat();
   const cfg = await sync.lireConfig();
-  const r = etat.region;
-  const paysProposes = paysDuContinent(r.continent);
+  const pays = await paysCourant();
+  const langue = langueDuPays(pays);
+  const tousPays = trierFr(Object.values(CONTINENTS).flat());
+  const moi = { nom: await db.lireReglage('nomFiche', ''), courriel: await db.lireReglage('courrielFiche', ''), tel: await db.lireReglage('telFiche', ''), insta: await db.lireReglage('instaFiche', '') };
   app.innerHTML = `
     <header class="entete-page"><h1>Réglages</h1></header>
 
     <section class="section">
-      <h2 class="section-titre">${icone('map-pin', { taille: 20 })} Où je suis</h2>
-      <label class="champ"><span>Continent</span><select id="continent">
-        <option value="">Tous les continents</option>
-        ${Object.keys(CONTINENTS).map((c) => `<option ${c === r.continent ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-      </select></label>
-      <label class="champ"><span>Pays où je suis en ce moment</span><select id="pays-actuel">
-        <option value="">Je change souvent de pays</option>
-        ${paysProposes.map((p) => `<option ${p === r.pays ? 'selected' : ''}>${esc(p)}</option>`).join('')}
-      </select></label>
+      <h2 class="section-titre">En voyage</h2>
+      <ul class="liste-choix liste-reglages">
+        ${ligneReglage('#/outils/phrases', 'message-circle', 'Phrases utiles', langue === 'fr' ? '' : LANGUES[langue]?.nom)}
+        ${ligneReglage('#/outils/pitch', 'megaphone', 'Présenter mon agence')}
+        ${ligneReglage('#/outils/convertir', 'coins', 'Convertir un prix')}
+        ${ligneReglage('#/outils/carte', 'id-card', 'Ma carte de contact')}
+      </ul>
     </section>
 
     <section class="section">
-      <h2 class="section-titre">${icone('camera', { taille: 20 })} Photos</h2>
+      <h2 class="section-titre">Mes coordonnées</h2>
+      <label class="champ"><span>Nom</span><input id="moi-nom" value="${esc(moi.nom)}" autocapitalize="words" autocomplete="name"></label>
+      <div class="deux">
+        <label class="champ"><span>Cell</span><input id="moi-tel" type="tel" value="${esc(moi.tel)}" autocomplete="tel"></label>
+        <label class="champ"><span>Instagram</span><input id="moi-insta" value="${esc(moi.insta)}" autocapitalize="off" autocorrect="off" placeholder="@"></label>
+      </div>
+      <label class="champ"><span>Courriel</span><input id="moi-courriel" type="email" inputmode="email" value="${esc(moi.courriel)}" autocapitalize="off" autocomplete="email"></label>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">Préférences</h2>
+      <label class="champ"><span>Pays par défaut</span><select id="pays-actuel">
+        <option value="">Aucun</option>
+        ${tousPays.map((p) => `<option ${p === etat.region.pays ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+      </select></label>
       <label class="interrupteur">
-        <span><b>Aussi dans ma pellicule</b><small>Les photos prises dans l'appli</small></span>
+        <span><b>Photos aussi dans la pellicule</b></span>
         <input type="checkbox" id="pellicule" ${(await db.lireReglage('pellicule', true)) ? 'checked' : ''}>
         <i aria-hidden="true"></i>
       </label>
     </section>
 
     <section class="section" id="section-envoi">
-      <h2 class="section-titre">${icone('refresh-cw', { taille: 20 })} Envoi automatique au Studio</h2>
+      <h2 class="section-titre">Studio</h2>
       ${cfg ? `
         <p class="etat-branche" id="detail-envoi">${texteDetailEnvoi(envoi)}</p>
         <p class="etat-branche" id="etat-cle">${icone('lock', { taille: 16 })}<span><b>Clé GitHub : vérification…</b></span></p>
-        <button class="bouton-principal" id="envoyer-maintenant">Envoyer maintenant</button>
+        <div class="deux">
+          <button class="bouton-secondaire" id="envoyer-maintenant">${icone('refresh-cw', { taille: 17 })} Synchroniser</button>
+          <a class="bouton-secondaire" href="studio/?depuis=appli">${icone('external-link', { taille: 17 })} Ouvrir</a>
+        </div>
         <div class="liens-ligne"><button class="lien" id="changer-cle">Changer la clé</button><button class="lien" id="debrancher">Débrancher</button></div>
         <div id="zone-cle" hidden>
           <label class="champ"><span>Nouvelle clé</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
@@ -1902,50 +2129,45 @@ async function pageReglages() {
         <label class="champ"><span>Dossier GitHub privé</span><input id="depot" value="${esc(DEPOT_DONNEES)}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <label class="champ"><span>Clé d'accès GitHub</span><input id="jeton" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <p class="aide" id="message-envoi"></p>
-        <button class="bouton-principal" id="brancher">Brancher</button>`}
+        <button class="bouton-principal" id="brancher">Brancher</button>
+        <a class="bouton-secondaire bouton-bloc" href="studio/?depuis=appli">Ouvrir le Studio</a>`}
     </section>
 
     <section class="section">
-      <h2 class="section-titre">${icone('route', { taille: 20 })} Studio</h2>
-      <a class="bouton-secondaire bouton-bloc" href="studio/?depuis=appli">Ouvrir le Studio</a>
+      <h2 class="section-titre">Aperçus</h2>
+      <ul class="liste-choix liste-reglages">
+        ${ligneReglage('demande.html?apercu', 'file-text', 'Formulaire de demande')}
+        ${ligneReglage('carnet.html?demo&apercu', 'eye', 'Page client (exemple)')}
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2 class="section-titre">Sauvegarde</h2>
+      <p class="petit">${plur(etat.endroits.length, 'endroit')}, ${plur(nbPhotos, 'photo')}${derniere ? ` · copie du ${new Date(derniere).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}` : ''}</p>
+      <div class="deux">
+        <button class="bouton-secondaire" id="exporter">Faire une copie</button>
+        <label class="bouton-secondaire">Restaurer<input type="file" accept=".json,application/json" id="importer" hidden></label>
+      </div>
     </section>
     ${pwa.dejaInstallee() ? '' : `
     <section class="section">
-      <h2 class="section-titre">${icone('download', { taille: 20 })} Installer l'appli</h2>
-      <button class="bouton-secondaire bouton-bloc" id="installer">Installer l'appli</button>
+      <button class="bouton-secondaire bouton-bloc" id="installer">${icone('download', { taille: 18 })} Installer l'appli</button>
       <p class="petit" id="aide-installer" hidden>${pwa.EXPLICATION.fr}</p>
-    </section>`}
-
-    <section class="section">
-      <h2 class="section-titre">${icone('save', { taille: 20 })} Copie dans un fichier</h2>
-      <p class="petit">${etat.endroits.length} endroits, ${nbPhotos} photos${derniere ? ` · dernière copie le ${new Date(derniere).toLocaleDateString('fr-CA')}` : ''}</p>
-      <button class="bouton-secondaire bouton-bloc" id="exporter">Faire une copie</button>
-      <label class="bouton-secondaire bouton-bloc">Restaurer une copie<input type="file" accept=".json,application/json" id="importer" hidden></label>
-    </section>
-
-    <section class="section">
-      <h2 class="section-titre">${icone('coins', { taille: 20 })} Taux de change</h2>
-      <p class="petit">1 unité = ? $ CA</p>
-      <div class="taux">
-        ${trierFr(Object.keys(etat.taux)).filter((d) => d !== 'CAD').map((d) => `<label>${d}<input type="text" inputmode="decimal" data-devise="${d}" value="${etat.taux[d]}"></label>`).join('')}
-      </div>
-    </section>`;
+    </section>`}`;
 
   const boutonInstaller = app.querySelector('#installer');
   if (boutonInstaller) boutonInstaller.onclick = async () => { if (!(await pwa.installer())) app.querySelector('#aide-installer').hidden = false; };
 
+  // Mes coordonnées : servent aux liens de demande, à la page des clients et à ma carte.
+  [['#moi-nom', 'nomFiche'], ['#moi-tel', 'telFiche'], ['#moi-insta', 'instaFiche'], ['#moi-courriel', 'courrielFiche']].forEach(([sel, cle]) => {
+    app.querySelector(sel).addEventListener('change', async (ev) => { await db.ecrireReglage(cle, ev.target.value.trim()); toast('Enregistré'); });
+  });
   app.querySelector('#pellicule').onchange = (ev) => db.ecrireReglage('pellicule', ev.target.checked);
-  const sauverRegion = async () => { await db.ecrireReglage('region', etat.region); };
-  app.querySelector('#continent').onchange = async (ev) => {
-    etat.region.continent = ev.target.value;
-    if (etat.region.pays && !paysDuContinent(etat.region.continent).includes(etat.region.pays)) etat.region.pays = '';
-    await sauverRegion();
-    pageReglages();
-  };
   app.querySelector('#pays-actuel').onchange = async (ev) => {
-    etat.region.pays = ev.target.value;
-    await sauverRegion();
-    toast(etat.region.pays ? `Pays : ${etat.region.pays}` : 'Pays libre');
+    etat.region = { continent: '', pays: ev.target.value };
+    await db.ecrireReglage('region', etat.region);
+    toast(etat.region.pays ? `Pays par défaut : ${etat.region.pays}` : 'Aucun pays par défaut');
+    pageReglages();
   };
 
   if (cfg) {
@@ -1970,11 +2192,13 @@ async function pageReglages() {
       pageReglages();
     };
     app.querySelector('#envoyer-maintenant').onclick = async (ev) => {
-      ev.target.disabled = true;
+      const b = ev.currentTarget;
+      b.disabled = true;
+      await sync.recevoir(['endroits', 'villes', 'photos', 'carnets', 'carnets-choix', 'liens']).then(() => charger()).catch(() => {});
       await sync.toutMarquer();
       const e = await sync.envoyer();
-      ev.target.disabled = false;
-      toast(e.erreur ? "L'envoi n'a pas marché, réessaie plus tard" : e.horsLigne ? 'Pas d\'internet : ça partira plus tard' : 'Tout est envoyé au Studio');
+      b.disabled = false;
+      toast(e.erreur ? 'La synchronisation a échoué' : e.horsLigne ? 'Pas d\'internet : ça partira plus tard' : 'Tout est à jour');
     };
     app.querySelector('#debrancher').onclick = async () => { await sync.oublierConfig(); toast('Envoi automatique débranché'); pageReglages(); };
   } else {
@@ -2027,17 +2251,6 @@ async function pageReglages() {
     }
   };
 
-  app.querySelectorAll('[data-devise]').forEach((input) => {
-    input.onchange = async () => {
-      const v = parseFloat(input.value.replace(',', '.'));
-      if (!(v > 0)) return;
-      etat.taux[input.dataset.devise] = v;
-      const perso = await db.lireReglage('taux', {});
-      perso[input.dataset.devise] = v;
-      await db.ecrireReglage('taux', perso);
-      toast('Taux enregistré');
-    };
-  });
 }
 
 function texteDetailEnvoi(e) {
