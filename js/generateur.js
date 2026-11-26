@@ -428,7 +428,7 @@ async function router() {
 
 const entete = (titre, sousTitre, actions = '') => `
   <div class="head"><h1>${titre}</h1><div class="head-actions">${actions}</div></div>
-  ${sousTitre ? `<p class="crumb">${sousTitre}</p>` : ''}`;
+  ${sousTitre ? `<p class="crumb">${sousTitre}</p>` : '<div class="crumb-vide"></div>'}`;
 
 // Met une appli sur le bureau, ou explique comment faire si le navigateur ne le propose pas.
 async function installerAppli(nom) {
@@ -670,10 +670,6 @@ function tuileVoyage(v) {
 
 
 // Le projet expliqué en 30 secondes (pour Philippe, un client, un futur contributeur).
-const PITCH = {
-  fr: "Je développe une application qui rémunère des gens du coin pour partager ce qu'ils connaissent de leur ville : les meilleurs restaurants, bars, hôtels, activités et façons de se déplacer. Chaque endroit est photographié sur place et vérifié. Je le fais partout dans le monde, avec un but : remplir la carte du monde, pays par pays, ville par ville, puis vendre des voyages sur mesure tirés de cette carte. Google a les avis, les agences vendent des forfaits. Moi, j'aurai les deux : une carte que personne d'autre ne possède, et les voyages qui vont avec.",
-  en: "I'm building an app that pays locals to share what they know about their city: the best restaurants, bars, hotels, activities and ways to get around. Every place is photographed on the spot and verified. I'm doing it worldwide, with one goal: fill the world map, country by country, city by city, then sell custom trips built from that map. Google has the reviews, agencies sell packages. I'll have both: a map no one else owns, and the trips that come with it.",
-};
 function pageAccueil() {
   const tries = [...etat.voyages].sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const modeles = tries.filter((v) => v.modele);
@@ -690,16 +686,11 @@ function pageAccueil() {
       <div class="kpi"><span>${icone('route', { taille: 15 })} Voyages</span><b>${clients.length}</b><small>${pluriel(modeles.length, 'modèle réutilisable', 'modèles réutilisables')}</small></div>
       <a class="kpi" href="#/ventes"><span>${icone('banknote', { taille: 15 })} Ventes</span><b>${formatCAD(ventes)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></a>
     </div>
-    <section class="panel pitch">
-      <div class="panel-tete"><h3>Ton projet en 30 secondes</h3><div class="seg"><button class="on" data-pitch="fr">Français</button><button data-pitch="en">English</button></div></div>
-      <p id="pitch-texte">${esc(PITCH.fr)}</p>
-      <div class="rangee-btn"><button class="btn ghost sm" id="copier-pitch">${icone('copy', { taille: 14 })} Copier</button></div>
-    </section>
     ${panneauCarnets()}
     ${etat.endroits.length ? '' : `
       <div class="encart">
         <span class="rond-ico">${icone('upload', { taille: 18 })}</span>
-        <div><b>Commence par importer tes endroits</b><p>Sur ton cell : Réglages, puis « Faire une copie de sauvegarde ». Envoie le fichier à ton ordi et choisis-le dans « Mes données ».</p></div>
+        <div><b>Importer mes endroits</b><p>Branche le cell dans Mes données, ou importe une copie de sauvegarde.</p></div>
         <a class="btn" href="#/donnees">Importer</a>
       </div>`}
     <h2 class="titre-section">Voyages clients</h2>
@@ -707,15 +698,6 @@ function pageAccueil() {
     ${modeles.length ? `
       <h2 class="titre-section">Modèles réutilisables</h2>
       <div class="tiles">${modeles.map(tuileVoyage).join('')}</div>` : ''}`;
-  let languePitch = 'fr';
-  app.querySelectorAll('[data-pitch]').forEach((b) => {
-    b.onclick = () => {
-      languePitch = b.dataset.pitch;
-      app.querySelectorAll('[data-pitch]').forEach((x) => x.classList.toggle('on', x === b));
-      app.querySelector('#pitch-texte').textContent = PITCH[languePitch];
-    };
-  });
-  app.querySelector('#copier-pitch').onclick = async () => { try { await navigator.clipboard.writeText(PITCH[languePitch]); toast('Texte copié'); } catch (_) { toast('Sélectionne le texte pour le copier'); } };
   app.querySelector('#nouveau').onclick = creerVoyage;
   const n2 = app.querySelector('#nouveau2');
   if (n2) n2.onclick = creerVoyage;
@@ -784,10 +766,11 @@ async function pageClientsStudio() {
   app.innerHTML = `
     ${entete('Clients', pluriel(clients.length, 'client'))}
     <section class="panel nouveau-client">
-      <div class="panel-tete"><h3>${icone('send', { taille: 15 })} Nouveau client</h3></div>
+      <div class="panel-tete"><h3>${icone('send', { taille: 15 })} Formulaire de demande</h3></div>
       <div class="rangee-btn">
-        <input id="nom-client" type="text" placeholder="Nom du client (ex. : Marie Tremblay)" autocomplete="off">
-        <button class="btn" id="copier-lien-client">${icone('copy', { taille: 15 })} Copier son lien</button>
+        <input id="nom-client" type="text" placeholder="Nom du client" autocomplete="off">
+        <button class="btn" id="copier-lien-client">${icone('copy', { taille: 15 })} Copier le lien</button>
+        <button class="btn ghost" id="copier-lien-public">${icone('link', { taille: 15 })} Lien public</button>
       </div>
     </section>
     ${clients.length ? `<section class="panel"><table class="tableau tableau-clients"><thead><tr><th>Client</th><th>Formulaire</th><th>Voyage</th><th>Sur mesure en direct</th></tr></thead><tbody>
@@ -804,6 +787,10 @@ async function pageClientsStudio() {
         </tr>`;
       }).join('')}
       </tbody></table></section>` : '<p class="vide-ligne">Aucun client pour l\'instant.</p>'}`;
+  app.querySelector('#copier-lien-public').onclick = async () => {
+    const url = new URL('../demande.html', location.href).href;
+    try { await navigator.clipboard.writeText(url); toast('Lien public copié'); } catch (_) { prompt('Copie ce lien :', url); }
+  };
   app.querySelector('#copier-lien-client').onclick = async () => {
     const champNom = app.querySelector('#nom-client');
     const { lien, url } = liensDemande.preparerLien(new URL('../', location.href).href, { client: champNom.value, pour: courriel, tel: telFiche });

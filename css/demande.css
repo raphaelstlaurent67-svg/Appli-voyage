@@ -506,3 +506,8 @@ button:disabled { cursor: default; }
 }
 .retour-apercu .ico { width: 20px; height: 20px; }
 body:has(.retour-apercu) .haut-ligne .marque { padding-left: 92px; }
+
+/* Comme une appli : un appui long n'ouvre pas la sélection de texte ni le menu du téléphone. */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea, [contenteditable], .selectionnable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img { -webkit-user-drag: none; }

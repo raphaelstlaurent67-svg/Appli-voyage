@@ -6,6 +6,10 @@
 import * as db from './db.js';
 import * as sync from './sync.js';
 import { RELAIS, idCourt, nouvelleCle, canalDemande, dechiffrerJson, deBase64Url } from './carnet-commun.js';
+import { DEMANDE_PUBLIQUE } from './marque.js';
+import { decoder } from './code-demande.js';
+
+const MAX_PUBLIQUES_PAR_JOUR = 25;
 
 // Prépare un lien unique, tout de suite (sans attendre : le téléphone permet de copier seulement
 // juste après le toucher). Puis garderLien() le range, pour le retrouver dans le Studio.
@@ -34,9 +38,10 @@ export function urlLien(base, lien, { pour = '', tel = '', langue = '' } = {}) {
 // Retourne la liste des liens qui viennent de recevoir leur demande.
 export async function relever() {
   if (!navigator.onLine) return [];
-  const recus = [];
+  const recus = await releverPubliques();
   const limite = Date.now() - 183 * 864e5;
   for (const l of await db.tous('liens')) {
+    if (l.source === 'public' || !l.cle) continue;
     // Une demande déjà reçue est encore surveillée 3 jours (au cas où le client la modifie et la renvoie).
     if (new Date(l.creeLe).getTime() < limite || (l.code && Date.now() - new Date(l.recuLe).getTime() > 3 * 864e5)) continue;
     try {
@@ -65,4 +70,50 @@ export const tousLesLiens = async () => (await db.tous('liens')).sort((a, b) => 
 export async function oublierLien(id) {
   await db.effacer('liens', id);
   sync.marquer(sync.cheminLien(id));
+}
+
+// Les demandes du lien public (demande.html tout court) : chaque demande devient sa propre fiche.
+// Protégé contre les envois en masse : même message jamais deux fois, même courriel = la même demande
+// mise à jour, et pas plus de 25 nouvelles par jour (le reste est ignoré).
+async function releverPubliques() {
+  const recus = [];
+  try {
+    const canal = await canalDemande(DEMANDE_PUBLIQUE.id, DEMANDE_PUBLIQUE.cle);
+    const rep = await fetch(`${RELAIS}/${canal}/json?poll=1&since=all`, { cache: 'no-store' });
+    if (!rep.ok) return recus;
+    const tous = await db.tous('liens');
+    const parId = new Map(tous.map((l) => [l.id, l]));
+    const jour = Date.now() - 864e5;
+    let nouveauxAujourdhui = tous.filter((l) => l.source === 'public' && new Date(l.creeLe).getTime() > jour).length;
+    for (const ligne of (await rep.text()).split('\n').slice(-200)) {
+      let m; try { m = JSON.parse(ligne); } catch (_) { continue; }
+      if (m?.event !== 'message' || !m.message || !m.id || m.message.length > 20000) continue;
+      const id = `p-${String(m.id).replace(/[^\w-]/g, '').slice(0, 24)}`;
+      if (parId.has(id)) continue;
+      let msg; try { msg = await dechiffrerJson(DEMANDE_PUBLIQUE.cle, deBase64Url(m.message)); } catch (_) { continue; }
+      if (!msg?.code || typeof msg.code !== 'string') continue;
+      let dem; try { dem = await decoder(msg.code); } catch (_) { continue; }
+      const courriel = String(dem?.courriel || '').trim().toLowerCase();
+      if (!dem?.nom || !/^\S+@\S+\.\S+$/.test(courriel)) continue;
+      const maintenant = new Date().toISOString();
+      // Même personne (même courriel) : sa demande est mise à jour, pas dédoublée.
+      const meme = [...parId.values()].find((l) => l.source === 'public' && l.courriel === courriel);
+      if (meme) {
+        if (meme.code === msg.code) continue;
+        Object.assign(meme, { code: msg.code, nom: String(msg.nom || dem.nom).slice(0, 80), recuLe: msg.envoyeLe || maintenant, modifieLe: maintenant, vu: false });
+        await db.ecrire('liens', meme);
+        sync.marquer(sync.cheminLien(meme.id));
+        recus.push(meme);
+        continue;
+      }
+      if (nouveauxAujourdhui >= MAX_PUBLIQUES_PAR_JOUR) continue;
+      nouveauxAujourdhui++;
+      const l = { id, source: 'public', courriel, client: '', nom: String(msg.nom || dem.nom).slice(0, 80), statut: 'recu', code: msg.code, recuLe: msg.envoyeLe || maintenant, creeLe: maintenant, modifieLe: maintenant };
+      await db.ecrire('liens', l);
+      sync.marquer(sync.cheminLien(l.id));
+      parId.set(id, l);
+      recus.push(l);
+    }
+  } catch (_) { /* on réessaiera */ }
+  return recus;
 }
