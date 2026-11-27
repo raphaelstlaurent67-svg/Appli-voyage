@@ -1760,7 +1760,7 @@ async function pageDemande(lienId) {
           ${info('users', 'Voyageurs', voyageurs)}
           ${d.style ? info('gem', 'Style', NOM_STYLE[d.style] || d.style) : ''}
           ${d.repartition?.trim() ? info('route', 'Répartition', d.repartition.trim()) : ''}
-          ${d.source ? info('megaphone', 'Nous a connus par', SOURCES[d.source] || d.source) : ''}
+          ${d.source ? info('megaphone', 'Nous a connus par', d.source === 'autre' && d.sourceAutre?.trim() ? d.sourceAutre.trim() : (SOURCES[d.source] || d.source)) : ''}
         </ul>
       </section>
       ${envies.length ? `<section class="bloc-fiche"><h2>Ses envies</h2><ul class="envies-tel">
