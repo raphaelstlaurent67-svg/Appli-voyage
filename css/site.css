@@ -232,3 +232,58 @@ a, button, .carte, img { -webkit-user-select: none; user-select: none; -webkit-t
 .boutons-recois { display: flex; flex-wrap: wrap; gap: 10px; }
 .bouton.contour { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .bouton.contour:hover { background: rgba(0, 0, 0, .04); }
+
+/* ---------- Deux langues superposées : rien ne bouge quand on passe de FR à EN ---------- */
+.bi { display: inline-grid; }
+.bi.bloc, h1 > .bi, h2 > .bi, h3 > .bi, p > .bi, li > .bi { display: grid; }
+.bi > span { grid-area: 1 / 1; transition: opacity .25s ease, visibility 0s; }
+html[lang="fr"] .bi > [lang="en"], html[lang="en"] .bi > [lang="fr"] { opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility 0s .25s; }
+.bouton .bi > span, .nav-liens .bi > span { justify-self: center; text-align: center; }
+.langue button { min-width: 38px; }
+
+/* ---------- Recherche d'un pays ---------- */
+.cherche-pays { position: relative; max-width: 520px; margin-top: 24px; z-index: 3; }
+.destinations { margin-top: 20px; }
+#destinations .texte { margin: 12px 0 0; }
+.champ-cherche {
+  display: flex; align-items: center; gap: 10px; background: var(--carte); border: 1.5px solid var(--ligne); border-radius: 16px;
+  padding: 0 16px; min-height: 54px; color: var(--pale); transition: border-color .15s, box-shadow .15s;
+}
+.champ-cherche:focus-within { border-color: var(--encre); box-shadow: 0 0 0 4px rgba(29, 27, 25, .06); color: var(--encre); }
+.champ-cherche input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 17px; color: var(--encre); }
+.champ-cherche input::placeholder { color: var(--pale); }
+.resultats-pays {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--carte); border: 1px solid var(--ligne); border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(29, 27, 25, .12); padding: 6px; display: grid; animation: apparait .16s ease-out;
+}
+.resultat { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 11px; font-weight: 600; }
+.resultat .ico { color: var(--pale); }
+.resultat:hover, .resultat:focus-visible { background: var(--accent-fond); outline: none; }
+.resultat:hover .ico { color: var(--accent); }
+.resultats-pays .aucun { padding: 12px 14px; color: var(--doux); }
+@keyframes apparait { from { opacity: 0; transform: translateY(-4px); } }
+.destination.autre {
+  border: 1.5px dashed #d6cec4; background: transparent; color: var(--encre); flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 10px;
+  font: inherit; font-weight: 800; font-size: 19px; text-align: left; cursor: pointer;
+}
+.destination.autre::before { display: none; }
+.destination.autre .ico { color: var(--accent); }
+.destination.autre:hover { border-color: var(--accent); background: var(--accent-fond); }
+.destination { cursor: pointer; }
+@media (max-width: 480px) { .destination.autre:last-child:nth-child(odd) { grid-column: span 2; aspect-ratio: auto; min-height: 120px; } .destination.autre { font-size: 17px; } }
+.pas-decide { margin-top: 22px; }
+.pas-decide a { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--accent); }
+.pas-decide a:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---------- Transition vers la fiche de demande ---------- */
+.voile-transition { position: fixed; z-index: 100; pointer-events: none; }
+.voile-transition.disque {
+  border-radius: 50%; background: #faf8f5; transform: scale(0); opacity: .9;
+  transition: transform .52s cubic-bezier(.65, 0, .35, 1), opacity .2s ease;
+}
+.voile-transition.disque.plein { transform: scale(1); opacity: 1; }
+.voile-transition.photo {
+  border-radius: 20px; background: center / cover no-repeat #1d1b19;
+  transition: top .5s cubic-bezier(.65, 0, .35, 1), left .5s cubic-bezier(.65, 0, .35, 1), width .5s cubic-bezier(.65, 0, .35, 1), height .5s cubic-bezier(.65, 0, .35, 1), border-radius .5s;
+}
+.voile-transition.photo.plein { top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; border-radius: 0; }

@@ -6,7 +6,7 @@
 import './clavier.js';
 import { tirerPourRecharger } from './tirer.js';
 tirerPourRecharger();
-import { paysDuContinent } from './monde.js';
+import { TOUS_PAYS, NOM_EN, sansAccents } from './noms-pays.js';
 import { icone } from './icones.js';
 import { ENVIES, encoder, nuits } from './code-demande.js';
 import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
@@ -15,7 +15,7 @@ import { CONTACT } from './contact.js';
 import { RELAIS, canalDemande, chiffrerJson, enBase64Url, deposerRelais } from './carnet-commun.js';
 import { MARQUE, DEMANDE_PUBLIQUE, ALERTE } from './marque.js';
 import { messageAppel, lienTexto, lienCourriel } from './appel.js';
-import { photo, photoPays, PHOTOS_FOND } from './photos.js';
+import { photo, photoPays, galeriePays, PHOTOS_FOND } from './photos.js';
 
 const fiche = document.getElementById('fiche');
 const params = new URLSearchParams(location.search);
@@ -82,7 +82,6 @@ const prenomClient = CLIENT.split(/\s+/)[0] || '';
 const REQUIS = '<span class="requis" aria-hidden="true">*</span>';
 // Les destinations les plus demandées ; les autres se trouvent avec la recherche.
 const POPULAIRES = ['Japon', 'Italie', 'Thaïlande', 'France', 'Grèce', 'Portugal', 'Espagne', 'Islande', 'Mexique', 'Costa Rica', 'Pérou', 'Vietnam', 'Corée du Sud', 'Indonésie', 'Maroc', 'Cuba', 'République dominicaine', 'États-Unis'];
-const TOUS_PAYS = paysDuContinent('');
 const COULEURS = ['#f0532f', '#2f80ed', '#16a34a', '#a855f7', '#e8a20c', '#0ea5a4', '#db2777', '#64748b'];
 // Pour qui ne sait pas encore où aller : une région suffit (nom français gardé, nom anglais affiché).
 const REGIONS = [
@@ -105,6 +104,7 @@ const TXT = {
     bonjour: (n) => `Bonjour ${n}, voici votre demande de voyage personnalisée.`,
     introPays: 'Un ou plusieurs pays, dans l’ordre souhaité. Vous hésitez encore ? Indiquez plutôt une région.',
     chercher: 'Chercher un pays', resultats: 'Résultats', populaires: 'Les plus demandés', aucunPays: 'Aucun pays trouvé. Vérifiez l’orthographe ou choisissez une région.',
+    vedetteBadge: 'Votre destination', changer: 'Changer', ajouterPays: 'Ajouter un autre pays', vedetteIntro: 'Vous pouvez ajouter d’autres pays, dans l’ordre souhaité.',
     trajet: 'Votre itinéraire', plusTot: 'Plus tôt', plusTard: 'Plus tard', retirer: 'Retirer',
     pasDecide: 'Ou une région', regionsChoisies: 'Régions qui vous attirent',
     introDates: 'Une estimation suffit pour commencer. Nous préciserons ensemble.',
@@ -169,6 +169,7 @@ const TXT = {
     bonjour: (n) => `Hello ${n}, here is your personal trip request.`,
     introPays: 'One or more countries, in the order you’d like. Still deciding? Choose a region instead.',
     chercher: 'Search a country', resultats: 'Results', populaires: 'Most requested', aucunPays: 'No country found. Check the spelling or choose a region.',
+    vedetteBadge: 'Your destination', changer: 'Change', ajouterPays: 'Add another country', vedetteIntro: 'You can add more countries, in the order you like.',
     trajet: 'Your route', plusTot: 'Earlier', plusTard: 'Later', retirer: 'Remove',
     pasDecide: 'Or a region', regionsChoisies: 'Regions you’re drawn to',
     introDates: 'An estimate is enough to start. We’ll refine it together.',
@@ -234,23 +235,7 @@ const ENVIES_EN = {
   detente: ['Relaxation', 'Beach, spa, hot springs, slow days'],
 };
 
-// ---------- Noms des pays en anglais (la demande garde le nom français, pour le Studio) ----------
-const sansAccents = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const CODES_MANQUANTS = { centrafrique: 'CF', congo: 'CG', guyane: 'GF', hongkong: 'HK', kirghizistan: 'KG', macao: 'MO', myanmar: 'MM', republiquedemocratiqueducongo: 'CD', vatican: 'VA' };
-const EN_REMPLACE = { HK: 'Hong Kong', MO: 'Macao', MM: 'Myanmar', CD: 'DR Congo', CG: 'Congo', CI: "Côte d'Ivoire", PS: 'Palestine' };
-const NOM_EN = (() => {
-  const m = {};
-  try {
-    const fr = new Intl.DisplayNames(['fr'], { type: 'region' });
-    const en = new Intl.DisplayNames(['en'], { type: 'region' });
-    const cle = (x) => sansAccents(x).replace(/[^a-z]/g, '');
-    const codes = { ...CODES_MANQUANTS };
-    const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    for (const a of L) for (const b of L) { const c = a + b; const f = fr.of(c); if (f && f !== c && !codes[cle(f)]) codes[cle(f)] = c; }
-    for (const p of TOUS_PAYS) { const c = codes[cle(p)]; if (c) m[p] = EN_REMPLACE[c] || en.of(c); }
-  } catch (_) { /* vieux navigateur : on garde les noms français */ }
-  return m;
-})();
+// Noms des pays en anglais : js/noms-pays.js (la demande garde le nom français, pour le Studio).
 
 // ---------- Réponses (gardées dans le navigateur au cas où la page se ferme) ----------
 const langueParam = ['fr', 'en'].includes(params.get('lang')) ? params.get('lang') : '';
@@ -303,6 +288,8 @@ const garder = () => {
   } catch (_) { /* rien */ }
 };
 let etape = 0;
+// Arrivée depuis le site : l'animation ne joue qu'au premier affichage.
+setTimeout(() => document.documentElement.classList.remove('arrivee', 'arrivee-photo'), 1400);
 try {
   const e = parseInt(localStorage.getItem(CLE_ETAPE), 10);
   if (brouillonRepris && !MODE_TEST && e > 0) etape = Math.min(e, 4);
@@ -527,9 +514,23 @@ function suivant() {
 // ---------- 1. Destination ----------
 function etapePays(zone) {
   let recherche = '';
-  zone.innerHTML = `
+  // Venu du site avec un pays (?pays=Thaïlande) : il est mis en vedette, avec ses photos.
+  const vedette = PAYS_PARAM && d.pays.some((p) => p.nom === PAYS_PARAM) ? PAYS_PARAM : '';
+  const photos = vedette ? galeriePays(vedette).slice(0, 3) : [];
+  const haut = vedette ? `
+    <div class="vedette n${photos.length}">
+      <div class="vedette-photos">${photos.map((id, i) => `<div style="background-image:url('${photo(id, i ? 700 : 1200)}'), url('${photo(id, 700)}')"></div>`).join('')}</div>
+      <div class="vedette-bas">
+        <span class="vedette-badge">${icone('check', { taille: 14, epaisseur: 3 })}${t().vedetteBadge}</span>
+        <b class="vedette-nom">${esc(nomPays(vedette))}</b>
+      </div>
+      <button type="button" class="vedette-changer" data-changer="1">${t().changer}</button>
+    </div>
+    <p class="intro">${t().vedetteIntro}</p>
+    <label class="petit-titre premier" for="cherche">${t().ajouterPays}</label>` : `
     <p class="intro">${t().introPays}</p>
-    <label class="petit-titre premier" for="cherche">${t().paysOuRegion} ${REQUIS}</label>
+    <label class="petit-titre premier" for="cherche">${t().paysOuRegion} ${REQUIS}</label>`;
+  zone.innerHTML = `${haut}
     <label class="recherche">${icone('search', { taille: 18 })}<input id="cherche" type="search" placeholder="${t().chercher}" autocomplete="off" enterkeyhint="search"></label>
     <div id="resultats"></div>
     <div id="choix"></div>`;
@@ -543,6 +544,7 @@ function etapePays(zone) {
       <div class="puces">${resultats.map((p) => `<button class="puce ${choisis.includes(p) ? 'choisie' : ''}" data-pays="${esc(p)}" aria-pressed="${choisis.includes(p)}">${choisis.includes(p) ? icone('check', { taille: 15, epaisseur: 2.6 }) : icone('plus', { taille: 15 })}${esc(nomPays(p))}</button>`).join('') || `<p class="doux">${t().aucunPays}</p>`}</div>`;
   };
   const dessinerChoix = () => {
+    if (vedette && d.pays.length === 1 && d.pays[0].nom === vedette) { zone.querySelector('#choix').innerHTML = ''; return; }
     zone.querySelector('#choix').innerHTML = d.pays.length ? `
       <p class="petit-titre">${t().trajet}</p>
       <ol class="trajet">${d.pays.map((p, i) => `
@@ -583,9 +585,12 @@ function etapePays(zone) {
     } else if (b.dataset.monter) { const i = +b.dataset.monter; [d.pays[i - 1], d.pays[i]] = [d.pays[i], d.pays[i - 1]]; }
     else if (b.dataset.descendre) { const i = +b.dataset.descendre; [d.pays[i + 1], d.pays[i]] = [d.pays[i], d.pays[i + 1]]; }
     else if (b.dataset.retirer) d.pays.splice(+b.dataset.retirer, 1);
+    else if (b.dataset.changer) d.pays = d.pays.filter((p) => p.nom !== vedette);
     else return;
     if (d.mode === 'pays' && d.pays.length < 2) d.mode = 'total';
     garder();
+    // La vedette a été retirée : on redessine l'étape sans elle, et on place le curseur dans la recherche.
+    if (vedette && !d.pays.some((p) => p.nom === vedette)) { etapePays(zone); majBas(); majDecor(); zone.querySelector('#cherche').focus({ preventScroll: true }); return; }
     dessinerResultats();
     dessinerChoix();
     majBas();

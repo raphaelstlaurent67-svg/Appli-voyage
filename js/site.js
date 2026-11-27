@@ -5,66 +5,83 @@ import './clavier.js';
 import { icone } from './icones.js';
 import { photo, PHOTOS_PAYS, PHOTOS_FOND } from './photos.js';
 import { MARQUE } from './marque.js';
+import { TOUS_PAYS, NOM_EN, sansAccents } from './noms-pays.js';
 
 const TXT = {
   fr: {
-    navComment: 'Comment ça marche', navRecois: 'Ce que vous recevez', navFaq: 'Questions',
-    cta: 'Demander mon voyage', ctaCourt: 'Commencer', voirComment: 'Comment ça marche',
-    surtitre: 'Itinéraires sur mesure',
-    titre: 'Votre voyage, repéré sur place.',
-    sousTitre: "Des restos, des hôtels et des activités choisis sur place, pas sur internet. Vous recevez un itinéraire jour par jour, prêt à réserver.",
-    rassure1: 'Une fiche, deux minutes', rassure2: 'Le prix avant de commencer', rassure3: 'Vous réservez, à votre rythme',
-    commentSur: 'Comment ça marche', commentTitre: 'En trois étapes',
-    e1t: 'Vous nous dites où', e1p: 'Les pays, la durée, ce qui vous attire. Deux minutes.',
-    e2t: 'On prépare votre itinéraire', e2p: 'Où dormir, où manger et quoi faire, jour par jour.',
-    e3t: 'Vous réservez et partez', e3p: 'Vous avez la carte et tous les liens. Il reste juste à réserver.',
-    recoisSur: 'Ce que vous recevez', recoisTitre: 'Un voyage complet, prêt à partir',
-    recoisTexte: "Chaque endroit a été visité et photographié sur place.",
+    navComment: 'Notre méthode', navRecois: 'Ce que vous recevez', navFaq: 'Questions',
+    cta: 'Demander mon voyage', ctaCourt: 'Commencer', voirComment: 'Notre méthode',
+    surtitre: 'Itinéraires de voyage sur mesure',
+    titre: 'Votre grand voyage, conçu sur mesure.',
+    sousTitre: 'Nous concevons votre itinéraire complet selon vos goûts, votre rythme et votre budget, avec des adresses repérées sur place par notre équipe.',
+    rassure1: 'Prix fixe, convenu d’avance', rassure2: 'Une équipe québécoise', rassure3: 'Ajustements inclus',
+    commentSur: 'Notre méthode', commentTitre: 'De votre demande à votre départ',
+    e1t: 'Votre projet', e1p: 'Décrivez votre voyage dans notre formulaire : destinations, période, style et centres d’intérêt.',
+    e2t: 'Un premier appel', e2p: 'Nous prenons quinze minutes pour bien comprendre vos attentes. Vous recevez ensuite un prix ferme.',
+    e3t: 'Votre itinéraire', e3p: 'Vous recevez votre voyage jour par jour, avec la carte et un lien pour chaque réservation.',
+    recoisSur: 'Ce que vous recevez', recoisTitre: 'Un itinéraire complet, prêt à réserver',
+    recoisTexte: 'Chaque recommandation est choisie pour vous, selon votre style de voyage et votre budget.',
     r1t: 'Jour par jour', r1p: 'Quoi faire, où et à quel moment.',
-    r2t: 'Où dormir', r2p: 'Des hôtels selon votre budget.',
-    r3t: 'Où manger', r3p: 'Des restos, des marchés et de la cuisine de rue.',
-    r4t: 'La carte', r4p: 'Tous les endroits sur une carte, dans votre cellulaire.',
-    r5t: 'Le budget', r5p: 'Combien coûtera le voyage sur place.',
-    destSur: 'Destinations', destTitre: 'Où irez-vous ?',
+    r2t: 'Où dormir', r2p: 'Des hébergements adaptés à votre budget.',
+    r3t: 'Où manger', r3p: 'Des restaurants, des marchés et de la cuisine locale.',
+    r4t: 'La carte', r4p: 'Toutes les adresses sur une carte, dans votre cellulaire.',
+    r5t: 'Le budget', r5p: 'Une estimation des dépenses sur place.',
+    destSur: 'Destinations', destTitre: 'Où aimeriez-vous aller ?',
+    destTexte: 'Nous préparons des voyages partout dans le monde.',
+    chercherPays: 'Rechercher un pays', aucunPays: 'Aucun pays trouvé.', autreDest: 'Une autre destination', autreDestP: 'Rechercher un pays',
+    pasDecide: 'Pas encore décidé ? Commencez quand même',
     faqSur: 'Questions', faqTitre: 'Les questions fréquentes',
     faq: [
-      ['Combien ça coûte ?', "Ça dépend du nombre de pays et de jours. Après votre fiche, nous vous donnons un prix clair avant de commencer. Aucune obligation."],
-      ['Est-ce que vous réservez pour moi ?', 'Non : nous préparons votre itinéraire complet avec tous les liens, et vous réservez vous-même. Vous gardez le contrôle de vos billets et de votre argent.'],
-      ['Et si je ne sais pas encore où aller ?', 'C’est très courant. Choisissez simplement une région qui vous attire (ou « Surprenez-moi »), dites-nous ce que vous aimez, et on vous propose des destinations.'],
-      ['Et si je ne connais pas encore mes dates ?', 'Aucun problème. Indiquez juste le mois et la durée approximative : on ajuste ensemble ensuite.'],
-      ['Est-ce que je peux modifier l’itinéraire ?', 'Oui. Si quelque chose ne vous convient pas, nous l’ajustons ensemble.'],
+      ['Combien ça coûte ?', 'Le prix dépend de la durée du voyage et du nombre de pays. Il est fixé lors de notre premier appel, avant que le travail commence. Aucune obligation.'],
+      ['Qui prépare mon itinéraire ?', 'Notre équipe, au Québec. Nos éclaireurs, des voyageurs que nous connaissons personnellement, se rendent sur place pour repérer les adresses que nous recommandons.'],
+      ['Pour quel genre de voyage ?', 'Surtout les voyages qui comptent : lune de miel, voyage de retraite, sabbatique ou grand voyage en famille. Seul, en couple ou en groupe.'],
+      ['Est-ce que vous réservez pour moi ?', 'Non. Vous recevez l’itinéraire complet avec un lien pour chaque hôtel, activité et transport, et vous réservez vous-même. Vous gardez le contrôle de vos billets et de votre argent.'],
+      ['Pourquoi ne pas tout planifier moi-même ?', 'Vous pouvez, mais un bon itinéraire demande des dizaines d’heures de recherche. Nous faisons ce travail pour vous, et vous partez avec des adresses déjà repérées.'],
+      ['Et si je ne sais pas encore où aller ?', 'C’est fréquent. Indiquez une région qui vous attire, ou « Surprenez-moi », et dites-nous ce que vous aimez. Nous vous proposerons des destinations.'],
+      ['Et si je ne connais pas encore mes dates ?', 'Aucun problème. Indiquez le mois et une durée approximative : nous ajusterons ensemble.'],
+      ['Combien de temps à l’avance dois-je faire ma demande ?', 'Idéalement deux mois ou plus avant le départ. Le délai de préparation vous est confirmé lors du premier appel.'],
+      ['Est-ce que je peux modifier l’itinéraire ?', 'Oui. Si quelque chose ne vous convient pas, nous l’ajustons avec vous.'],
+      ['Mes informations restent-elles privées ?', 'Oui. Vos réponses servent uniquement à préparer votre voyage. Elles ne sont jamais vendues ni partagées.'],
     ],
-    appelTitre: 'Envie de partir ?', appelTexte: 'Remplissez la fiche. On vous répond avec une proposition.',
+    appelTitre: 'Parlons de votre prochain voyage', appelTexte: 'Décrivez votre projet en quelques minutes. Nous vous contactons pour en discuter.',
     pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir éclaireur', voirExemple: 'Voir un exemple',
   },
   en: {
-    navComment: 'How it works', navRecois: 'What you get', navFaq: 'Questions',
-    cta: 'Plan my trip', ctaCourt: 'Start', voirComment: 'How it works',
-    surtitre: 'Custom itineraries',
-    titre: 'Your trip, scouted on site.',
-    sousTitre: 'Restaurants, hotels and activities picked on site, not online. You get a day-by-day itinerary, ready to book.',
-    rassure1: 'One form, two minutes', rassure2: 'The price before we begin', rassure3: 'You book, at your own pace',
-    commentSur: 'How it works', commentTitre: 'In three steps',
-    e1t: 'Tell us where', e1p: 'The countries, the length, what draws you. Two minutes.',
-    e2t: 'We plan your itinerary', e2p: 'Where to sleep, where to eat and what to do, day by day.',
-    e3t: 'You book and go', e3p: 'You get the map and every link. All that is left is to book.',
-    recoisSur: 'What you get', recoisTitre: 'A complete trip, ready to go',
-    recoisTexte: 'Every place was visited and photographed on site.',
+    navComment: 'Our approach', navRecois: 'What you get', navFaq: 'Questions',
+    cta: 'Plan my trip', ctaCourt: 'Start', voirComment: 'Our approach',
+    surtitre: 'Custom travel itineraries',
+    titre: 'Your big trip, designed around you.',
+    sousTitre: 'We design your complete itinerary around your tastes, your pace and your budget, with places our team has scouted on site.',
+    rassure1: 'Fixed price, agreed upfront', rassure2: 'A team based in Québec', rassure3: 'Adjustments included',
+    commentSur: 'Our approach', commentTitre: 'From your request to departure',
+    e1t: 'Your project', e1p: 'Describe your trip in our form: destinations, timing, travel style and interests.',
+    e2t: 'A first call', e2p: 'We take fifteen minutes to understand what you are looking for. You then receive a firm price.',
+    e3t: 'Your itinerary', e3p: 'You receive your trip day by day, with the map and a link for every booking.',
+    recoisSur: 'What you get', recoisTitre: 'A complete itinerary, ready to book',
+    recoisTexte: 'Every recommendation is chosen for you, based on your travel style and your budget.',
     r1t: 'Day by day', r1p: 'What to do, where and when.',
-    r2t: 'Where to sleep', r2p: 'Hotels that fit your budget.',
-    r3t: 'Where to eat', r3p: 'Restaurants, markets and street food.',
+    r2t: 'Where to stay', r2p: 'Accommodation that fits your budget.',
+    r3t: 'Where to eat', r3p: 'Restaurants, markets and local food.',
     r4t: 'The map', r4p: 'Every place on a map, on your phone.',
-    r5t: 'The budget', r5p: 'What the trip will cost on the ground.',
-    destSur: 'Destinations', destTitre: 'Where will you go?',
+    r5t: 'The budget', r5p: 'An estimate of what you will spend on the ground.',
+    destSur: 'Destinations', destTitre: 'Where would you like to go?',
+    destTexte: 'We plan trips all over the world.',
+    chercherPays: 'Search for a country', aucunPays: 'No country found.', autreDest: 'Another destination', autreDestP: 'Search for a country',
+    pasDecide: 'Not sure yet? Start anyway',
     faqSur: 'Questions', faqTitre: 'Frequently asked questions',
     faq: [
-      ['How much does it cost?', 'It depends on the number of countries and days. After your form, we give you a clear price before starting. No obligation.'],
-      ['Do you book for me?', 'No: we prepare your full itinerary with every link, and you book yourself. You stay in control of your tickets and your money.'],
-      ["What if I don't know where to go yet?", 'That’s very common. Just pick a region you’re drawn to (or “Surprise me”), tell us what you love, and we’ll suggest destinations.'],
-      ["What if I don't know my dates yet?", 'No problem. Just give the month and a rough length: we adjust together afterwards.'],
-      ['Can I change the itinerary?', "Yes. If something doesn't feel right, we adjust it together."],
+      ['How much does it cost?', 'The price depends on the length of the trip and the number of countries. It is set during our first call, before any work begins. No obligation.'],
+      ['Who prepares my itinerary?', 'Our team, based in Québec. Our scouts, travellers we know personally, go on site to find the places we recommend.'],
+      ['What kind of trip is it for?', 'Mostly the trips that matter: a honeymoon, a retirement trip, a sabbatical or a big family trip. Solo, as a couple or in a group.'],
+      ['Do you book for me?', 'No. You receive the full itinerary with a link for every hotel, activity and transfer, and you book yourself. You stay in control of your tickets and your money.'],
+      ['Why not plan it all myself?', 'You can, but a good itinerary takes dozens of hours of research. We do that work for you, and you leave with places already scouted.'],
+      ["What if I don't know where to go yet?", 'That is common. Pick a region you are drawn to, or “Surprise me”, and tell us what you enjoy. We will suggest destinations.'],
+      ["What if I don't know my dates yet?", 'No problem. Give us the month and a rough length: we will adjust together.'],
+      ['How far ahead should I ask?', 'Ideally two months or more before departure. The preparation time is confirmed during the first call.'],
+      ['Can I change the itinerary?', 'Yes. If something does not feel right, we adjust it with you.'],
+      ['Is my information kept private?', 'Yes. Your answers are only used to prepare your trip. They are never sold or shared.'],
     ],
-    appelTitre: 'Want to go?', appelTexte: 'Fill in the form. We reply with a proposal.',
+    appelTitre: "Let's talk about your next trip", appelTexte: 'Describe your project in a few minutes. We will contact you to discuss it.',
     pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a scout', voirExemple: 'See an example',
   },
 };
@@ -78,21 +95,114 @@ const DESTINATIONS = [
 
 let langue = 'fr';
 try { langue = localStorage.getItem('langueSite') || (/^fr/i.test(navigator.language || 'fr') ? 'fr' : 'en'); } catch (_) { /* rien */ }
-const lienDemande = () => `../demande.html?lang=${langue}`;
+const lienDemande = (pays = '') => `../demande.html?lang=${langue}${pays ? `&pays=${encodeURIComponent(pays)}` : ''}`;
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nomPays = (p) => (langue === 'en' ? NOM_EN[p] || p : p);
+
+// Les deux langues sont écrites l'une par-dessus l'autre ; seule la bonne est visible.
+// Chaque texte prend donc toujours la place du plus long des deux : rien ne bouge quand on change de langue.
+const BLOCS = new Set(['H1', 'H2', 'H3', 'P', 'LI', 'DIV']);
+const deux = (fr, en, bloc = false) => `<span class="bi${bloc ? ' bloc' : ''}"><span lang="fr">${esc(fr)}</span><span lang="en">${esc(en)}</span></span>`;
+
+function remplirTextes() {
+  document.querySelectorAll('[data-t]').forEach((el) => { el.innerHTML = deux(TXT.fr[el.dataset.t], TXT.en[el.dataset.t], BLOCS.has(el.tagName)); });
+  document.querySelectorAll('[data-marque]').forEach((el) => { el.textContent = MARQUE; });
+  document.getElementById('destinations-liste').innerHTML = DESTINATIONS.map(([fr, en]) => `
+    <a class="destination" data-pays="${esc(fr)}" style="${PHOTOS_PAYS[fr] ? `--photo:url('${photo(PHOTOS_PAYS[fr], 700)}')` : ''}">${deux(fr, en)}</a>`).join('') + `
+    <button type="button" class="destination autre" id="autre-dest">${icone('search', { taille: 26 })}<b>${deux(TXT.fr.autreDest, TXT.en.autreDest)}</b></button>`;
+  document.getElementById('faq-liste').innerHTML = TXT.fr.faq.map(([q, r], i) => `<details><summary>${deux(q, TXT.en.faq[i][0], true)}${icone('chevron-down', { taille: 18 })}</summary><p>${deux(r, TXT.en.faq[i][1], true)}</p></details>`).join('');
+}
 
 function afficher() {
   const t = TXT[langue];
   document.documentElement.lang = langue;
   document.title = `${MARQUE}, ${t.surtitre}`;
-  document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = t[el.dataset.t]; });
-  document.querySelectorAll('[data-marque]').forEach((el) => { el.textContent = MARQUE; });
   document.querySelectorAll('[data-demande]').forEach((el) => { el.href = lienDemande(); });
-  document.querySelectorAll('[data-langue]').forEach((b) => b.classList.toggle('choisi', b.dataset.langue === langue));
-  document.getElementById('destinations-liste').innerHTML = DESTINATIONS.map(([fr, en]) => `
-    <a class="destination" href="${lienDemande()}&pays=${encodeURIComponent(fr)}" style="${PHOTOS_PAYS[fr] ? `--photo:url('${photo(PHOTOS_PAYS[fr], 700)}')` : ''}"><span>${esc(langue === 'en' ? en : fr)}</span></a>`).join('');
-  document.getElementById('faq-liste').innerHTML = t.faq.map(([q, r]) => `<details><summary>${esc(q)}${icone('chevron-down', { taille: 18 })}</summary><p>${esc(r)}</p></details>`).join('');
+  document.querySelectorAll('.destination[data-pays]').forEach((el) => { el.href = lienDemande(el.dataset.pays); });
+  document.querySelectorAll('[data-langue]').forEach((b) => { b.classList.toggle('choisi', b.dataset.langue === langue); b.setAttribute('aria-pressed', b.dataset.langue === langue); });
+  const champ = document.getElementById('cherche-pays');
+  if (champ) { champ.placeholder = t.chercherPays; champ.setAttribute('aria-label', t.chercherPays); dessinerResultats(); }
 }
+
+// ---------- Recherche d'un pays (tous les pays du monde, pas seulement ceux en photo) ----------
+function dessinerResultats() {
+  const champ = document.getElementById('cherche-pays');
+  const zone = document.getElementById('resultats-pays');
+  if (!champ || !zone) return;
+  const q = sansAccents(champ.value.trim());
+  if (!q) { zone.hidden = true; zone.innerHTML = ''; return; }
+  const trouves = TOUS_PAYS
+    .filter((p) => sansAccents(p).includes(q) || sansAccents(NOM_EN[p]).includes(q))
+    .sort((x, y) => Number(!sansAccents(nomPays(x)).startsWith(q)) - Number(!sansAccents(nomPays(y)).startsWith(q)))
+    .slice(0, 8);
+  zone.hidden = false;
+  zone.innerHTML = trouves.length
+    ? trouves.map((p) => `<a role="option" class="resultat" data-pays="${esc(p)}" href="${lienDemande(p)}"><span>${esc(nomPays(p))}</span>${icone('arrow-right', { taille: 16 })}</a>`).join('')
+    : `<p class="aucun">${esc(TXT[langue].aucunPays)}</p>`;
+}
+function brancherRecherche() {
+  const champ = document.getElementById('cherche-pays');
+  if (!champ) return;
+  champ.oninput = dessinerResultats;
+  champ.onkeydown = (ev) => {
+    if (ev.key === 'Escape') { champ.value = ''; dessinerResultats(); }
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const premier = document.querySelector('#resultats-pays .resultat');
+    if (premier) premier.click();
+  };
+  document.getElementById('autre-dest').onclick = () => {
+    champ.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setTimeout(() => champ.focus({ preventScroll: true }), 350);
+  };
+}
+
+// ---------- Transition vers la fiche de demande ----------
+// Même site, même adresse de base : ça marche pareil sur github.io et sur le futur .com.
+// Bouton : un disque couleur crème grandit depuis le bouton et couvre l'écran, puis la fiche apparaît.
+// Destination : la photo s'agrandit jusqu'à remplir l'écran, et la fiche s'ouvre sur cette même photo.
+const MOUVEMENT_REDUIT = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function partirVers(lien, depuis, pays) {
+  if (MOUVEMENT_REDUIT) { location.href = lien; return; }
+  const r = depuis.getBoundingClientRect();
+  const voile = document.createElement('div');
+  voile.className = 'voile-transition';
+  if (pays && PHOTOS_PAYS[pays]) {
+    voile.classList.add('photo');
+    voile.style.cssText = `top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px;background-image:url('${photo(PHOTOS_PAYS[pays], 700)}')`;
+    document.body.append(voile);
+    requestAnimationFrame(() => requestAnimationFrame(() => voile.classList.add('plein')));
+  } else {
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const rayon = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    voile.classList.add('disque');
+    voile.style.cssText = `left:${x - rayon}px;top:${y - rayon}px;width:${rayon * 2}px;height:${rayon * 2}px`;
+    document.body.append(voile);
+    requestAnimationFrame(() => requestAnimationFrame(() => voile.classList.add('plein')));
+  }
+  try { sessionStorage.setItem('arriveeSite', JSON.stringify({ quand: Date.now(), photo: pays && PHOTOS_PAYS[pays] ? photo(PHOTOS_PAYS[pays], 700) : '' })); } catch (_) { /* rien */ }
+  setTimeout(() => { location.href = lien; }, 520);
+}
+document.addEventListener('click', (ev) => {
+  const a = ev.target.closest('a[data-demande], a.destination[data-pays], a.resultat');
+  if (!a || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) return;
+  ev.preventDefault();
+  partirVers(a.href, a, a.dataset.pays || '');
+});
+// Retour arrière (le navigateur garde la page en mémoire) : on enlève le voile.
+addEventListener('pageshow', () => document.querySelectorAll('.voile-transition').forEach((v) => v.remove()));
+// La fiche est chargée d'avance dès qu'on approche d'un bouton : l'ouverture est instantanée.
+let precharge = false;
+const precharger = () => {
+  if (precharge) return;
+  precharge = true;
+  const l = document.createElement('link');
+  l.rel = 'prefetch'; l.href = '../demande.html';
+  document.head.append(l);
+};
+document.addEventListener('pointerover', (ev) => { if (ev.target.closest?.('a[data-demande], a.destination, a.resultat')) precharger(); }, { passive: true });
+document.addEventListener('touchstart', (ev) => { if (ev.target.closest?.('a[data-demande], a.destination, a.resultat')) precharger(); }, { passive: true });
 
 document.querySelectorAll('[data-ico]').forEach((el) => {
   const grand = el.closest('.etapes, .liste-recois');
@@ -101,6 +211,8 @@ document.querySelectorAll('[data-ico]').forEach((el) => {
 document.querySelectorAll('[data-langue]').forEach((b) => {
   b.onclick = () => { langue = b.dataset.langue; try { localStorage.setItem('langueSite', langue); } catch (_) { /* rien */ } afficher(); };
 });
+remplirTextes();
+brancherRecherche();
 afficher();
 
 // Couverture : quelques photos de voyage qui se suivent, avec un zoom lent.
