@@ -112,7 +112,7 @@ function versClient(c, endroits) {
       description: e.description, mot: it.mot,
       prix: e.prix, confort: e.confort, montant: e.montant, devise: e.devise,
       coupDeCoeur: !!e.coupDeCoeur,
-      lat: e.lat, lng: e.lng, lienMaps: e.lienMaps,
+      lat: e.lat, lng: e.lng, lienMaps: e.lienMaps, telephone: e.telephone || '',
       site: e.contacts?.site || e.contacts?.reservation || '', instagram: e.contacts?.instagram || '',
       depart: e.depart, arrivee: e.arrivee, duree: e.duree,
       photos: (e.photos || []).slice(0, 6),

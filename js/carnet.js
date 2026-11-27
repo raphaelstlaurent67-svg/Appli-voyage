@@ -173,11 +173,16 @@ function lienCarte(i) {
   return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : '';
 }
 const lienWeb = (v) => (!v ? '' : /^https?:/i.test(v) ? v : `https://${v}`);
+// Niveau de prix : « $$$ Haut de gamme », sans signes gris à côté (c'était illisible).
+const NIVEAUX_PRIX = ['', 'Petit budget', 'Prix moyen', 'Haut de gamme', 'Luxe'];
+const niveauPrix = (i) => (i.prix ? `<span class="prix"><b>${'$'.repeat(i.prix)}</b>${NIVEAUX_PRIX[i.prix] || ''}</span>` : '');
+const parNuit = (i) => (i.categorie === 'hebergement' ? ' / nuit' : '');
+const montant = (i) => (i.montant ? `${esc(i.montant)} ${esc(i.devise || '')}${parNuit(i)}`.replace(/\s+\//, ' /') : '');
 function meta(i) {
   const bouts = [];
-  if (i.prix) bouts.push(`<span class="prix" aria-label="Budget ${i.prix} sur 4"><b>${'$'.repeat(i.prix)}</b>${'$'.repeat(4 - i.prix)}</span>`);
+  if (i.prix) bouts.push(niveauPrix(i));
+  if (i.montant) bouts.push(`<span>${montant(i)}</span>`);
   if (i.confort) bouts.push(`<span>${icone('star', { taille: 13 })} ${i.confort}/5</span>`);
-  if (i.montant) bouts.push(`<span>${esc(i.montant)} ${esc(i.devise || '')}</span>`);
   if (i.duree) bouts.push(`<span>${icone('clock', { taille: 13 })} ${esc(i.duree)}</span>`);
   return bouts.length ? `<div class="meta">${bouts.join('<i>·</i>')}</div>` : '';
 }
@@ -563,29 +568,43 @@ function trouverItem(itemId) {
   for (const s of soirees().liste) { const i = s.items.find((x) => x.id === itemId); if (i) return { i, s }; }
   return {};
 }
+const lienInsta = (v) => (!v ? '' : /^https?:/i.test(v) ? v : `https://instagram.com/${String(v).replace(/^@/, '')}`);
+// Les infos pratiques, une par ligne.
+function infos(i) {
+  const l = [];
+  const ligne = (ico, titre, valeur) => l.push(`<li>${icone(ico, { taille: 18 })}<div><span>${titre}</span><b>${valeur}</b></div></li>`);
+  if (i.prix || i.montant) ligne('wallet', 'Prix', [i.montant ? montant(i) : '', i.prix ? `<span class="prix"><b>${'$'.repeat(i.prix)}</b>${NIVEAUX_PRIX[i.prix]}</span>` : ''].filter(Boolean).join(' · '));
+  if (i.confort) ligne('star', 'Confort', `${i.confort}/5`);
+  if (i.duree) ligne('clock', 'Durée', esc(i.duree));
+  if (i.adresse || i.ville) ligne('map-pin', 'Adresse', esc([i.adresse, i.ville].filter(Boolean).join(', ')));
+  if (i.depart || i.arrivee) ligne('route', 'Trajet', `${esc(i.depart || '?')} → ${esc(i.arrivee || '?')}`);
+  if (i.telephone) ligne('phone', 'Téléphone', esc(i.telephone));
+  return l.length ? `<ul class="fiche-infos">${l.join('')}</ul>` : '';
+}
 function ouvrirFiche(itemId) {
   const { i, s } = trouverItem(itemId);
   if (!i) return;
   const g = groupeDe(i);
   const carteUrl = lienCarte(i);
   const site = lienWeb(i.site);
-  const moi = g !== 'savoir' && aChoisi(s.quand, g, i.id);
+  const insta = lienInsta(i.instagram);
+  const tel = (i.telephone || '').replace(/[^\d+]/g, '');
   feuille.innerHTML = `
     <div class="voile" data-fermer></div>
     <div class="fiche" role="dialog" aria-modal="true" aria-label="${esc(i.nom)}">
       <button class="fermer" data-fermer aria-label="Fermer">${icone('x', { taille: 20 })}</button>
       ${i.photos?.length ? `<div class="fiche-photos defile">${i.photos.map((p) => `<img data-p="${esc(p)}" alt="">`).join('')}</div>${i.photos.length > 1 ? `<div class="points fiche-points">${i.photos.map((_, n) => `<i class="${n ? '' : 'on'}"></i>`).join('')}</div>` : ''}` : ''}
       <div class="fiche-corps">
-        <p class="sur">${iconeCat(i.categorie, { taille: 14 })} ${etiquette(i)}</p>
+        <p class="sur">${iconeCat(i.categorie, { taille: 14 })} ${etiquette(i)}${i.coupDeCoeur ? ` · ${icone('heart', { taille: 13 })} Coup de cœur` : ''}</p>
         <h3>${esc(i.nom)}</h3>
-        ${i.adresse || i.ville ? `<p class="adresse">${icone('map-pin', { taille: 14 })} ${esc([i.adresse, i.ville].filter(Boolean).join(', '))}</p>` : ''}
-        ${i.depart || i.arrivee ? `<p class="adresse">${icone('route', { taille: 14 })} ${esc(i.depart || '?')} → ${esc(i.arrivee || '?')}</p>` : ''}
-        ${meta(i)}
         ${i.mot ? `<blockquote class="mot-raph grand"><span class="avatar">${initiale(etat.donnees.raph)}</span><p>${esc(i.mot)}</p></blockquote>` : ''}
         ${i.description ? `<p class="desc">${esc(i.description)}</p>` : ''}
+        ${infos(i)}
         <div class="fiche-actions">
           ${carteUrl ? `<a class="btn-doux" href="${esc(carteUrl)}" target="_blank" rel="noopener">${icone('map', { taille: 16 })} Carte</a>` : ''}
-          ${site ? `<a class="btn-doux" href="${esc(site)}" target="_blank" rel="noopener">${icone('globe', { taille: 16 })} Site</a>` : ''}
+          ${site ? `<a class="btn-doux" href="${esc(site)}" target="_blank" rel="noopener">${icone('globe', { taille: 16 })} Site web</a>` : ''}
+          ${insta ? `<a class="btn-doux" href="${esc(insta)}" target="_blank" rel="noopener">${icone('instagram', { taille: 16 })} Instagram</a>` : ''}
+          ${tel ? `<a class="btn-doux" href="tel:${esc(tel)}">${icone('phone', { taille: 16 })} Appeler</a>` : ''}
         </div>
       </div>
     </div>`;
