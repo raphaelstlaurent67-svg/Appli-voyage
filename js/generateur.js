@@ -136,7 +136,7 @@ async function charger() {
   etat.contributeurs = await db.tous('contributeurs');
   etat.paiements = await db.tous('paiements');
   etat.carnets = await db.tous('carnets');
-  etat.liens = await db.tous('liens');
+  etat.liens = (await db.tous('liens')).filter((l) => !l.efface);
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
@@ -632,7 +632,7 @@ async function pageDemandes() {
     db.ecrireReglage('telFiche', champTel.value.trim());
     try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { prompt('Copie ce lien :', url); }
     await liensDemande.garderLien(lien);
-    etat.liens = await db.tous('liens');
+    etat.liens = (await db.tous('liens')).filter((l) => !l.efface);
   };
   app.querySelector('#ouvrir').onclick = () => {
     const c = extraireCode(app.querySelector('#colle').value);
@@ -792,7 +792,7 @@ async function pageClientsStudio() {
     const { lien, url } = liensDemande.preparerLien(new URL('../', location.href).href, { client: champNom.value, pour: courriel, tel: telFiche });
     try { await navigator.clipboard.writeText(url); toast(`Nouveau lien copié${lien.client ? ` pour ${lien.client}` : ''}`); } catch (_) { prompt('Copie ce lien :', url); }
     await liensDemande.garderLien(lien);
-    etat.liens = await db.tous('liens');
+    etat.liens = (await db.tous('liens')).filter((l) => !l.efface);
     pageClientsStudio();
   };
 }
