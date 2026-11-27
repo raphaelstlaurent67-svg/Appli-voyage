@@ -251,8 +251,16 @@ export async function recevoir(dossiers = ['endroits', 'villes', 'photos', 'cont
       }
     } else if (dossier === 'liens') {
       const actuel = await db.lire('liens', objet.id);
-      // Une demande reçue n'est jamais perdue, peu importe l'appareil qui l'a reçue.
-      if (!actuel || (objet.modifieLe || '') > (actuel.modifieLe || '')) await db.ecrire('liens', actuel?.code && !objet.code ? { ...objet, code: actuel.code, statut: actuel.statut, recuLe: actuel.recuLe } : objet);
+      if (objet.efface) {
+        // Supprimée sur un autre appareil : supprimée ici aussi, toujours.
+        if (!actuel?.efface) await db.ecrire('liens', objet);
+      } else if (actuel?.efface) {
+        // Supprimée ici, mais un autre appareil l'a ramenée : on garde la suppression et on la renvoie.
+        marquer(f.path);
+      } else if (!actuel || (objet.modifieLe || '') > (actuel.modifieLe || '')) {
+        // Une demande reçue n'est jamais perdue, peu importe l'appareil qui l'a reçue.
+        await db.ecrire('liens', actuel?.code && !objet.code ? { ...objet, code: actuel.code, statut: actuel.statut, recuLe: actuel.recuLe } : objet);
+      }
     } else if (dossier === 'studio') {
       const magasin = f.path.slice(7, -5);
       for (const x of Array.isArray(objet) ? objet : []) {
