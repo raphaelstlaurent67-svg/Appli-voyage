@@ -10,8 +10,8 @@ import { lireExif } from './exif.js';
 // ---------- Textes (anglais d'abord : les contributeurs viennent de partout) ----------
 const TXT = {
   en: {
-    bienvenue: 'Map the places only locals know.',
-    bienvenueTxt: 'Walk your city. Photograph the places worth the trip. Each place accepted is paid.',
+    bienvenue: 'Scout the places worth the trip.',
+    bienvenueTxt: 'Photograph the places worth the trip. Every place counts toward your mission.',
     tonNom: 'Your name', commencer: 'Begin',
     bonjour: (n) => `Hello ${n}`,
     resume: (n, a) => (n ? `${n} place${n > 1 ? 's' : ''} on your map${a ? `, ${a} not sent yet` : ''}` : 'Your map is empty. Start with one place.'),
@@ -40,13 +40,13 @@ const TXT = {
     complexe: 'Complex route', complexeTxt: 'Several steps, or a place outside the city. Counts double.',
     trajetAide: 'Bus, metro, train, on foot? How long, how much, where to catch it.',
     ville100: (v) => `Complete ${v || 'your city'}`,
-    villeTxt: 'A complete city earns a bonus. Extra routes can replace missing nightlife spots.',
+    villeTxt: 'The goal of the mission. Extra routes can replace missing nightlife spots.',
     groupes: { restos: 'Food', hebergement: 'Stay', activites: 'Sights, experiences, sport', bars: 'Nightlife', trajets: 'Transport' },
     r4: 'Every now and then, a route: the best way to get somewhere (bus, train, on foot).',
   },
   fr: {
-    bienvenue: 'Cartographiez les endroits que seuls les gens d’ici connaissent.',
-    bienvenueTxt: 'Marchez dans votre ville. Photographiez les endroits qui valent le détour. Chaque endroit accepté est payé.',
+    bienvenue: 'Repérez les endroits qui valent le voyage.',
+    bienvenueTxt: 'Photographiez les endroits qui valent le détour. Chaque endroit compte pour votre mission.',
     tonNom: 'Votre nom', commencer: 'Commencer',
     bonjour: (n) => `Bonjour ${n}`,
     resume: (n, a) => (n ? `${n} endroit${n > 1 ? 's' : ''} sur votre carte${a ? `, dont ${a} à envoyer` : ''}` : 'Votre carte est vide. Commencez par un endroit.'),
@@ -75,7 +75,7 @@ const TXT = {
     complexe: 'Trajet complexe', complexeTxt: 'Plusieurs étapes, ou un endroit hors de la ville. Compte double.',
     trajetAide: 'Bus, métro, train, à pied ? Combien de temps, combien ça coûte, où le prendre.',
     ville100: (v) => `Compléter ${v || 'votre ville'}`,
-    villeTxt: 'Une ville complète donne un bonus. Des trajets en plus peuvent remplacer des endroits pour sortir.',
+    villeTxt: 'L’objectif de la mission. Des trajets en plus peuvent remplacer des endroits pour sortir.',
     groupes: { restos: 'Manger', hebergement: 'Dormir', activites: 'Visiter, expériences, sport', bars: 'Sortir', trajets: 'Transport' },
     r4: 'De temps en temps, un trajet : la meilleure façon de se rendre quelque part (bus, train, à pied).',
   },
