@@ -33,8 +33,10 @@ const TXT = {
     faqSur: 'Questions', faqTitre: 'Les questions fréquentes',
     faq: [
       ['Combien ça coûte ?', 'Le prix dépend de la durée du voyage et du nombre de pays. Il est fixé lors de notre premier appel, avant que le travail commence. Aucune obligation.'],
+      ['Que comprend le prix ?', 'La conception complète de votre itinéraire, nos recommandations et les ajustements. Les vols, les hébergements et les activités ne sont pas inclus : vous les réservez et les payez directement.'],
       ['Qui prépare mon itinéraire ?', 'Notre équipe, au Québec. Nos éclaireurs, des voyageurs que nous connaissons personnellement, se rendent sur place pour repérer les adresses que nous recommandons.'],
       ['Pour quel genre de voyage ?', 'Surtout les voyages qui comptent : lune de miel, voyage de retraite, sabbatique ou grand voyage en famille. Seul, en couple ou en groupe.'],
+      ['Voyagez-vous avec des enfants ?', 'Oui. Indiquez leur âge dans le formulaire : nous adaptons le rythme, les hébergements et les activités à toute la famille.'],
       ['Est-ce que vous réservez pour moi ?', 'Non. Vous recevez l’itinéraire complet avec un lien pour chaque hôtel, activité et transport, et vous réservez vous-même. Vous gardez le contrôle de vos billets et de votre argent.'],
       ['Pourquoi ne pas tout planifier moi-même ?', 'Vous pouvez, mais un bon itinéraire demande des dizaines d’heures de recherche. Nous faisons ce travail pour vous, et vous partez avec des adresses déjà repérées.'],
       ['Et si je ne sais pas encore où aller ?', 'C’est fréquent. Indiquez une région qui vous attire, ou « Surprenez-moi », et dites-nous ce que vous aimez. Nous vous proposerons des destinations.'],
@@ -84,8 +86,10 @@ const TXT = {
     faqSur: 'Questions', faqTitre: 'Frequently asked questions',
     faq: [
       ['How much does it cost?', 'The price depends on the length of the trip and the number of countries. It is set during our first call, before any work begins. No obligation.'],
+      ['What does the price include?', 'The full design of your itinerary, our recommendations and adjustments. Flights, accommodation and activities are not included: you book and pay for them directly.'],
       ['Who prepares my itinerary?', 'Our team, based in Québec. Our scouts, travellers we know personally, go on site to find the places we recommend.'],
       ['What kind of trip is it for?', 'Mostly the trips that matter: a honeymoon, a retirement trip, a sabbatical or a big family trip. Solo, as a couple or in a group.'],
+      ['Do you plan trips with children?', 'Yes. Add their ages in the form: we adapt the pace, accommodation and activities to the whole family.'],
       ['Do you book for me?', 'No. You receive the full itinerary with a link for every hotel, activity and transfer, and you book yourself. You stay in control of your tickets and your money.'],
       ['Why not plan it all myself?', 'You can, but a good itinerary takes dozens of hours of research. We do that work for you, and you leave with places already scouted.'],
       ["What if I don't know where to go yet?", 'That is common. Pick a region you are drawn to, or “Surprise me”, and tell us what you enjoy. We will suggest destinations.'],
@@ -153,12 +157,10 @@ function remplirTextes() {
         <span class="face recto">
           <span class="carte-num">${String(i + 1).padStart(2, '0')}</span>
           <span class="carte-question">${deux(q, TXT.en.faq[i][0], true)}</span>
-          <span class="carte-indice">${icone('refresh-cw', { taille: 15, epaisseur: 2.2 })}${deux(TXT.fr.voirReponse, TXT.en.voirReponse)}</span>
         </span>
         <span class="face verso">
           <span class="carte-question petite">${deux(q, TXT.en.faq[i][0], true)}</span>
           <span class="carte-reponse">${deux(r, TXT.en.faq[i][1], true)}</span>
-          <span class="carte-indice">${icone('refresh-cw', { taille: 15, epaisseur: 2.2 })}${deux(TXT.fr.retourner, TXT.en.retourner)}</span>
         </span>
       </span>
     </button>`).join('');
@@ -273,18 +275,6 @@ document.addEventListener('click', (ev) => {
     carte.classList.toggle('tournee', tourne);
   }
 });
-// Les cartes penchent légèrement vers la souris (ordinateur seulement).
-if (matchMedia('(hover: hover) and (pointer: fine)').matches && !MOUVEMENT_REDUIT) {
-  document.addEventListener('pointermove', (ev) => {
-    const c = ev.target.closest?.('.carte-q, .destination');
-    document.querySelectorAll('.penche').forEach((x) => { if (x !== c) { x.classList.remove('penche'); x.style.removeProperty('--rx'); x.style.removeProperty('--ry'); } });
-    if (!c) return;
-    const r = c.getBoundingClientRect();
-    c.classList.add('penche');
-    c.style.setProperty('--ry', `${((ev.clientX - r.left) / r.width - 0.5) * 8}deg`);
-    c.style.setProperty('--rx', `${-((ev.clientY - r.top) / r.height - 0.5) * 8}deg`);
-  }, { passive: true });
-}
 // Les blocs apparaissent en douceur quand on arrive dessus en défilant.
 function animerAuDefilement() {
   if (!('IntersectionObserver' in window) || MOUVEMENT_REDUIT) return;
