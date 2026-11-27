@@ -23,13 +23,15 @@ if (DANS_APPLI) document.documentElement.classList.add('dans-appli');
 // Le lien du client n'a jamais « apercu » : lui ne voit pas ce bouton.
 const APERCU = params.has('apercu');
 if (APERCU) document.documentElement.classList.add('apercu');
-if (APERCU) {
+// La démo a aussi son Retour (montrée depuis le site ou l'appli).
+if (APERCU || DEMO) {
   const retour = document.createElement('button');
   retour.type = 'button';
   retour.className = 'retour-apercu';
   retour.innerHTML = `${icone('chevron-left', { taille: 20 })}<span>Retour</span>`;
   retour.onclick = () => {
     if (history.length > 1) { history.back(); return; }
+    if (!APERCU) { location.href = './site/'; return; }
     window.close();
     setTimeout(() => { location.href = './#/clients'; }, 300);
   };
@@ -65,6 +67,8 @@ if (!DEMO && !APERCU) {
 }
 const cleLocale = DEMO ? 'demo-montreal' : APERCU ? `apercu-${id}` : id;
 
+// Démo : chaque chargement repart à zéro (jamais pour un vrai client).
+if (DEMO) memoire.ecrire(`choix-${cleLocale}`, {});
 const lireChoixLocaux = () => {
   const c = memoire.lire(`choix-${cleLocale}`, {});
   return { soirs: c.soirs || {}, mot: c.mot || '', messages: c.messages || [] };
