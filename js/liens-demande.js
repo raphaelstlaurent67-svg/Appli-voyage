@@ -41,7 +41,7 @@ export async function relever() {
   const recus = await releverPubliques();
   const limite = Date.now() - 183 * 864e5;
   for (const l of await db.tous('liens')) {
-    if (l.source === 'public' || !l.cle) continue;
+    if (l.source === 'public' || !l.cle || l.efface) continue;
     // Une demande déjà reçue est encore surveillée 3 jours (au cas où le client la modifie et la renvoie).
     if (new Date(l.creeLe).getTime() < limite || (l.code && Date.now() - new Date(l.recuLe).getTime() > 3 * 864e5)) continue;
     try {
@@ -62,9 +62,14 @@ export async function relever() {
   return recus;
 }
 
-export const tousLesLiens = async () => (await db.tous('liens')).sort((a, b) => (b.recuLe || b.creeLe || '').localeCompare(a.recuLe || a.creeLe || ''));
+export const tousLesLiens = async () => (await db.tous('liens')).filter((l) => !l.efface).sort((a, b) => (b.recuLe || b.creeLe || '').localeCompare(a.recuLe || a.creeLe || ''));
+// Supprimer une demande : on garde une petite trace « effacée » (cachée partout),
+// sinon le relais (qui garde les envois 12 h) la ramènerait à la prochaine ouverture.
 export async function oublierLien(id) {
-  await db.effacer('liens', id);
+  const l = await db.lire('liens', id);
+  if (!l) return;
+  const trace = { id: l.id, source: l.source, cle: l.cle, courriel: l.courriel, code: l.code, creeLe: l.creeLe, recuLe: l.recuLe, efface: true, modifieLe: new Date().toISOString() };
+  await db.ecrire('liens', trace);
   sync.marquer(sync.cheminLien(id));
 }
 
@@ -99,7 +104,7 @@ async function releverPubliques() {
       // Déjà rangée (même contenu) : rien à faire.
       if ([...parId.values()].some((l) => l.source === 'public' && l.code === msg.code)) continue;
       const meme = courriel && [...parId.values()].find((l) => l.source === 'public' && l.courriel === courriel
-        && !l.carnetId && !l.contacteLe && Date.now() - new Date(l.recuLe || l.creeLe).getTime() < 3 * 864e5);
+        && !l.efface && !l.carnetId && !l.contacteLe && Date.now() - new Date(l.recuLe || l.creeLe).getTime() < 3 * 864e5);
       if (meme) {
         Object.assign(meme, { code: msg.code, nom, statut: 'recu', recuLe: msg.envoyeLe || maintenant, modifieLe: maintenant, vu: false, suspect });
         await db.ecrire('liens', meme);
