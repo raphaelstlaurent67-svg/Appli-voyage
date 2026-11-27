@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#faf8f5">
   <title>Voyage sur mesure</title>
-  <meta name="description" content="Votre voyage, repéré sur place. Des restos, des hôtels et des activités choisis sur place, dans un itinéraire jour par jour prêt à réserver.">
+  <meta name="description" content="Itinéraires de voyage sur mesure, conçus selon vos goûts, votre rythme et votre budget, avec des adresses repérées sur place.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Voyage sur mesure">
-  <meta property="og:description" content="Votre voyage, repéré sur place. Un itinéraire jour par jour, prêt à réserver.">
+  <meta property="og:description" content="Votre grand voyage, conçu sur mesure. Un itinéraire jour par jour, prêt à réserver.">
   <meta property="og:image" content="https://raphaelstlaurent67-svg.github.io/Appli-voyage/icons/apercu-demande.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -87,7 +87,13 @@
       <div class="enveloppe">
         <p class="surtitre" data-t="destSur"></p>
         <h2 data-t="destTitre"></h2>
+        <p class="texte" data-t="destTexte"></p>
+        <div class="cherche-pays">
+          <label class="champ-cherche"><span data-ico="search"></span><input id="cherche-pays" type="search" autocomplete="off" enterkeyhint="go" role="combobox" aria-controls="resultats-pays" aria-autocomplete="list"></label>
+          <div class="resultats-pays" id="resultats-pays" role="listbox" hidden></div>
+        </div>
         <div class="destinations" id="destinations-liste"></div>
+        <p class="pas-decide"><a data-demande><span data-t="pasDecide"></span><span data-ico="arrow-right"></span></a></p>
       </div>
     </section>
 

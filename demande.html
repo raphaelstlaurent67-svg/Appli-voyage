@@ -21,6 +21,18 @@
   <link rel="apple-touch-icon" href="icons/demande-192.png">
   <link rel="preload" href="fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/demande.css">
+  <script>
+    // Arrivée depuis le site : la fiche apparaît en douceur (et sur la photo du pays touché, s'il y en a une).
+    try {
+      var a = JSON.parse(sessionStorage.getItem('arriveeSite') || 'null');
+      sessionStorage.removeItem('arriveeSite');
+      if (a && Date.now() - a.quand < 6000 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        var h = document.documentElement;
+        h.classList.add('arrivee');
+        if (/^https:\/\/images\.unsplash\.com\//.test(a.photo || '')) { h.classList.add('arrivee-photo'); h.style.setProperty('--photo-arrivee', 'url("' + a.photo + '")'); }
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <div class="decor" id="decor" aria-hidden="true"><div class="decor-img"></div><div class="decor-img"></div></div>
