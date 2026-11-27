@@ -389,3 +389,26 @@ body { background: var(--fond); color: var(--encre); }
   .carte-q:hover .carte-int, .carte-q:focus-visible .carte-int { transform: rotateY(180deg); }
   .carte-int { transition-duration: .6s; }
 }
+
+/* ---------- Retouches (Raph, 2026-11-27) ---------- */
+/* La boîte des résultats reste cachée tant qu'on n'a rien tapé. */
+.resultats-pays[hidden] { display: none; }
+/* Destinations : plus de zoom de la photo au survol (il laissait voir des bandes de couleur). */
+.destination:not(.autre):hover { background-size: cover; }
+.destination, .destination:hover { transform: none; }
+.destination:hover { translate: 0 -3px; }
+html.anime .destination { transition: opacity .7s cubic-bezier(.2, .7, .2, 1) var(--delai, 0ms), translate .3s ease, box-shadow .25s; }
+/* Questions : toutes les cartes ont la même taille, et elles tournent lentement et en douceur. */
+.faq-cartes { grid-auto-rows: 1fr; }
+.carte-q { transform: none; display: flex; }
+.carte-q .carte-int { flex: 1; height: 100%; transition: transform 1.1s cubic-bezier(.45, .05, .25, 1); }
+.face { gap: 14px; }
+.verso .carte-question.petite { opacity: .65; }
+@media (hover: hover) and (pointer: fine) {
+  /* Un petit délai : passer vite la souris sur les cartes ne les fait pas tourner. */
+  .carte-q .carte-int { transition: transform 1.1s cubic-bezier(.45, .05, .25, 1) 0s; }
+  .carte-q:hover .carte-int { transition-delay: .18s; }
+}
+@media (max-width: 480px) { .verso .carte-question.petite { display: block; } }
+.recto { justify-content: center; } .recto .carte-question { flex: none; font-size: 21px; }
+@media (max-width: 480px) { .recto .carte-question { font-size: 19px; } }
