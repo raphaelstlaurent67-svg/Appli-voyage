@@ -26,7 +26,7 @@
 .av-pas button:disabled, .av-actions button:disabled { opacity: .3; cursor: default; }
 .av-jours { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .av-jours button { height: 40px; border-radius: 10px; font-weight: 650; font-size: .86rem; }
-.av-jours button.on { background: var(--av-accent); border-color: var(--av-accent); color: #fff; }
+.av-jours button.on { background: var(--av-accent); border-color: var(--av-accent); color: var(--accent-encre, #fff); }
 .av-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .av-champ { display: flex; flex-direction: column; gap: 4px; font-size: .86rem; font-weight: 600; min-width: 0; }
 .av-champ select { font: inherit; font-weight: 500; padding: 10px; border-radius: 10px; border: 1px solid var(--av-ligne); background: var(--av-carte); color: inherit; min-width: 0; }
