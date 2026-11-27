@@ -16,9 +16,9 @@ const TXT = {
     sousTitre: 'Nous concevons votre itinéraire complet selon vos goûts, votre rythme et votre budget, avec des adresses repérées sur place par notre équipe.',
     rassure1: 'Prix fixe, convenu d’avance', rassure2: 'Une équipe québécoise', rassure3: 'Ajustements inclus',
     commentSur: 'Notre méthode', commentTitre: 'De votre demande à votre départ',
-    e1t: 'Votre projet', e1p: 'Décrivez votre voyage dans notre formulaire : destinations, période, style et centres d’intérêt.',
-    e2t: 'Un premier appel', e2p: 'Nous prenons quinze minutes pour bien comprendre vos attentes. Vous recevez ensuite un prix ferme.',
-    e3t: 'Votre itinéraire', e3p: 'Vous recevez votre voyage jour par jour, avec la carte et un lien pour chaque réservation.',
+    e1t: 'Votre projet', e1p: 'Destinations, période, style et envies.',
+    e2t: 'Un premier appel', e2p: 'Quinze minutes pour bien vous comprendre.',
+    e3t: 'Votre itinéraire', e3p: 'Votre voyage, jour par jour.',
     recoisSur: 'Ce que vous recevez', recoisTitre: 'Un itinéraire complet, prêt à réserver',
     recoisTexte: 'Chaque recommandation est choisie pour vous, selon votre style de voyage et votre budget.',
     r1t: 'Jour par jour', r1p: 'Quoi faire, où et à quel moment.',
@@ -44,6 +44,19 @@ const TXT = {
       ['Mes informations restent-elles privées ?', 'Oui. Vos réponses servent uniquement à préparer votre voyage. Elles ne sont jamais vendues ni partagées.'],
     ],
     appelTitre: 'Parlons de votre prochain voyage', appelTexte: 'Décrivez votre projet en quelques minutes. Nous vous contactons pour en discuter.',
+    e1m: 'Le formulaire prend environ cinq minutes. Choisissez un ou plusieurs pays, ou seulement une région si vous hésitez encore. Vos réponses restent enregistrées si vous fermez la page.',
+    e2m: 'Nous revenons ensemble sur votre demande, vos attentes et votre budget. À la fin de l’appel, vous connaissez le prix exact et le délai de préparation. Aucune obligation.',
+    e3m: 'Vous recevez une page personnelle avec votre itinéraire, la carte et nos recommandations. Pour certaines étapes, vous choisissez parmi quelques options. Chaque hôtel, activité et transport a son lien de réservation.',
+    r1m: 'Chaque journée est organisée selon votre rythme : ce qu’il faut voir, dans quel ordre et combien de temps prévoir.',
+    r2m: 'Pour chaque étape, des hébergements adaptés à votre style de voyage, avec le lien pour réserver.',
+    r3m: 'Des adresses pour chaque moment de la journée, du café du matin au souper, choisies selon vos goûts.',
+    r4m: 'Toutes les adresses de votre voyage sur une seule carte, à ouvrir sur votre cellulaire une fois sur place.',
+    r5m: 'Une estimation des coûts sur place : hébergement, repas, transport et activités. Vous savez à quoi vous attendre avant de partir.',
+    enSavoirPlus: 'En savoir plus',
+    moins: 'Moins',
+    faqAstuce: 'Touchez une carte pour voir la réponse.',
+    voirReponse: 'Voir la réponse',
+    retourner: 'Retourner',
     pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir éclaireur', voirExemple: 'Voir un exemple',
   },
   en: {
@@ -54,9 +67,9 @@ const TXT = {
     sousTitre: 'We design your complete itinerary around your tastes, your pace and your budget, with places our team has scouted on site.',
     rassure1: 'Fixed price, agreed upfront', rassure2: 'A team based in Québec', rassure3: 'Adjustments included',
     commentSur: 'Our approach', commentTitre: 'From your request to departure',
-    e1t: 'Your project', e1p: 'Describe your trip in our form: destinations, timing, travel style and interests.',
-    e2t: 'A first call', e2p: 'We take fifteen minutes to understand what you are looking for. You then receive a firm price.',
-    e3t: 'Your itinerary', e3p: 'You receive your trip day by day, with the map and a link for every booking.',
+    e1t: 'Your project', e1p: 'Destinations, timing, style and interests.',
+    e2t: 'A first call', e2p: 'Fifteen minutes to understand you.',
+    e3t: 'Your itinerary', e3p: 'Your trip, day by day.',
     recoisSur: 'What you get', recoisTitre: 'A complete itinerary, ready to book',
     recoisTexte: 'Every recommendation is chosen for you, based on your travel style and your budget.',
     r1t: 'Day by day', r1p: 'What to do, where and when.',
@@ -82,6 +95,19 @@ const TXT = {
       ['Is my information kept private?', 'Yes. Your answers are only used to prepare your trip. They are never sold or shared.'],
     ],
     appelTitre: "Let's talk about your next trip", appelTexte: 'Describe your project in a few minutes. We will contact you to discuss it.',
+    e1m: 'The form takes about five minutes. Pick one or more countries, or just a region if you are still deciding. Your answers are saved if you close the page.',
+    e2m: 'We go over your request, your expectations and your budget together. By the end of the call, you know the exact price and the preparation time. No obligation.',
+    e3m: 'You receive a personal page with your itinerary, the map and our recommendations. For some stops, you choose between a few options. Every hotel, activity and transfer has its booking link.',
+    r1m: 'Each day is planned around your pace: what to see, in what order and how much time to allow.',
+    r2m: 'For each stop, accommodation that fits your travel style, with the link to book.',
+    r3m: 'Places for every moment of the day, from morning coffee to dinner, chosen for your tastes.',
+    r4m: 'Every place of your trip on one map, ready to open on your phone once you are there.',
+    r5m: 'An estimate of costs on the ground: accommodation, meals, transport and activities. You know what to expect before you leave.',
+    enSavoirPlus: 'Learn more',
+    moins: 'Less',
+    faqAstuce: 'Tap a card to see the answer.',
+    voirReponse: 'See the answer',
+    retourner: 'Flip back',
     pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a scout', voirExemple: 'See an example',
   },
 };
@@ -110,7 +136,31 @@ function remplirTextes() {
   document.getElementById('destinations-liste').innerHTML = DESTINATIONS.map(([fr, en]) => `
     <a class="destination" data-pays="${esc(fr)}" style="${PHOTOS_PAYS[fr] ? `--photo:url('${photo(PHOTOS_PAYS[fr], 700)}')` : ''}">${deux(fr, en)}</a>`).join('') + `
     <button type="button" class="destination autre" id="autre-dest">${icone('search', { taille: 26 })}<b>${deux(TXT.fr.autreDest, TXT.en.autreDest)}</b></button>`;
-  document.getElementById('faq-liste').innerHTML = TXT.fr.faq.map(([q, r], i) => `<details><summary>${deux(q, TXT.en.faq[i][0], true)}${icone('chevron-down', { taille: 18 })}</summary><p>${deux(r, TXT.en.faq[i][1], true)}</p></details>`).join('');
+  // « En savoir plus » : une phrase courte, et le détail pour qui veut en lire plus.
+  document.querySelectorAll('[data-plus]').forEach((el, i) => {
+    const k = el.dataset.plus;
+    el.innerHTML = `
+      <button type="button" class="plus-bouton" aria-expanded="false" aria-controls="plus-${i}">
+        <span class="plus-txt">${deux(TXT.fr.enSavoirPlus, TXT.en.enSavoirPlus)}</span><span class="moins-txt">${deux(TXT.fr.moins, TXT.en.moins)}</span>${icone('chevron-down', { taille: 16, epaisseur: 2.4 })}
+      </button>
+      <div class="plus-panneau" id="plus-${i}"><div><p>${deux(TXT.fr[k], TXT.en[k], true)}</p></div></div>`;
+  });
+  // Questions : des cartes à retourner, la question d'un côté, la réponse de l'autre.
+  document.getElementById('faq-liste').innerHTML = TXT.fr.faq.map(([q, r], i) => `
+    <button type="button" class="carte-q" aria-pressed="false" style="--i:${i}">
+      <span class="carte-int">
+        <span class="face recto">
+          <span class="carte-num">${String(i + 1).padStart(2, '0')}</span>
+          <span class="carte-question">${deux(q, TXT.en.faq[i][0], true)}</span>
+          <span class="carte-indice">${icone('refresh-cw', { taille: 15, epaisseur: 2.2 })}${deux(TXT.fr.voirReponse, TXT.en.voirReponse)}</span>
+        </span>
+        <span class="face verso">
+          <span class="carte-question petite">${deux(q, TXT.en.faq[i][0], true)}</span>
+          <span class="carte-reponse">${deux(r, TXT.en.faq[i][1], true)}</span>
+          <span class="carte-indice">${icone('refresh-cw', { taille: 15, epaisseur: 2.2 })}${deux(TXT.fr.retourner, TXT.en.retourner)}</span>
+        </span>
+      </span>
+    </button>`).join('');
 }
 
 function afficher() {
@@ -204,6 +254,51 @@ const precharger = () => {
 document.addEventListener('pointerover', (ev) => { if (ev.target.closest?.('a[data-demande], a.destination, a.resultat')) precharger(); }, { passive: true });
 document.addEventListener('touchstart', (ev) => { if (ev.target.closest?.('a[data-demande], a.destination, a.resultat')) precharger(); }, { passive: true });
 
+// ---------- Interactions ----------
+document.addEventListener('click', (ev) => {
+  const plus = ev.target.closest('.plus-bouton');
+  if (plus) {
+    const ouvert = plus.getAttribute('aria-expanded') !== 'true';
+    plus.setAttribute('aria-expanded', ouvert);
+    plus.parentElement.classList.toggle('ouvert', ouvert);
+    return;
+  }
+  const carte = ev.target.closest('.carte-q');
+  if (carte) {
+    const tourne = carte.getAttribute('aria-pressed') !== 'true';
+    carte.setAttribute('aria-pressed', tourne);
+    carte.classList.toggle('tournee', tourne);
+  }
+});
+// Les cartes penchent légèrement vers la souris (ordinateur seulement).
+if (matchMedia('(hover: hover) and (pointer: fine)').matches && !MOUVEMENT_REDUIT) {
+  document.addEventListener('pointermove', (ev) => {
+    const c = ev.target.closest?.('.carte-q, .destination');
+    document.querySelectorAll('.penche').forEach((x) => { if (x !== c) { x.classList.remove('penche'); x.style.removeProperty('--rx'); x.style.removeProperty('--ry'); } });
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.classList.add('penche');
+    c.style.setProperty('--ry', `${((ev.clientX - r.left) / r.width - 0.5) * 8}deg`);
+    c.style.setProperty('--rx', `${-((ev.clientY - r.top) / r.height - 0.5) * 8}deg`);
+  }, { passive: true });
+}
+// Les blocs apparaissent en douceur quand on arrive dessus en défilant.
+function animerAuDefilement() {
+  if (!('IntersectionObserver' in window) || MOUVEMENT_REDUIT) return;
+  const cibles = document.querySelectorAll('.section h2, .section .surtitre, .section .texte, .etapes li, .liste-recois li, .destination, .carte-q, .cherche-pays, .appel-int > *');
+  document.documentElement.classList.add('anime');
+  const vu = new IntersectionObserver((entrees) => entrees.forEach((e) => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add('vu');
+    vu.unobserve(e.target);
+  }), { rootMargin: '0px 0px -8% 0px' });
+  cibles.forEach((el) => {
+    const freres = [...el.parentElement.children].filter((x) => x.matches(el.tagName));
+    el.style.setProperty('--delai', `${Math.min(freres.indexOf(el), 6) * 70}ms`);
+    vu.observe(el);
+  });
+}
+
 document.querySelectorAll('[data-ico]').forEach((el) => {
   const grand = el.closest('.etapes, .liste-recois');
   el.innerHTML = icone(el.dataset.ico, { taille: grand ? 22 : el.classList.contains('marque-ico') ? 17 : 18, epaisseur: el.classList.contains('marque-ico') ? 2.2 : 2 });
@@ -214,6 +309,7 @@ document.querySelectorAll('[data-langue]').forEach((b) => {
 remplirTextes();
 brancherRecherche();
 afficher();
+animerAuDefilement();
 
 // Couverture : quelques photos de voyage qui se suivent, avec un zoom lent.
 const fond = document.getElementById('fond-couverture');
