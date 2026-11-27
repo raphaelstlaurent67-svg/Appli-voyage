@@ -1598,7 +1598,7 @@ async function ongletDemandes(zone, liens) {
       ${liens.map((l) => { const [cl, txt] = etatLien(l); return `
         <li><a class="ligne-demande" href="#/demande/${esc(l.id)}" data-id="${esc(l.id)}">
           <span class="carnet-avatar ${l.code ? '' : 'avatar-pale'}">${l.code ? esc((l.nom || l.client || '?').charAt(0).toUpperCase()) : icone('send', { taille: 18 })}</span>
-          <span class="carnet-txt"><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.recuLe || l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${l.source === 'public' ? ' · lien public' : ''}</small></span>
+          <span class="carnet-txt"><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.recuLe || l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${l.source === 'public' ? ' · site' : ''}${l.suspect ? ' · à vérifier' : ''}</small></span>
           <span class="etat-lien ${cl}">${txt}</span>
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`; }).join('')}
@@ -1745,7 +1745,7 @@ async function pageDemande(lienId) {
     <article class="demande-recue">
       <div class="demande-tete">
         <span class="carnet-avatar grand">${esc((d.nom || '?').charAt(0).toUpperCase())}</span>
-        <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
+        <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${lien.suspect ? ' · à vérifier' : ''}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
       </div>
       ${relancer ? `<p class="bandeau-relance">${icone('clock', { taille: 17 })}<span>Sans nouvelles depuis ${Math.floor(depuisJours(lien.relanceLe || lien.contacteLe))} jours</span></p>` : ''}
       ${tel || d.courriel ? `<div class="actions" id="actions-demande">

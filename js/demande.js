@@ -12,7 +12,7 @@ import { ENVIES, encoder, nuits } from './code-demande.js';
 import { ideesPour, aDesIdees, traduireIdee } from './idees-pays.js';
 import * as pwa from './installer.js';
 import { CONTACT } from './contact.js';
-import { RELAIS, canalDemande, chiffrerJson, enBase64Url } from './carnet-commun.js';
+import { RELAIS, canalDemande, chiffrerJson, enBase64Url, deposerRelais } from './carnet-commun.js';
 import { MARQUE, DEMANDE_PUBLIQUE, ALERTE } from './marque.js';
 import { messageAppel, lienTexto, lienCourriel } from './appel.js';
 import { photo, photoPays, PHOTOS_FOND } from './photos.js';
@@ -37,23 +37,28 @@ const LIEN = (() => {
 const LIEN_ENVOI = LIEN || DEMANDE_PUBLIQUE;
 // Contre les envois en masse : un champ caché que seuls les robots remplissent,
 // un minimum de temps passé sur le formulaire, et quelques envois par appareil par jour.
+// Rien n'est jamais jeté : un envoi douteux part quand même, marqué « à vérifier »
+// (dans l'appli et dans la notification). Un lien personnel n'est jamais douteux.
 // Début du remplissage (gardé si la page se recharge, pour ne pas bloquer un vrai client).
 let OUVERT_LE = Date.now();
 try { OUVERT_LE = +localStorage.getItem('debutDemande') || OUVERT_LE; localStorage.setItem('debutDemande', String(OUVERT_LE)); } catch (_) { /* rien */ }
 function envoiSuspect() {
-  if (document.querySelector('#site-web-pot')?.value) return true;
   const debut = OUVERT_LE;
   OUVERT_LE = Date.now();
   try { localStorage.removeItem('debutDemande'); } catch (_) { /* rien */ }
-  if (!MODE_TEST && Date.now() - debut < 20000) return true;
+  let rafale = false;
   try {
     const jour = Date.now() - 864e5;
     const envois = JSON.parse(localStorage.getItem('envoisDemande') || '[]').filter((x) => x > jour);
-    if (envois.length >= 3 && !MODE_TEST) return true;
+    rafale = envois.length >= 3;
     envois.push(Date.now());
-    localStorage.setItem('envoisDemande', JSON.stringify(envois));
+    localStorage.setItem('envoisDemande', JSON.stringify(envois.slice(-20)));
   } catch (_) { /* rien */ }
-  return false;
+  if (LIEN || MODE_TEST) return '';
+  if (document.querySelector('#site-web-pot')?.value) return 'robot';
+  if (Date.now() - debut < 20000) return 'rapide';
+  if (rafale) return 'rafale';
+  return '';
 }
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
@@ -1153,8 +1158,8 @@ function marquerErreur(champ, message) {
 }
 
 // Notification instantanée sur le téléphone de Raph (appli ntfy). Rien de privé : pas de courriel ni de téléphone.
-function alerter() {
-  if (!ALERTE) return;
+async function alerter(suspect = '') {
+  if (!ALERTE) return false;
   const prenom = d.nom.trim().split(/\s+/)[0].slice(0, 30);
   const ou = d.pays.length ? d.pays.map((x) => x.nom).join(', ') : d.regions.join(', ') || 'destination à définir';
   const jours = totalJours();
@@ -1166,11 +1171,16 @@ function alerter() {
   const contact = tel ? ['Texto', lienTexto(tel, message)] : d.courriel.trim() ? ['Courriel', lienCourriel(d.courriel, d.langue, message)] : null;
   const actions = [contact && `view, ${contact[0]}, ${contact[1]}`, 'view, Mon agenda, https://calendar.google.com/calendar/r/week', `view, Voir la demande, ${new URL('./#/demandes', location.href).href}`].filter(Boolean).join('; ');
   const q = new URLSearchParams({
-    title: `${MODE_TEST ? '(Essai) ' : ''}Nouvelle demande de voyage`, tags: 'airplane', priority: 'high',
+    title: `${MODE_TEST ? '(Essai) ' : ''}${suspect ? '(À vérifier) ' : ''}Nouvelle demande de voyage${LIEN ? '' : ' · site'}`, tags: 'airplane', priority: 'high',
     click: contact ? contact[1] : new URL('./#/demandes', location.href).href,
     actions,
   });
-  fetch(`${RELAIS}/${ALERTE}?${q}`, { method: 'POST', body: texte.slice(0, 300) }).catch(() => {});
+  // Réessaie si le réseau du client flanche (jusqu'à 3 fois).
+  for (let k = 0; k < 3; k++) {
+    try { if ((await fetch(`${RELAIS}/${ALERTE}?${q}`, { method: 'POST', body: texte.slice(0, 300) })).ok) return true; } catch (_) { /* réessaie */ }
+    await new Promise((r) => setTimeout(r, 800 * (k + 1)));
+  }
+  return false;
 }
 
 async function envoyer() {
@@ -1194,18 +1204,16 @@ async function envoyer() {
   let etat = 'envoi';
   const suspect = envoiSuspect();
   const envoyerAuto = async () => {
-    // Robot ou envoi en rafale : on affiche « envoyé », mais rien ne part.
-    if (suspect) { await new Promise((r) => setTimeout(r, 900)); etat = 'ok'; dessiner(); return; }
     // 1. Directement dans l'appli de Raph (relais gratuit, chiffré avec la clé du lien).
+    // Même un envoi douteux part (marqué « à vérifier ») : aucune demande n'est perdue en silence.
     let parRelais = false;
-    {
-      try {
-        const canal = await canalDemande(LIEN_ENVOI.id, LIEN_ENVOI.cle);
-        const corps = enBase64Url(await chiffrerJson(LIEN_ENVOI.cle, { code, nom: d.nom.trim().slice(0, 80), envoyeLe: d.envoyeLe }));
-        parRelais = (await fetch(`${RELAIS}/${canal}`, { method: 'POST', body: corps })).ok;
-      } catch (_) { parRelais = false; }
-    }
-    alerter();
+    try {
+      const canal = await canalDemande(LIEN_ENVOI.id, LIEN_ENVOI.cle);
+      const corps = enBase64Url(await chiffrerJson(LIEN_ENVOI.cle, { code, nom: d.nom.trim().slice(0, 80), envoyeLe: d.envoyeLe, ...(suspect ? { suspect } : {}) }));
+      parRelais = await deposerRelais(canal, corps);
+    } catch (_) { parRelais = false; }
+    // 2. La notification sur le téléphone de Raph, chaque fois.
+    await alerter(suspect);
     if (!POUR) { etat = parRelais ? 'ok' : 'manuel'; dessiner(); return; }
     // 2. Et par courriel (FormSubmit), en plus.
     try {

@@ -75,6 +75,45 @@ export async function canalDemande(id, cle) {
   return `pd${[...h.subarray(0, 12)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Le relais n'accepte que des messages de 4 Ko : au-delà, il en fait une pièce jointe qui disparaît
+// après 3 h (et la demande serait perdue). Un long envoi part donc en morceaux « AV1~groupe~i~n~texte ».
+const MORCEAU = 3500;
+export async function deposerRelais(canal, texte, essais = 3) {
+  const groupe = idCourt();
+  const n = Math.max(1, Math.ceil(texte.length / MORCEAU));
+  for (let i = 0; i < n; i++) {
+    const corps = n === 1 ? texte : `AV1~${groupe}~${i}~${n}~${texte.slice(i * MORCEAU, (i + 1) * MORCEAU)}`;
+    let ok = false;
+    for (let k = 0; k < essais && !ok; k++) {
+      try { ok = (await fetch(`${RELAIS}/${canal}`, { method: 'POST', body: corps })).ok; } catch (_) { ok = false; }
+      if (!ok && k < essais - 1) await new Promise((r) => setTimeout(r, 800 * (k + 1)));
+    }
+    if (!ok) return false;
+  }
+  return true;
+}
+// Lit tout ce que le relais garde pour ce canal (12 h) et recolle les morceaux.
+// Retourne [{ id, time, message }] ; lance une erreur si le relais ne répond pas.
+export async function lireRelais(canal) {
+  const rep = await fetch(`${RELAIS}/${canal}/json?poll=1&since=all`, { cache: 'no-store' });
+  if (!rep.ok) throw new Error(`relais ${rep.status}`);
+  const sortie = [];
+  const groupes = new Map();
+  for (const ligne of (await rep.text()).split('\n')) {
+    let m; try { m = JSON.parse(ligne); } catch (_) { continue; }
+    if (m?.event !== 'message' || typeof m.message !== 'string' || !m.message) continue;
+    const p = /^AV1~([\w-]{1,40})~(\d{1,3})~(\d{1,3})~(.*)$/s.exec(m.message);
+    if (!p) { sortie.push({ id: m.id, time: m.time, message: m.message }); continue; }
+    const g = groupes.get(p[1]) || { id: p[1], time: m.time, n: +p[3], parts: [] };
+    g.parts[+p[2]] = p[4];
+    groupes.set(p[1], g);
+  }
+  for (const g of groupes.values()) {
+    if (g.n > 0 && g.n <= 50 && g.parts.filter((x) => x !== undefined).length === g.n) sortie.push({ id: g.id, time: g.time, message: g.parts.join('') });
+  }
+  return sortie.sort((a, b) => (a.time || 0) - (b.time || 0));
+}
+
 // ---------- Adresses des fichiers publiés ----------
 export const cheminPublic = (id, fichier = 'c') => `carnets/${id}/${fichier}.bin`;
 export const urlPublique = (id, fichier = 'c', depot = DEPOT_CARNETS) => `https://raw.githubusercontent.com/${depot}/${BRANCHE_CARNETS}/${cheminPublic(id, fichier)}`;
