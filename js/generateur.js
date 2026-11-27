@@ -25,17 +25,15 @@ const app = document.getElementById('app');
 const side = document.getElementById('side');
 const modale = document.getElementById('modale');
 
-// Règles de paiement des contributeurs (modifiables dans Contributeurs > Règles).
+// Les éclaireurs : des gens de confiance qui partent repérer une ville. Le voyage (vol, hébergement)
+// est payé, plus un cachet par mission terminée (modifiable dans Éclaireurs > Règles).
 const REGLES_DEFAUT = {
-  parEndroit: 1,
-  bonusVille: 75,
+  cachetMission: 1000,
   // Une ville complète : 60 restos, 30 hébergements, 30 activités, 20 bars et 10 trajets (150).
   // Les trajets en plus remplacent les bars qui manquent ; un trajet complexe compte pour 2.
   cibles: { restos: 60, hebergement: 30, activites: 30, bars: 20, trajets: 10 },
-  pourcentage: 1,
-  seuilVoyage: 300,
-  recompenseVoyage: 'Un voyage à rabais',
 };
+const STATUTS_MISSION = { prevue: 'Prévue', en_cours: 'En cours', terminee: 'Terminée' };
 
 const GROUPES_VILLE = [
   ['restos', 'Restos', ['restos']],
@@ -85,6 +83,14 @@ function enCAD(montant, devise) {
   return m && t ? m * t : null;
 }
 const formatCAD = (v) => `${Math.round(v || 0).toLocaleString('fr-CA')} $`;
+// Ce qu'un voyage rapporte vraiment : prix moins les coûts, et le taux horaire.
+function rentabilite(v) {
+  const prix = nombre(v.prixVente);
+  const couts = nombre(v.coutEclaireur) + nombre(v.coutAutres);
+  const heures = nombre(v.heures);
+  const profit = prix - couts;
+  return { prix, couts, heures, profit, marge: prix ? Math.round((profit / prix) * 100) : 0, parHeure: heures ? profit / heures : 0 };
+}
 const formatArgent = (v) => `${(Math.round((v || 0) * 100) / 100).toLocaleString('fr-CA', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 })} $`;
 const dollars = (n) => (n ? '$'.repeat(n) : '');
 const pct = (n) => `${(+n || 0).toLocaleString('fr-CA', { maximumFractionDigits: 2 })} %`;
@@ -134,7 +140,6 @@ async function charger() {
   etat.taux = { ...TAUX_PAR_DEFAUT, ...(await db.lireReglage('taux', {})) };
   etat.regles = { ...REGLES_DEFAUT, ...(await db.lireReglage('reglesContrib', {})) };
   // Ancien réglage par défaut (10 %) jugé beaucoup trop haut : on passe à 1 %.
-  if (etat.regles.pourcentage === 10) etat.regles.pourcentage = 1;
   etat.regles.cibles = { ...REGLES_DEFAUT.cibles, ...(etat.regles.cibles || {}) };
   await integrerDemandes();
   await integrerChoixClients();
@@ -316,27 +321,14 @@ function bilanContributeur(c) {
     parVille.get(cle).endroits.push(e);
   }
   const villes = [...parVille.values()].map((v) => ({ pays: v.pays, ville: v.ville, ...progresVille(v.endroits, r.cibles) })).sort((a, b) => b.progres - a.progres);
-  const bonus = villes.filter((v) => v.complete).length * r.bonusVille;
-
-  // Pourcentage sur les itinéraires vendus, selon la part de ses endroits dans le voyage.
-  let commissions = 0;
-  const ventes = [];
-  for (const v of etat.voyages.filter((x) => x.vendu && nombre(x.prixVente))) {
-    const ids = v.jours.flatMap((j) => j.items.map((it) => it.endroitId));
-    if (!ids.length) continue;
-    const a = ids.filter((id) => endroit(id)?.contributeurId === c.id).length;
-    if (!a) continue;
-    const montant = nombre(v.prixVente) * (r.pourcentage / 100) * (a / ids.length);
-    commissions += montant;
-    ventes.push({ titre: v.titre, montant });
-  }
-
-  const gagne = acceptes.length * r.parEndroit + bonus + commissions;
+  const missions = c.missions || [];
+  const terminees = missions.filter((m) => m.statut === 'terminee');
+  const gagne = terminees.reduce((n, m) => n + nombre(m.cachet ?? r.cachetMission), 0);
+  const frais = missions.reduce((n, m) => n + nombre(m.frais), 0);
   const paye = etat.paiements.filter((p) => p.contributeurId === c.id).reduce((n, p) => n + nombre(p.montant), 0);
   return {
-    acceptes: acceptes.length, enAttente, refuses, villes, bonus, commissions, ventes,
+    acceptes: acceptes.length, enAttente, refuses, villes, missions, terminees: terminees.length, frais,
     gagne, paye, du: Math.max(0, Math.round((gagne - paye) * 100) / 100),
-    progresVoyage: Math.min(1, acceptes.length / Math.max(1, r.seuilVoyage)),
   };
 }
 
@@ -345,9 +337,9 @@ function bilanContributeur(c) {
 const MENU = [
   ['#/', 'house', 'Accueil', ''],
   ['#/clients', 'inbox', 'Clients', 'Tous tes clients : lien envoyé, demande reçue, voyage sur mesure en direct.'],
-  ['#/contributeurs', 'users', 'Contributeurs', 'Ajoute des contributeurs, envoie-leur leur lien, vois ce que tu leur dois.'],
+  ['#/contributeurs', 'users', 'Éclaireurs', 'Les gens qui partent repérer pour toi : missions, endroits, ce que tu leur dois.'],
   ['#/ventes', 'banknote', 'Ventes', 'Ce que tes itinéraires ont rapporté.'],
-  ['#/donnees', 'folder-open', 'Mes données', 'Importer un fichier de contributeur, garder une copie.'],
+  ['#/donnees', 'folder-open', 'Mes données', 'Importer un fichier d\'éclaireur, garder une copie.'],
 ];
 function rendreSide() {
   const route = location.hash || '#/';
@@ -962,13 +954,33 @@ function ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb) {
       <section class="panel">
         <div class="panel-tete"><h3>Vente</h3></div>
         <div class="form-grille">
-          <label class="champ"><span>Prix de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 350"></label>
+          <label class="champ"><span>Prix de l'itinéraire ($ CA)</span><input data-info="prixVente" inputmode="decimal" value="${esc(v.prixVente)}" placeholder="Ex. : 8000"></label>
           <label class="champ"><span>Vendu le</span><input data-info="venduLe" type="date" value="${esc(v.venduLe)}" ${v.vendu ? '' : 'disabled'}></label>
-          <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Les contributeurs dont les endroits sont dans ce voyage reçoivent ${pct(r.pourcentage)} du prix, selon leur part.</small></span></label>
+          <label class="interr large"><input type="checkbox" data-info="vendu" ${v.vendu ? 'checked' : ''}><i></i><span><b>Itinéraire vendu</b><small>Compte dans Ventes.</small></span></label>
           <label class="interr large"><input type="checkbox" data-info="modele" ${v.modele ? 'checked' : ''}><i></i><span><b>Modèle réutilisable</b><small>Apparaît sur l'accueil, prêt à dupliquer pour un nouveau client.</small></span></label>
         </div>
       </section>
-    </div>`;
+    </div>
+    <section class="panel renta">
+      <div class="panel-tete"><h3>Rentabilité</h3><span class="aide">Privé</span></div>
+      <div class="renta-grille">
+        <div class="form-grille">
+          <label class="champ"><span>Éclaireur <small>voyage + cachet</small></span><input data-info="coutEclaireur" inputmode="decimal" value="${esc(v.coutEclaireur || '')}" placeholder="Ex. : 2500"></label>
+          <label class="champ"><span>Autres frais <small>outils, pub, imprévus</small></span><input data-info="coutAutres" inputmode="decimal" value="${esc(v.coutAutres || '')}" placeholder="Ex. : 150"></label>
+          <label class="champ"><span>Heures de travail</span><input data-info="heures" inputmode="decimal" value="${esc(v.heures || '')}" placeholder="Ex. : 20"></label>
+        </div>
+        <div class="renta-resultat" id="renta"></div>
+      </div>
+    </section>`;
+  const majRenta = () => {
+    const r = rentabilite(v);
+    zone.querySelector('#renta').innerHTML = r.prix
+      ? `<div class="${r.profit < 0 ? 'perte' : ''}"><span>Profit</span><b>${formatCAD(r.profit)}</b></div>
+         <div><span>Marge</span><b>${r.marge} %</b></div>
+         <div><span>Par heure</span><b>${r.heures ? formatCAD(r.parHeure) : '–'}</b></div>`
+      : '<p class="aide">Entre le prix de vente pour voir le profit.</p>';
+  };
+  majRenta();
   zone.querySelectorAll('[data-info]').forEach((champ) => {
     champ.addEventListener(champ.type === 'checkbox' ? 'change' : 'input', () => {
       const k = champ.dataset.info;
@@ -984,6 +996,7 @@ function ongletInfos(v, zone, enregistrer, majEtiquette, majCrumb) {
         toast(k === 'vendu' ? (v.vendu ? 'Marqué comme vendu' : 'Plus marqué comme vendu') : v.modele ? 'Ajouté aux modèles' : 'Retiré des modèles');
       }
       if (k === 'client') majCrumb();
+      if (['prixVente', 'coutEclaireur', 'coutAutres', 'heures'].includes(k)) majRenta();
       enregistrer();
     });
   });
@@ -1880,13 +1893,14 @@ function pageContributeurs(onglet) {
   const bilans = etat.contributeurs.map((c) => ({ c, b: bilanContributeur(c) }));
   const du = bilans.reduce((s, x) => s + x.b.du, 0);
   const paye = etat.paiements.reduce((s, p) => s + nombre(p.montant), 0);
-  const onglets = [['apercu', 'users', 'Contributeurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
+  const onglets = [['apercu', 'users', 'Éclaireurs', etat.contributeurs.length], ['paiements', 'banknote', 'Paiements', ''], ['regles', 'settings', 'Règles', '']];
+  const enMission = etat.contributeurs.flatMap((c) => c.missions || []).filter((m) => m.statut === 'en_cours').length;
   app.innerHTML = `
-    ${entete('Contributeurs', '', `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>`)}
+    ${entete('Éclaireurs', '', `<button class="btn" id="ajout-contrib">${icone('user-plus', { taille: 15 })} Ajouter un éclaireur</button>`)}
     <div class="kpis kpis-3">
       <a class="kpi ${n ? 'hi' : ''}" href="#/a-valider"><span>${icone('inbox', { taille: 15 })} À valider</span><b>${n}</b><small>${n ? 'Endroits en attente' : 'Rien en attente'}</small></a>
       <div class="kpi ${du ? 'warn' : ''}"><span>${icone('wallet', { taille: 15 })} À payer</span><b>${formatArgent(du)}</b><small>Total dû maintenant</small></div>
-      <div class="kpi"><span>${icone('circle-check-big', { taille: 15 })} Déjà payé</span><b>${formatArgent(paye)}</b><small>${pluriel(etat.paiements.length, 'paiement')}</small></div>
+      <div class="kpi"><span>${icone('plane', { taille: 15 })} En mission</span><b>${enMission}</b><small>${formatArgent(paye)} déjà payé</small></div>
     </div>
     <nav class="tabs">${onglets.map(([k, ico, nom, c]) => `<a class="tab ${k === onglet ? 'on' : ''}" href="#/contributeurs/${k}">${icone(ico, { taille: 15 })}${nom}${c !== '' ? `<span class="n">${c}</span>` : ''}</a>`).join('')}</nav>
     <div id="contenu"></div>`;
@@ -1914,6 +1928,8 @@ function pageVentes(periode) {
   const moisCourant = aujourdhui().slice(0, 7);
   const ceMois = vendus.filter((x) => x.date.startsWith(moisCourant)).reduce((s, x) => s + x.prix, 0);
   const moyenne = vendus.length ? total / vendus.length : 0;
+  const profit = vendus.reduce((s, x) => s + rentabilite(x.v).profit, 0);
+  const heures = vendus.reduce((s, x) => s + nombre(x.v.heures), 0);
 
   // Barres : un jour par barre (30 derniers jours) ou un mois par barre (12 derniers mois).
   const barres = [];
@@ -1944,10 +1960,11 @@ function pageVentes(periode) {
 
   app.innerHTML = `
     ${entete('Ventes', '')}
-    <div class="kpis kpis-3">
+    <div class="kpis">
       <div class="kpi"><span>${icone('banknote', { taille: 15 })} Total</span><b>${formatCAD(total)}</b><small>${pluriel(vendus.length, 'itinéraire vendu', 'itinéraires vendus')}</small></div>
       <div class="kpi"><span>${icone('calendar', { taille: 15 })} Ce mois-ci</span><b>${formatCAD(ceMois)}</b><small>${new Date().toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' })}</small></div>
       <div class="kpi"><span>${icone('target', { taille: 15 })} Prix moyen</span><b>${formatCAD(moyenne)}</b><small>par itinéraire</small></div>
+      <div class="kpi"><span>${icone('hand-coins', { taille: 15 })} Profit</span><b>${formatCAD(profit)}</b><small>${total ? `marge ${Math.round((profit / total) * 100)} %` : 'après les coûts'}${heures ? `, ${formatCAD(profit / heures)} / h` : ''}</small></div>
     </div>
     <section class="panel graphique">
       <div class="panel-tete"><h3>${periode === '12m' ? 'Par mois' : 'Par jour'}</h3><span class="aide">${formatCAD(periodeTotal)} sur ${periode === '12m' ? '12 mois' : '30 jours'}</span>
@@ -1975,7 +1992,7 @@ const lienInvitation = (c) => `${new URL('../contribuer.html', location.href).hr
 function montrerInvitation(c) {
   const l = lienInvitation(c);
   ouvrirModale(`Le lien de ${esc(c.nom)}`, `
-    <p class="doux">Envoie ce lien à ${esc(c.nom)}. Sur son cellulaire, il ouvre l'appli des contributeurs, déjà à son nom. Quand ses endroits sont prêts, il touche « Envoyer » et te transmet un fichier, que tu importes dans « Mes données ».</p>
+    <p class="doux">Envoie ce lien à ${esc(c.nom)}. Sur son cellulaire, il ouvre l'appli des éclaireurs, déjà à son nom. Quand ses endroits sont prêts, il touche « Envoyer » et te transmet un fichier, que tu importes dans « Mes données ».</p>
     <div class="lien-invit"><code>${esc(l)}</code></div>`, async () => {
     try { await navigator.clipboard.writeText(l); toast('Lien copié'); } catch (_) { prompt('Copie ce lien :', l); }
     return true;
@@ -1983,19 +2000,19 @@ function montrerInvitation(c) {
 }
 
 function formulaireContributeur(c = null) {
-  ouvrirModale(c ? 'Modifier le contributeur' : 'Nouveau contributeur', `
+  ouvrirModale(c ? 'Modifier l\'éclaireur' : 'Nouvel éclaireur', `
     <div class="form-grille">
       <label class="champ large"><span>Nom</span><input name="nom" required value="${esc(c?.nom)}" placeholder="Ex. : Mai Tran"></label>
-      <label class="champ"><span>Ville</span><input name="ville" value="${esc(c?.ville)}" placeholder="Ex. : Hanoï"></label>
-      <label class="champ"><span>Pays où il habite <small>sert à la vérification</small></span><input name="pays" value="${esc(c?.pays)}" placeholder="Ex. : Vietnam"></label>
+      <label class="champ"><span>Ville où il habite</span><input name="ville" value="${esc(c?.ville)}" placeholder="Ex. : Sherbrooke"></label>
+      <label class="champ"><span>Pays</span><input name="pays" value="${esc(c?.pays)}" placeholder="Ex. : Canada"></label>
       <label class="champ large"><span>Contact <small>courriel, WhatsApp, Instagram…</small></span><input name="contact" value="${esc(c?.contact)}"></label>
-      <label class="champ large"><span>Façon de le payer <small>PayPal, Wise, virement…</small></span><input name="paiement" value="${esc(c?.paiement)}"></label>
+      <label class="champ large"><span>Façon de le payer <small>Interac, virement…</small></span><input name="paiement" value="${esc(c?.paiement)}"></label>
       <label class="champ large"><span>Notes</span><textarea name="notes" rows="2">${esc(c?.notes)}</textarea></label>
     </div>`, async (val) => {
     if (!val.nom.trim()) return false;
     const objet = { ...(c || { id: db.nouvelId(), creeLe: new Date().toISOString() }), ...val, nom: val.nom.trim() };
     await sauver('contributeurs', objet);
-    toast(c ? 'Contributeur modifié' : 'Contributeur ajouté');
+    toast(c ? 'Éclaireur modifié' : 'Éclaireur ajouté');
     router();
     if (!c) setTimeout(() => montrerInvitation(objet), 50);
     return true;
@@ -2006,17 +2023,17 @@ function ongletListeContrib(zone, bilans) {
   const r = etat.regles;
   const explications = `
     <div class="grille-3 explique">
-      <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Tu valides chaque endroit. Plus la fiche est complète, plus elle a de chances d'être acceptée.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${GROUPES_VILLE.map(([k, nom]) => `${r.cibles[k]} ${nom.toLowerCase()}`).join(', ')}. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${pct(r.pourcentage)} des ventes</b><p>Quand un itinéraire vendu utilise ses endroits, selon sa part du voyage. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('plane', { taille: 18 })}</span><b>Le voyage payé</b><p>Le vol et l'hébergement pendant la mission. Note-les dans la mission.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('banknote', { taille: 18 })}</span><b>${formatArgent(r.cachetMission)} par mission</b><p>Dû quand la mission passe à « Terminée », une fois ses endroits validés.</p></div>
+      <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${Object.values(r.cibles).reduce((a, b) => a + b, 0)} endroits par ville</b><p>${GROUPES_VILLE.map(([k, nom]) => `${r.cibles[k]} ${nom.toLowerCase()}`).join(', ')}.</p></div>
     </div>`;
   if (!bilans.length) {
     zone.innerHTML = `
       <div class="panel vide-bloc">
         ${icone('users', { taille: 28, epaisseur: 1.6 })}
-        <b>Aucun contributeur pour l'instant</b>
-        <span>Ajoute une personne ici : tu reçois un lien à lui envoyer. Elle ouvre l'appli des contributeurs sur son cellulaire, ajoute ses endroits, puis t'envoie un fichier que tu importes dans « Mes données ».</span>
-        <button class="btn" id="ajout-vide">${icone('user-plus', { taille: 15 })} Ajouter un contributeur</button>
+        <b>Aucun éclaireur pour l'instant</b>
+        <span>Ajoute une personne de confiance, puis crée sa mission : la ville, les dates, le voyage payé.</span>
+        <button class="btn" id="ajout-vide">${icone('user-plus', { taille: 15 })} Ajouter un éclaireur</button>
       </div>
       ${explications}`;
     zone.querySelector('#ajout-vide').onclick = () => formulaireContributeur();
@@ -2039,6 +2056,10 @@ function ongletListeContrib(zone, bilans) {
               <button class="ico-btn" data-modifier="${esc(c.id)}" aria-label="Modifier">${icone('pencil', { taille: 15 })}</button>
             </div>
           </div>
+          <div class="missions">
+            ${b.missions.map((m) => `<button class="mission ${m.statut}" data-mission="${esc(c.id)}|${esc(m.id)}">${icone(m.statut === 'terminee' ? 'circle-check-big' : 'plane', { taille: 14 })}<b>${esc(m.ville || 'Mission')}</b><span>${esc([m.debut && dateCourte(m.debut), STATUTS_MISSION[m.statut]].filter(Boolean).join(' · '))}</span></button>`).join('')}
+            <button class="mission nouvelle" data-nouvelle-mission="${esc(c.id)}">${icone('plus', { taille: 14 })}<b>Nouvelle mission</b></button>
+          </div>
           <div class="contrib-simple">
             <div><b>${b.acceptes}</b><span>acceptés</span></div>
             ${b.enAttente ? `<a class="hi" href="#/a-valider"><b>${b.enAttente}</b><span>à valider</span></a>` : `<div><b>0</b><span>à valider</span></div>`}
@@ -2053,6 +2074,43 @@ function ongletListeContrib(zone, bilans) {
   zone.querySelectorAll('[data-modifier]').forEach((b) => { b.onclick = () => formulaireContributeur(etat.contributeurs.find((c) => c.id === b.dataset.modifier)); });
   zone.querySelectorAll('[data-invitation]').forEach((b) => { b.onclick = () => montrerInvitation(etat.contributeurs.find((c) => c.id === b.dataset.invitation)); });
   zone.querySelectorAll('[data-payer]').forEach((b) => { b.onclick = () => formulairePaiement(b.dataset.payer); });
+  zone.querySelectorAll('[data-nouvelle-mission]').forEach((b) => { b.onclick = () => formulaireMission(b.dataset.nouvelleMission); });
+  zone.querySelectorAll('[data-mission]').forEach((b) => { const [cid, mid] = b.dataset.mission.split('|'); b.onclick = () => formulaireMission(cid, mid); });
+}
+
+// Une mission : une ville à repérer, ses dates, ce que le voyage a coûté, et le cachet.
+function formulaireMission(contributeurId, missionId = null) {
+  const c = etat.contributeurs.find((x) => x.id === contributeurId);
+  if (!c) return;
+  const m = (c.missions || []).find((x) => x.id === missionId);
+  const villes = trier(uniques(etat.voyages.flatMap((v) => (v.etapes || []).map((e) => e.ville)).filter(Boolean)));
+  ouvrirModale(m ? `Mission de ${esc(c.nom)}` : `Nouvelle mission pour ${esc(c.nom)}`, `
+    <div class="form-grille">
+      <label class="champ"><span>Ville</span><input name="ville" required list="villes-mission" value="${esc(m?.ville)}" placeholder="Ex. : Lisbonne"></label>
+      <label class="champ"><span>Pays</span><input name="pays" value="${esc(m?.pays)}" placeholder="Ex. : Portugal"></label>
+      <datalist id="villes-mission">${villes.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
+      <label class="champ"><span>Départ</span><input name="debut" type="date" value="${esc(m?.debut)}"></label>
+      <label class="champ"><span>Retour</span><input name="fin" type="date" value="${esc(m?.fin)}"></label>
+      <label class="champ"><span>Vol + hébergement ($ CA) <small>payés par toi</small></span><input name="frais" inputmode="decimal" value="${esc(m?.frais ?? '')}"></label>
+      <label class="champ"><span>Cachet ($ CA)</span><input name="cachet" inputmode="decimal" value="${esc(m?.cachet ?? etat.regles.cachetMission)}"></label>
+      <label class="champ large"><span>Statut</span><select name="statut">${Object.entries(STATUTS_MISSION).map(([k, nom]) => `<option value="${k}" ${(m?.statut || 'prevue') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
+      <label class="champ large"><span>Notes</span><textarea name="notes" rows="2" placeholder="Ex. : vol AC 872, Airbnb Alfama">${esc(m?.notes)}</textarea></label>
+    </div>
+    ${m ? `<button type="button" class="btn ghost sm rouge" id="suppr-mission">${icone('x', { taille: 14 })} Supprimer la mission</button>` : ''}`, async (val) => {
+    if (!val.ville.trim()) return false;
+    const mission = { ...(m || { id: db.nouvelId(), creeLe: new Date().toISOString() }), ville: val.ville.trim(), pays: val.pays.trim(), debut: val.debut, fin: val.fin, frais: nombre(val.frais) || 0, cachet: nombre(val.cachet) || 0, statut: val.statut, notes: val.notes.trim() };
+    c.missions = [...(c.missions || []).filter((x) => x.id !== mission.id), mission].sort((a, b) => (a.debut || '9').localeCompare(b.debut || '9'));
+    await sauver('contributeurs', c);
+    toast(m ? 'Mission modifiée' : 'Mission créée');
+    router();
+    return true;
+  }, { ok: m ? 'Enregistrer' : 'Créer la mission' });
+  const suppr = document.getElementById('suppr-mission');
+  if (suppr) suppr.onclick = async () => {
+    c.missions = (c.missions || []).filter((x) => x.id !== missionId);
+    await sauver('contributeurs', c);
+    fermerModale(); toast('Mission supprimée'); router();
+  };
 }
 
 function formulairePaiement(contributeurId) {
@@ -2064,7 +2122,7 @@ function formulairePaiement(contributeurId) {
       <label class="champ"><span>Date</span><input name="date" type="date" value="${aujourdhui()}"></label>
       <label class="champ large"><span>Note <small>ex. : PayPal, référence…</small></span><input name="note" value="${esc(c.paiement || '')}"></label>
     </div>
-    <p class="aide">À payer en ce moment : ${formatArgent(b.du)}. Ceci ne fait pas le virement : ça note seulement que tu l'as fait.</p>`, async (val) => {
+    <p class="aide">À payer : ${formatArgent(b.du)} (${pluriel(b.terminees, 'mission terminée', 'missions terminées')}). Ceci note le virement, il ne le fait pas.</p>`, async (val) => {
     const montant = nombre(val.montant);
     if (!(montant > 0)) return false;
     await sauver('paiements', { id: db.nouvelId(), contributeurId, montant, date: val.date || aujourdhui(), note: val.note.trim() });
@@ -2135,7 +2193,7 @@ async function decider(id, statut, raison = '') {
   await sauver('endroits', e);
 }
 function demanderRefus(id, raison = '') {
-  ouvrirModale('Refuser cet endroit ?', `<label class="champ"><span>Raison <small>optionnel, pour l'expliquer au contributeur</small></span><input name="raison" value="${esc(raison)}" placeholder="Ex. : photo floue, endroit fermé…"></label>`, async (val) => {
+  ouvrirModale('Refuser cet endroit ?', `<label class="champ"><span>Raison <small>optionnel, pour l'expliquer à l'éclaireur</small></span><input name="raison" value="${esc(raison)}" placeholder="Ex. : photo floue, endroit fermé…"></label>`, async (val) => {
     await decider(id, 'refuse', val.raison.trim());
     toast('Endroit refusé');
     router();
@@ -2149,7 +2207,7 @@ async function ouvrirRapport(id, forcer = false) {
   if (!e) return;
   const cat = categorie(e);
   const c = etat.contributeurs.find((x) => x.id === e.contributeurId);
-  modale.innerHTML = `<div class="mod-fond" data-fermer></div><div class="mod mod-rapport" role="dialog" aria-modal="true"><div class="rapport-attente">${icone('scan-search', { taille: 30, epaisseur: 1.6 })}<b>Vérification de « ${esc(e.nom)} »…</b><span>Photos, position, carte du monde, historique du contributeur.</span></div></div>`;
+  modale.innerHTML = `<div class="mod-fond" data-fermer></div><div class="mod mod-rapport" role="dialog" aria-modal="true"><div class="rapport-attente">${icone('scan-search', { taille: 30, epaisseur: 1.6 })}<b>Vérification de « ${esc(e.nom)} »…</b><span>Photos, position, carte du monde, historique de l'éclaireur.</span></div></div>`;
   modale.hidden = false;
   modale.querySelectorAll('[data-fermer]').forEach((b) => { b.onclick = fermerModale; });
   const r = await rapportDe(e, { forcer });
@@ -2253,7 +2311,7 @@ function ongletSoumissions(zone) {
   const liste = aValider().sort((a, b) => (a.recuLe || '').localeCompare(b.recuLe || ''));
   indexVerif = null;
   if (!liste.length) {
-    zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un contributeur (dans « Mes données »), ses nouveaux endroits arrivent ici et sont vérifiés tout seuls.</span></div>`;
+    zone.innerHTML = `<div class="panel vide-bloc">${icone('circle-check-big', { taille: 28, epaisseur: 1.6 })}<b>Rien à valider</b><span>Quand tu importes le fichier d'un éclaireur (dans « Mes données »), ses nouveaux endroits arrivent ici et sont vérifiés tout seuls.</span></div>`;
     return;
   }
   zone.innerHTML = `
@@ -2324,17 +2382,17 @@ function ongletSoumissions(zone) {
 
 function ongletPaiements(zone, bilans) {
   const tries = [...etat.paiements].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const nom = (id) => etat.contributeurs.find((c) => c.id === id)?.nom || 'Contributeur supprimé';
+  const nom = (id) => etat.contributeurs.find((c) => c.id === id)?.nom || 'Éclaireur supprimé';
   const dus = bilans.filter((x) => x.b.du > 0).sort((a, b) => b.b.du - a.b.du);
   zone.innerHTML = `
     <div class="grille-2">
       <section class="panel">
         <div class="panel-tete"><h3>À payer</h3></div>
-        ${dus.length ? `<ul class="lignes">${dus.map(({ c, b }) => `<li><span class="avatar petit">${initiales(c.nom)}</span><span class="l-txt"><b>${esc(c.nom)}</b><small>${pluriel(b.acceptes, 'endroit')}${b.bonus ? `, bonus ${formatArgent(b.bonus)}` : ''}${b.commissions ? `, ventes ${formatArgent(b.commissions)}` : ''}</small></span><b class="l-montant">${formatArgent(b.du)}</b><button class="btn sm" data-payer="${esc(c.id)}">Payer</button></li>`).join('')}</ul>` : "<p class=\"vide-ligne\">Personne à payer pour l'instant.</p>"}
+        ${dus.length ? `<ul class="lignes">${dus.map(({ c, b }) => `<li><span class="avatar petit">${initiales(c.nom)}</span><span class="l-txt"><b>${esc(c.nom)}</b><small>${pluriel(b.terminees, 'mission terminée', 'missions terminées')}, ${pluriel(b.acceptes, 'endroit')}</small></span><b class="l-montant">${formatArgent(b.du)}</b><button class="btn sm" data-payer="${esc(c.id)}">Payer</button></li>`).join('')}</ul>` : "<p class=\"vide-ligne\">Personne à payer pour l'instant.</p>"}
       </section>
       <section class="panel">
         <div class="panel-tete"><h3>Historique</h3></div>
-        ${tries.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Contributeur</th><th>Note</th><th class="num">Montant</th><th></th></tr></thead><tbody>
+        ${tries.length ? `<table class="tableau"><thead><tr><th>Date</th><th>Éclaireur</th><th>Note</th><th class="num">Montant</th><th></th></tr></thead><tbody>
           ${tries.map((p) => `<tr><td>${esc(dateCourte(p.date))}</td><td>${esc(nom(p.contributeurId))}</td><td class="doux">${esc(p.note || '')}</td><td class="num">${formatArgent(nombre(p.montant))}</td><td><button class="ico-btn rouge" data-effacer-paiement="${esc(p.id)}" aria-label="Effacer">${icone('trash-2', { taille: 14 })}</button></td></tr>`).join('')}
         </tbody></table>` : '<p class="vide-ligne">Aucun paiement noté.</p>'}
       </section>
@@ -2350,24 +2408,13 @@ function ongletPaiements(zone, bilans) {
 
 function ongletRegles(zone) {
   const r = etat.regles;
-  const explications = `
-    <div class="grille-3 explique">
-      <div class="panel"><span class="rond-ico">${icone('map-pin', { taille: 18 })}</span><b>${formatArgent(r.parEndroit)} par endroit accepté</b><p>Payé seulement quand tu acceptes l'endroit.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('trophy', { taille: 18 })}</span><b>${formatArgent(r.bonusVille)} par ville complète</b><p>${GROUPES_VILLE.map(([k, nom]) => `${r.cibles[k]} ${nom.toLowerCase()}`).join(', ')}. Les trajets en plus remplacent les bars manquants ; un trajet complexe compte double.</p></div>
-      <div class="panel"><span class="rond-ico">${icone('percent', { taille: 18 })}</span><b>${pct(r.pourcentage)} des ventes</b><p>Quand un voyage vendu utilise ses endroits. ${esc(r.recompenseVoyage)} à ${r.seuilVoyage} endroits acceptés.</p></div>
-    </div>`;
   zone.innerHTML = `
-    ${explications}
     <form class="panel regles marge-panel" id="regles">
       <div class="form-grille">
-        <label class="champ"><span>Par endroit accepté ($ CA)</span><input name="parEndroit" inputmode="decimal" value="${r.parEndroit}"></label>
-        <label class="champ"><span>Pourcentage sur les ventes (%) <small>ex. : 0,5 ou 1</small></span><input name="pourcentage" inputmode="decimal" value="${r.pourcentage}"></label>
-        <label class="champ"><span>Bonus ville complète ($ CA)</span><input name="bonusVille" inputmode="decimal" value="${r.bonusVille}"></label>
-        <fieldset class="champ large"><span>Une ville complète <small>Activités = visites, expériences et sport.</small></span>
+        <label class="champ"><span>Cachet par mission ($ CA)</span><input name="cachetMission" inputmode="decimal" value="${r.cachetMission}"></label>
+        <fieldset class="champ large"><span>Objectif d'une ville <small>Activités = visites, expériences et sport.</small></span>
           <div class="cibles-ville">${GROUPES_VILLE.map(([k, nom]) => `<label class="champ"><span>${nom}</span><input name="cible-${k}" type="number" min="0" value="${r.cibles[k]}"></label>`).join('')}</div>
         </fieldset>
-        <label class="champ"><span>Récompense des meilleurs</span><input name="recompenseVoyage" value="${esc(r.recompenseVoyage)}"></label>
-        <label class="champ"><span>À partir de (endroits acceptés)</span><input name="seuilVoyage" type="number" min="1" value="${r.seuilVoyage}"></label>
       </div>
       <div class="pied-form"><button class="btn">${icone('save', { taille: 15 })} Enregistrer les règles</button></div>
     </form>`;
@@ -2375,10 +2422,8 @@ function ongletRegles(zone) {
     ev.preventDefault();
     const f = new FormData(ev.target);
     const nouvelles = {
-      parEndroit: nombre(f.get('parEndroit')), pourcentage: nombre(f.get('pourcentage')), bonusVille: nombre(f.get('bonusVille')),
+      cachetMission: nombre(f.get('cachetMission')) || REGLES_DEFAUT.cachetMission,
       cibles: Object.fromEntries(GROUPES_VILLE.map(([k]) => [k, Math.max(0, parseInt(f.get(`cible-${k}`), 10) || 0)])),
-      recompenseVoyage: String(f.get('recompenseVoyage') || '').trim() || REGLES_DEFAUT.recompenseVoyage,
-      seuilVoyage: Math.max(1, parseInt(f.get('seuilVoyage'), 10) || 1),
     };
     await db.ecrireReglage('reglesContrib', nouvelles);
     etat.regles = { ...REGLES_DEFAUT, ...nouvelles };
@@ -2420,12 +2465,12 @@ async function pageDonnees() {
         <ol class="etapes-texte">
           <li>Sur le cell, ouvre l'appli, va dans <b>Réglages</b> et touche <b>Faire une copie de sauvegarde</b>.</li>
           <li>Envoie le fichier à ton ordi (courriel, AirDrop, Google Drive…).</li>
-          <li>Dis de qui vient le fichier, puis choisis-le. Un fichier envoyé par l'appli des contributeurs est reconnu tout seul.</li>
+          <li>Dis de qui vient le fichier, puis choisis-le. Un fichier envoyé par l'appli des éclaireurs est reconnu tout seul.</li>
         </ol>
         <label class="champ"><span>Ce fichier vient de</span>
           <select id="source">
             <option value="">Moi (mon cellulaire)</option>
-            ${etat.contributeurs.map((c) => `<option value="${esc(c.id)}">${esc(c.nom)} (contributeur)</option>`).join('')}
+            ${etat.contributeurs.map((c) => `<option value="${esc(c.id)}">${esc(c.nom)} (éclaireur)</option>`).join('')}
           </select>
         </label>
         <p class="aide" id="aide-source">Tes endroits sont ajoutés ou mis à jour, et utilisables tout de suite.</p>
@@ -2488,7 +2533,7 @@ async function pageDonnees() {
   const source = app.querySelector('#source');
   source.onchange = () => {
     app.querySelector('#aide-source').textContent = source.value
-      ? 'Ses endroits arrivent dans « Contributeurs > À valider ». Ils seront utilisables une fois acceptés.'
+      ? 'Ses endroits arrivent dans « Éclaireurs > À valider ». Ils seront utilisables une fois acceptés.'
       : 'Tes endroits sont ajoutés ou mis à jour, et utilisables tout de suite.';
   };
   app.querySelector('#importer').onchange = async (ev) => {

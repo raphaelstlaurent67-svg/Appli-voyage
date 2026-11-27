@@ -23,7 +23,7 @@ import * as aVenir from './a-venir.js';
 import * as liensDemande from './liens-demande.js';
 import * as essai from './essai.js';
 import { DEPOT_DONNEES, DEPOT_PUBLIC, MARQUE, ALERTE } from './marque.js';
-import { messageAppel, lienTexto, lienCourriel } from './appel.js';
+import { messageAppel, messageRelance, messageRappelFiche, lienTexto, lienCourriel } from './appel.js';
 import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './phrases.js';
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 import * as autour from './autour.js';
@@ -1433,7 +1433,7 @@ async function pageClients(onglet = 'clients') {
   const tous = (await db.tous('carnets')).sort((a, b) => (b.modifieLe || '').localeCompare(a.modifieLe || ''));
   const actif = await db.lireReglage('carnetActif', null);
   const liens = await liensDemande.tousLesLiens();
-  const nouvelles = liens.filter((l) => l.code && !l.carnetId && !l.vu).length;
+  const nouvelles = liens.filter((l) => (l.code && !l.carnetId && !l.vu) || aRelancer(l)).length;
   const surDemandes = onglet === 'demandes';
   app.innerHTML = `
     <header class="entete-page entete-clients">
@@ -1576,12 +1576,22 @@ function montrerConfirmer(b) { b.closest('ul').hidden = true; feuille.querySelec
 function cacherConfirmer() { feuille.querySelector('.liste-choix').hidden = false; feuille.querySelector('#menu-confirmer').hidden = true; }
 
 // ----- Onglet Demandes : les formulaires envoyés et les demandes reçues -----
+const SOURCES = { instagram: 'Instagram', facebook: 'Facebook', bouche: 'Bouche à oreille', google: 'Google', courriel: 'Courriel ou appel', autre: 'Autre' };
+// Relance après 3 jours sans nouvelles : la demande reçue qu'on a contactée, ou le lien jamais rempli.
+const JOURS_RELANCE = 3;
+const depuisJours = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 0);
+const aRelancer = (l) => !l.carnetId && (l.code ? Boolean(l.contacteLe) && depuisJours(l.relanceLe || l.contacteLe) >= JOURS_RELANCE : depuisJours(l.relanceLe || l.creeLe) >= JOURS_RELANCE);
 function etatLien(l) {
   if (l.carnetId) return ['client', 'Client'];
-  if (l.code) return ['recue', l.vu ? 'Reçue' : 'Nouvelle'];
+  if (aRelancer(l)) return ['relance', 'À relancer'];
+  if (l.code && !l.contacteLe) return ['recue', l.vu ? 'À répondre' : 'Nouvelle'];
+  if (l.code) return ['attente', 'Contacté'];
   return ['attente', 'Envoyé'];
 }
+// Ce qui demande une action passe en premier.
+const rangLien = (l) => { const k = etatLien(l)[0]; return k === 'recue' ? 0 : k === 'relance' ? 1 : k === 'attente' ? 2 : 3; };
 async function ongletDemandes(zone, liens) {
+  liens = [...liens].sort((a, b) => rangLien(a) - rangLien(b));
   zone.innerHTML = liens.length ? `
     <ul class="liste-demandes" id="liste-liens">
       ${liens.map((l) => { const [cl, txt] = etatLien(l); return `
@@ -1694,7 +1704,17 @@ async function pageDemande(lienId) {
   const retour = `<a class="rond" href="#/demandes" data-retour-page aria-label="Retour">${icone('chevron-left')}</a>`;
   if (!lien.code) {
     app.innerHTML = `<header class="entete-form">${retour}<h1>${esc(lien.client || 'Demande')}</h1><span class="rond vide-rond"></span></header>
-      <div class="vide-demande">${icone('hourglass', { taille: 30 })}<b>Pas encore remplie</b><span>Le lien a été envoyé le ${esc(new Date(lien.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}.</span></div>`;
+      <div class="vide-demande">${icone('hourglass', { taille: 30 })}<b>Pas encore remplie</b><span>Le lien a été envoyé le ${esc(new Date(lien.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}.</span>
+        <button type="button" class="bouton-principal bouton-vide" id="rappel-fiche">${icone('send', { taille: 18 })} Envoyer un rappel</button></div>`;
+    app.querySelector('#rappel-fiche').onclick = async () => {
+      const url = liensDemande.urlLien(location.href, lien);
+      const texte = messageRappelFiche({ nom: lien.client, url, signe: (await db.lireReglage('nomFiche', '')) || undefined });
+      try {
+        if (navigator.share) await navigator.share({ text: texte });
+        else { await navigator.clipboard.writeText(texte); toast('Rappel copié'); }
+      } catch (err) { if (err?.name === 'AbortError') return; try { await navigator.clipboard.writeText(texte); toast('Rappel copié'); } catch (_) { return; } }
+      lien.relanceLe = new Date().toISOString(); await liensDemande.garderLien(lien);
+    };
     return;
   }
   let d;
@@ -1715,7 +1735,9 @@ async function pageDemande(lienId) {
   const tel = (d.telephone || '').replace(/[^\d+]/g, '');
   const info = (ico, etiquette, valeur) => `<li>${icone(ico, { taille: 19 })}<div><span class="etiquette">${etiquette}</span><b>${esc(valeur)}</b></div></li>`;
   // Réponse rapide déjà écrite : proposer un appel de 15 minutes.
-  const reponse = messageAppel({ nom: d.nom, langue: d.langue, signe: (await db.lireReglage('nomFiche', '')) || undefined });
+  const signe = (await db.lireReglage('nomFiche', '')) || undefined;
+  const relancer = !client && aRelancer(lien);
+  const reponse = relancer ? messageRelance({ nom: d.nom, langue: d.langue, signe }) : messageAppel({ nom: d.nom, langue: d.langue, signe });
 
   app.innerHTML = `
     <header class="entete-form">${retour}<h1>Demande</h1><span class="rond vide-rond"></span></header>
@@ -1724,7 +1746,8 @@ async function pageDemande(lienId) {
         <span class="carnet-avatar grand">${esc((d.nom || '?').charAt(0).toUpperCase())}</span>
         <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
       </div>
-      ${tel || d.courriel ? `<div class="actions">
+      ${relancer ? `<p class="bandeau-relance">${icone('clock', { taille: 17 })}<span>Sans nouvelles depuis ${Math.floor(depuisJours(lien.relanceLe || lien.contacteLe))} jours</span></p>` : ''}
+      ${tel || d.courriel ? `<div class="actions" id="actions-demande">
         ${tel ? `<a class="action" href="tel:${esc(tel)}"><span>${icone('phone')}</span>Appeler</a><a class="action" href="${esc(lienTexto(tel, reponse))}"><span>${icone('message-circle')}</span>Texto</a>` : ''}
         ${d.courriel ? `<a class="action" href="${esc(lienCourriel(d.courriel, d.langue, reponse))}"><span>${icone('mail')}</span>Courriel</a>` : ''}
       </div>` : ''}
@@ -1737,6 +1760,7 @@ async function pageDemande(lienId) {
           ${info('users', 'Voyageurs', voyageurs)}
           ${d.style ? info('gem', 'Style', NOM_STYLE[d.style] || d.style) : ''}
           ${d.repartition?.trim() ? info('route', 'Répartition', d.repartition.trim()) : ''}
+          ${d.source ? info('megaphone', 'Nous a connus par', SOURCES[d.source] || d.source) : ''}
         </ul>
       </section>
       ${envies.length ? `<section class="bloc-fiche"><h2>Ses envies</h2><ul class="envies-tel">
@@ -1753,6 +1777,14 @@ async function pageDemande(lienId) {
       ${client ? `<a class="bouton-principal" href="#/carnet/${esc(client.id)}">${icone('user-check', { taille: 19 })} Ouvrir ${esc(client.client?.prenom || 'le client')}</a>`
         : `<button class="bouton-principal" id="creer-client">${icone('user-plus', { taille: 19 })} Ajouter comme client</button>`}
     </div>`;
+  // Un appel, un texto ou un courriel : on note la date, pour savoir quand relancer.
+  app.querySelector('#actions-demande')?.addEventListener('click', async (ev) => {
+    if (!ev.target.closest('a.action')) return;
+    const maintenant = new Date().toISOString();
+    if (relancer || lien.contacteLe) lien.relanceLe = maintenant; else lien.contacteLe = maintenant;
+    lien.modifieLe = maintenant;
+    await liensDemande.garderLien(lien);
+  });
   const b = app.querySelector('#creer-client');
   if (b) b.onclick = async () => {
     b.disabled = true;

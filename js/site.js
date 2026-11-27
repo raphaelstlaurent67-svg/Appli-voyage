@@ -35,7 +35,7 @@ const TXT = {
       ['Est-ce que je peux modifier l’itinéraire ?', 'Oui. Si quelque chose ne vous convient pas, nous l’ajustons ensemble.'],
     ],
     appelTitre: 'Envie de partir ?', appelTexte: 'Remplissez la fiche. On vous répond avec une proposition.',
-    pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir contributeur',
+    pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir éclaireur', voirExemple: 'Voir un exemple',
   },
   en: {
     navComment: 'How it works', navRecois: 'What you get', navFaq: 'Questions',
@@ -65,7 +65,7 @@ const TXT = {
       ['Can I change the itinerary?', "Yes. If something doesn't feel right, we adjust it together."],
     ],
     appelTitre: 'Want to go?', appelTexte: 'Fill in the form. We reply with a proposal.',
-    pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a contributor',
+    pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a scout', voirExemple: 'See an example',
   },
 };
 

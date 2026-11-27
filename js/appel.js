@@ -9,6 +9,21 @@ export function messageAppel({ nom = '', langue = 'fr', signe = CONSEILLER } = {
   }
   return `Bonjour${prenom ? ` ${prenom}` : ''}, ${moi ? `ici ${moi} de ${MARQUE}. ` : ''}Merci pour votre demande de voyage ! Auriez-vous 15 minutes pour un appel rapide pour parler de votre projet ? ${LIEN_RDV ? `Choisissez le moment qui vous convient ici : ${LIEN_RDV}` : 'Dites-moi le moment qui vous convient.'}`;
 }
+// La relance, quelques jours après le premier message resté sans réponse.
+export function messageRelance({ nom = '', langue = 'fr', signe = CONSEILLER } = {}) {
+  const prenom = String(nom).trim().split(/\s+/)[0] || '';
+  const moi = String(signe || '').trim().split(/\s+/)[0];
+  if (langue === 'en') {
+    return `Hi${prenom ? ` ${prenom}` : ''}, ${moi ? `${moi} here from ${MARQUE}. ` : ''}Just following up on your trip. Still up for a quick 15-minute call this week? ${LIEN_RDV ? `Pick a time here: ${LIEN_RDV}` : 'Tell me what time works for you.'}`;
+  }
+  return `Bonjour${prenom ? ` ${prenom}` : ''}, ${moi ? `ici ${moi} de ${MARQUE}. ` : ''}Je reviens vers vous pour votre projet de voyage. Toujours partant pour qu'on s'en parle 15 minutes cette semaine ? ${LIEN_RDV ? `Choisissez le moment ici : ${LIEN_RDV}` : 'Dites-moi le moment qui vous convient.'}`;
+}
+// Le lien de la fiche, envoyé mais pas encore rempli.
+export function messageRappelFiche({ nom = '', url = '', signe = CONSEILLER } = {}) {
+  const prenom = String(nom).trim().split(/\s+/)[0] || '';
+  const moi = String(signe || '').trim().split(/\s+/)[0];
+  return `Bonjour${prenom ? ` ${prenom}` : ''}, ${moi ? `ici ${moi}. ` : ''}Petit rappel pour votre fiche de voyage, ça prend deux minutes : ${url}`;
+}
 export const sujetAppel = (langue = 'fr') => (langue === 'en' ? 'Your trip: a quick 15-minute call?' : 'Votre voyage : un appel de 15 minutes ?');
 // iPhone : sms:NUMÉRO&body=…
 export const lienTexto = (tel, texte) => `sms:${String(tel).replace(/[^\d+]/g, '')}&body=${encodeURIComponent(texte)}`;

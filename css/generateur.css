@@ -895,3 +895,28 @@ input[type='date'] { color-scheme: light; }
 
 /* Boutons et liens : un appui long ne sélectionne pas la page (iPhone). */
 a, button, .navBtn, .tile, .kpi, img { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+
+/* Éclaireurs : les missions de chacun */
+.missions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
+.mission {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ln); background: var(--p2); color: inherit; font: inherit; font-size: 13px;
+}
+.mission b { font-weight: 650; }
+.mission span { color: var(--dim2); font-size: 12px; }
+.mission.en_cours { border-color: var(--ac); color: var(--ac2); }
+.mission.terminee svg { color: var(--ok, #16915a); }
+.mission.nouvelle { border-style: dashed; background: transparent; color: var(--dim2); }
+.mission:hover { border-color: var(--ac); }
+
+/* Rentabilité d'un voyage */
+.renta { margin-top: 18px; }
+.renta-grille { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.renta-grille .form-grille { grid-template-columns: 1fr 1fr; }
+.renta-resultat { display: grid; gap: 10px; }
+.renta-resultat > div { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-radius: 10px; background: var(--p2); }
+.renta-resultat span { font-size: 13px; color: var(--dim); font-weight: 600; }
+.renta-resultat b { font-size: 20px; }
+.renta-resultat > div:first-child b { color: var(--ac); }
+.renta-resultat > .perte b { color: var(--bad); }
+@media (max-width: 760px) { .renta-grille, .renta-grille .form-grille { grid-template-columns: 1fr; } }

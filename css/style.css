@@ -868,3 +868,8 @@ html { overflow-x: clip; }
 .tuile-style.choisie .ts-nom { color: var(--accent); }
 /* Petit fondu quand on change de style */
 html.change-style body, html.change-style body * { transition: background-color .35s ease, color .35s ease, border-color .35s ease !important; }
+
+/* Demandes à relancer */
+.etat-lien.relance { background: var(--alerte-fond); color: var(--alerte-texte); }
+.bandeau-relance { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 14px; padding: 12px 14px; border-radius: var(--rayon-petit); background: var(--alerte-fond); color: var(--alerte-texte); font-size: 14px; font-weight: 600; }
+.bandeau-relance svg { flex: none; margin-top: 1px; }

@@ -227,3 +227,8 @@ section[id] { scroll-margin-top: 72px; }
 
 /* Sur téléphone : pas de sélection de texte en appuyant longtemps sur un bouton ou une carte. */
 a, button, .carte, img { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+
+/* Voir un exemple de voyage */
+.boutons-recois { display: flex; flex-wrap: wrap; gap: 10px; }
+.bouton.contour { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bouton.contour:hover { background: rgba(0, 0, 0, .04); }
