@@ -42,20 +42,36 @@ export async function relever() {
   const limite = Date.now() - 183 * 864e5;
   for (const l of await db.tous('liens')) {
     if (l.source === 'public' || !l.cle || l.efface) continue;
-    // Une demande déjà reçue est encore surveillée 3 jours (au cas où le client la modifie et la renvoie).
+    // Une demande déjà reçue est encore surveillée 3 jours (au cas où le client en envoie une 2e).
     if (new Date(l.creeLe).getTime() < limite || (l.code && Date.now() - new Date(l.recuLe).getTime() > 3 * 864e5)) continue;
     try {
       const canal = await canalDemande(l.id, l.cle);
-      let dernier = null;
+      // Chaque envoi est une demande à part (au plus 2 par lien) : la 1re va sur le lien lui-même,
+      // la 2e sur une fiche voisine « <id>~2 ». Rien n'est jamais remplacé.
+      const envois = [];
       for (const m of await lireRelais(canal)) {
-        try { dernier = await dechiffrerJson(l.cle, deBase64Url(m.message)); } catch (_) { /* illisible : ignoré */ }
+        let msg; try { msg = await dechiffrerJson(l.cle, deBase64Url(m.message)); } catch (_) { continue; }
+        if (msg?.code && typeof msg.code === 'string' && !envois.some((x) => x.code === msg.code)) envois.push(msg);
       }
-      if (dernier?.code && dernier.code !== l.code) {
-        const frais = (await db.lire('liens', l.id)) || l;
-        Object.assign(frais, { code: dernier.code, nom: dernier.nom || frais.client, statut: 'recu', vu: false, recuLe: dernier.envoyeLe || new Date().toISOString(), modifieLe: new Date().toISOString() });
+      const frais = (await db.lire('liens', l.id)) || l;
+      if (frais.efface) continue;
+      const nouveaux = envois.filter((x) => x.code !== frais.code);
+      if (!frais.code && nouveaux.length) {
+        const x = nouveaux.shift();
+        Object.assign(frais, { code: x.code, nom: x.nom || frais.client, statut: 'recu', vu: false, recuLe: x.envoyeLe || new Date().toISOString(), modifieLe: new Date().toISOString() });
         await db.ecrire('liens', frais);
         sync.marquer(sync.cheminLien(frais.id));
         recus.push(frais);
+      }
+      const idVoisin = `${l.id}~2`;
+      const voisin = await db.lire('liens', idVoisin);
+      if (nouveaux.length && !voisin) {
+        const x = nouveaux[0];
+        const maintenant = new Date().toISOString();
+        const deux = { id: idVoisin, parent: l.id, client: frais.client || '', nom: x.nom || frais.client || '', statut: 'recu', code: x.code, recuLe: x.envoyeLe || maintenant, creeLe: maintenant, modifieLe: maintenant, vu: false };
+        await db.ecrire('liens', deux);
+        sync.marquer(sync.cheminLien(deux.id));
+        recus.push(deux);
       }
     } catch (_) { /* on réessaiera */ }
   }
@@ -73,13 +89,11 @@ export async function oublierLien(id) {
   sync.marquer(sync.cheminLien(id));
 }
 
-// Les demandes du lien public (demande.html tout court) : chaque demande devient sa propre fiche.
-// Aucune vraie demande n'est jamais jetée en silence :
-// - le même message n'est jamais rangé deux fois ;
-// - même courriel, demande encore toute neuve (pas encore contactée, moins de 3 jours) : mise à jour ;
-//   sinon c'est une nouvelle fiche (un client qui revient, ou Raph qui fait un essai) ;
-// - seules les demandes marquées « à vérifier » par le formulaire (robot probable, envoi en rafale)
-//   sont limitées à 25 par jour, pour qu'un robot ne remplisse pas l'appli.
+// Les demandes du lien public (demande.html tout court) : chaque envoi devient sa propre fiche,
+// même quand c'est la même personne (le formulaire limite déjà à 2 demandes par personne).
+// Jamais deux fois le même envoi, jamais une fiche remplacée par une autre, et une demande
+// supprimée reste supprimée (sa trace « effacée » garde son identifiant).
+// Seules les demandes « à vérifier » (robot probable) sont limitées à 25 par jour.
 async function releverPubliques() {
   const recus = [];
   try {
@@ -87,6 +101,7 @@ async function releverPubliques() {
     const messages = await lireRelais(canal);
     const tous = await db.tous('liens');
     const parId = new Map(tous.map((l) => [l.id, l]));
+    const codes = new Set(tous.filter((l) => l.code).map((l) => l.code));
     const jour = Date.now() - 864e5;
     let suspectsAujourdhui = tous.filter((l) => l.source === 'public' && l.suspect && new Date(l.creeLe).getTime() > jour).length;
     for (const m of messages.slice(-300)) {
@@ -94,32 +109,21 @@ async function releverPubliques() {
       const id = `p-${String(m.id).replace(/[^\w-]/g, '').slice(0, 24)}`;
       if (parId.has(id)) continue;
       let msg; try { msg = await dechiffrerJson(DEMANDE_PUBLIQUE.cle, deBase64Url(m.message)); } catch (_) { continue; }
-      if (!msg?.code || typeof msg.code !== 'string') continue;
+      if (!msg?.code || typeof msg.code !== 'string' || codes.has(msg.code)) continue;
       let dem; try { dem = await decoder(msg.code); } catch (_) { continue; }
       const courriel = String(dem?.courriel || '').trim().toLowerCase();
       if (!dem?.nom && !courriel) continue;
       const suspect = typeof msg.suspect === 'string' ? msg.suspect.slice(0, 20) : '';
-      const maintenant = new Date().toISOString();
-      const nom = String(msg.nom || dem.nom || courriel).slice(0, 80);
-      // Déjà rangée (même contenu) : rien à faire.
-      if ([...parId.values()].some((l) => l.source === 'public' && l.code === msg.code)) continue;
-      const meme = courriel && [...parId.values()].find((l) => l.source === 'public' && l.courriel === courriel
-        && !l.efface && !l.carnetId && !l.contacteLe && Date.now() - new Date(l.recuLe || l.creeLe).getTime() < 3 * 864e5);
-      if (meme) {
-        Object.assign(meme, { code: msg.code, nom, statut: 'recu', recuLe: msg.envoyeLe || maintenant, modifieLe: maintenant, vu: false, suspect });
-        await db.ecrire('liens', meme);
-        sync.marquer(sync.cheminLien(meme.id));
-        recus.push(meme);
-        continue;
-      }
       if (suspect) {
         if (suspectsAujourdhui >= MAX_SUSPECTES_PAR_JOUR) continue;
         suspectsAujourdhui++;
       }
-      const l = { id, source: 'public', courriel, client: '', nom, statut: 'recu', code: msg.code, recuLe: msg.envoyeLe || maintenant, creeLe: maintenant, modifieLe: maintenant, suspect };
+      const maintenant = new Date().toISOString();
+      const l = { id, source: 'public', courriel, client: '', nom: String(msg.nom || dem.nom || courriel).slice(0, 80), statut: 'recu', code: msg.code, recuLe: msg.envoyeLe || maintenant, creeLe: maintenant, modifieLe: maintenant, vu: false, ...(suspect ? { suspect } : {}), ...(msg.test ? { essai: true } : {}) };
       await db.ecrire('liens', l);
       sync.marquer(sync.cheminLien(l.id));
       parId.set(id, l);
+      codes.add(msg.code);
       recus.push(l);
     }
   } catch (_) { /* on réessaiera */ }

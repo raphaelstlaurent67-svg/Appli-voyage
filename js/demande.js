@@ -35,10 +35,9 @@ const LIEN = (() => {
 })();
 // Sans lien personnel (bio Instagram, site…) : la demande passe par le lien public.
 const LIEN_ENVOI = LIEN || DEMANDE_PUBLIQUE;
-// Contre les envois en masse : un champ caché que seuls les robots remplissent,
-// un minimum de temps passé sur le formulaire, et quelques envois par appareil par jour.
-// Rien n'est jamais jeté : un envoi douteux part quand même, marqué « à vérifier »
-// (dans l'appli et dans la notification). Un lien personnel n'est jamais douteux.
+// Contre les envois en masse : un champ caché que seuls les robots remplissent et un minimum
+// de temps passé sur le formulaire. Rien n'est jamais jeté : un envoi douteux part quand même,
+// marqué « à vérifier » (dans l'appli et dans la notification). Un lien personnel n'est jamais douteux.
 // Début du remplissage (gardé si la page se recharge, pour ne pas bloquer un vrai client).
 let OUVERT_LE = Date.now();
 try { OUVERT_LE = +localStorage.getItem('debutDemande') || OUVERT_LE; localStorage.setItem('debutDemande', String(OUVERT_LE)); } catch (_) { /* rien */ }
@@ -46,19 +45,34 @@ function envoiSuspect() {
   const debut = OUVERT_LE;
   OUVERT_LE = Date.now();
   try { localStorage.removeItem('debutDemande'); } catch (_) { /* rien */ }
-  let rafale = false;
-  try {
-    const jour = Date.now() - 864e5;
-    const envois = JSON.parse(localStorage.getItem('envoisDemande') || '[]').filter((x) => x > jour);
-    rafale = envois.length >= 3;
-    envois.push(Date.now());
-    localStorage.setItem('envoisDemande', JSON.stringify(envois.slice(-20)));
-  } catch (_) { /* rien */ }
   if (LIEN || MODE_TEST) return '';
-  if (document.querySelector('#site-web-pot')?.value) return 'robot';
+  if (document.querySelector('#ref-x7')?.value) return 'robot';
   if (Date.now() - debut < 20000) return 'rapide';
-  if (rafale) return 'rafale';
   return '';
+}
+// Au plus 2 demandes par personne (même appareil, même courriel ou même lien personnel), sur 30 jours.
+// La 3e n'est pas envoyée : la personne le voit clairement. demande.html?test n'a pas de limite.
+const MAX_DEMANDES = 2;
+const CLE_ENVOIS = 'demandesEnvoyees';
+function envoisRecents() {
+  try {
+    const limite = Date.now() - 30 * 864e5;
+    return (JSON.parse(localStorage.getItem(CLE_ENVOIS) || '[]') || []).filter((x) => x && x.t > limite);
+  } catch (_) { return []; }
+}
+function dejaAuMaximum(courriel) {
+  if (MODE_TEST) return false;
+  const c = courriel.trim().toLowerCase();
+  const ici = LIEN ? LIEN.id : 'public';
+  return envoisRecents().filter((x) => x.lien === ici || (c && x.courriel === c)).length >= MAX_DEMANDES;
+}
+function noterEnvoi(courriel) {
+  if (MODE_TEST) return;
+  try {
+    const liste = envoisRecents();
+    liste.push({ t: Date.now(), courriel: courriel.trim().toLowerCase(), lien: LIEN ? LIEN.id : 'public' });
+    localStorage.setItem(CLE_ENVOIS, JSON.stringify(liste.slice(-20)));
+  } catch (_) { /* rien */ }
 }
 const MONTRER_INSTALLER = params.has('installer') && !pwa.dejaInstallee();
 // demande.html?test : pour Raph seulement, permet de passer les étapes sans tout remplir.
@@ -154,6 +168,7 @@ const TXT = {
     envoiCours: 'Envoi de votre demande', envoyee: 'Demande envoyée', envoyeeTxt: 'Merci. Nous vous répondons sous 12 heures pour convenir d’un appel et vous présenter une première proposition.', echec: 'L’envoi automatique n’a pas fonctionné. Envoyez votre demande avec un de ces boutons.',
     parCourriel: 'Envoyer par courriel', parMessage: 'Envoyer par message', copier: 'Copier la demande',
     image: 'Enregistrer le résumé en image', imageAide: 'Pratique pour le montrer aux autres voyageurs.', modifier: 'Modifier mes réponses', nouvelle: 'Faire une autre demande',
+    maxTitre: 'Vos demandes sont bien reçues', maxTxt: 'Vous nous avez déjà envoyé 2 demandes. Nous vous répondons sous 12 heures. Pour ajouter un détail, répondez simplement à notre message.', maxRetour: 'Revenir au formulaire',
     merci: 'Merci ! Demande envoyée', copie: 'Copié ! Collez-le dans un courriel ou un message', copieCeTexte: 'Copiez ce texte :',
     sujet: (p, n) => `Demande de voyage : ${p}${n ? ` (${n})` : ''}`,
     corps: (lignes, lien, n) => `Bonjour,\n\nVoici ma demande de voyage sur mesure.\n\n${lignes}\n\nToutes mes réponses sont dans ce lien :\n${lien}\n\n${n}`,
@@ -219,6 +234,7 @@ const TXT = {
     envoiCours: 'Sending your request', envoyee: 'Request sent', envoyeeTxt: 'Thank you. We’ll get back to you within 12 hours to set up a call and share a first proposal.', echec: 'Automatic sending did not work. Please send your request with one of these buttons.',
     parCourriel: 'Send by email', parMessage: 'Send by message', copier: 'Copy the request',
     image: 'Save the summary as an image', imageAide: 'Handy to show the other travellers.', modifier: 'Edit my answers', nouvelle: 'Start a new request',
+    maxTitre: 'Your requests have been received', maxTxt: 'You have already sent us 2 requests. We’ll get back to you within 12 hours. To add a detail, simply reply to our message.', maxRetour: 'Back to the form',
     merci: 'Thanks! Request sent', copie: 'Copied! Paste it in an email or a message', copieCeTexte: 'Copy this text:',
     sujet: (p, n) => `Trip request: ${p}${n ? ` (${n})` : ''}`,
     corps: (lignes, lien, n) => `Hello,\n\nHere is my custom trip request.\n\n${lignes}\n\nAll my answers are in this link:\n${lien}\n\n${n}`,
@@ -908,7 +924,7 @@ function etapeToi(zone) {
   zone.innerHTML = `
     <p class="intro">${t().introToi}</p>
     <label class="champ"><span>${t().nom} ${REQUIS}</span><input data-champ="nom" value="${esc(d.nom)}" autocomplete="name" placeholder="${esc(t().nomEx)}"></label>
-    <input id="site-web-pot" name="site-web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+    <input id="ref-x7" name="ref-x7" type="text" tabindex="-1" autocomplete="off" data-lpignore="true" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
     <label class="champ"><span>${t().courriel} ${REQUIS}</span><input data-champ="courriel" type="email" inputmode="email" value="${esc(d.courriel)}" autocomplete="email" placeholder="${esc(t().courrielEx)}"></label>
     <label class="champ"><span>${t().tel}</span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
     <label class="champ"><span>${t().message}</span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
@@ -1188,9 +1204,25 @@ async function alerter(suspect = '') {
   return false;
 }
 
+// 3e demande : rien n'est envoyé, et on le dit clairement.
+function montrerMaximum() {
+  fiche.innerHTML = `
+    <header class="haut">${enTete(null)}</header>
+    <section class="merci ok">
+      <span class="merci-ico">${icone('check', { taille: 30, epaisseur: 2.4 })}</span>
+      <h1>${t().maxTitre}</h1><p>${t().maxTxt}</p>
+      <div class="merci-liens"><button class="lien" id="retour-form">${t().maxRetour}</button></div>
+    </section>`;
+  brancherEnTete(montrerMaximum);
+  fiche.querySelector('#retour-form').onclick = () => { rendre(); window.scrollTo(0, 0); };
+  window.scrollTo(0, 0);
+  return undefined;
+}
+
 async function envoyer() {
   if (!d.nom.trim()) return marquerErreur('nom', t().errNom);
   if (!/^\S+@\S+\.\S+$/.test(d.courriel.trim())) return marquerErreur('courriel', t().errCourriel);
+  if (dejaAuMaximum(d.courriel)) return montrerMaximum();
   d.voyageurs = totalVoyageurs();
   d.envoyeLe = new Date().toISOString();
   // On n'envoie que ce qui sert au mode choisi.
@@ -1214,9 +1246,10 @@ async function envoyer() {
     let parRelais = false;
     try {
       const canal = await canalDemande(LIEN_ENVOI.id, LIEN_ENVOI.cle);
-      const corps = enBase64Url(await chiffrerJson(LIEN_ENVOI.cle, { code, nom: d.nom.trim().slice(0, 80), envoyeLe: d.envoyeLe, ...(suspect ? { suspect } : {}) }));
+      const corps = enBase64Url(await chiffrerJson(LIEN_ENVOI.cle, { code, nom: d.nom.trim().slice(0, 80), envoyeLe: d.envoyeLe, ...(suspect ? { suspect } : {}), ...(MODE_TEST ? { test: true } : {}) }));
       parRelais = await deposerRelais(canal, corps);
     } catch (_) { parRelais = false; }
+    if (parRelais) noterEnvoi(d.courriel);
     // 2. La notification sur le téléphone de Raph, chaque fois.
     await alerter(suspect);
     if (!POUR) { etat = parRelais ? 'ok' : 'manuel'; dessiner(); return; }
@@ -1255,7 +1288,7 @@ async function envoyer() {
         ${carteResume()}
         <button class="bouton secondaire" id="image">${icone('image', { taille: 18 })} ${t().image}</button>
         <p class="doux">${t().imageAide}</p>
-        <div class="merci-liens"><button class="lien" id="modifier">${t().modifier}</button><button class="lien" id="nouvelle">${t().nouvelle}</button></div>
+        <div class="merci-liens">${etat === 'envoi' || !dejaAuMaximum(d.courriel) ? `<button class="lien" id="modifier">${t().modifier}</button><button class="lien" id="nouvelle">${t().nouvelle}</button>` : ''}</div>
       </section>`;
     brancherEnTete(dessiner);
     const p = fiche.querySelector('#partager');
@@ -1265,8 +1298,8 @@ async function envoyer() {
       try { await navigator.clipboard.writeText(texte); toast(t().copie); } catch (_) { prompt(t().copieCeTexte, texte); }
     };
     fiche.querySelector('#image').onclick = partagerImage;
-    fiche.querySelector('#modifier').onclick = () => { delete d.envoyeLe; garder(); etape = 0; rendre(); window.scrollTo(0, 0); };
-    fiche.querySelector('#nouvelle').onclick = () => { const l = d.langue; d = vide(); d.langue = l; if (CLIENT) { d.client = CLIENT; d.nom = CLIENT; } garder(); etape = 0; voirCalendrier = false; rendre(); window.scrollTo(0, 0); };
+    if (fiche.querySelector('#modifier')) fiche.querySelector('#modifier').onclick = () => { delete d.envoyeLe; garder(); etape = 0; rendre(); window.scrollTo(0, 0); };
+    if (fiche.querySelector('#nouvelle')) fiche.querySelector('#nouvelle').onclick = () => { const l = d.langue; d = vide(); d.langue = l; if (CLIENT) { d.client = CLIENT; d.nom = CLIENT; } garder(); etape = 0; voirCalendrier = false; rendre(); window.scrollTo(0, 0); };
   };
   dessiner();
   window.scrollTo(0, 0);

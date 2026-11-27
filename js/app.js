@@ -1591,14 +1591,38 @@ function etatLien(l) {
 }
 // Ce qui demande une action passe en premier.
 const rangLien = (l) => { const k = etatLien(l)[0]; return k === 'recue' ? 0 : k === 'relance' ? 1 : k === 'attente' ? 2 : 3; };
+// Une ligne claire pour chaque demande reçue : où, combien de temps, et si c'est la 2e de la personne.
+async function resumesDemandes(liens) {
+  const infos = new Map();
+  for (const l of liens) {
+    if (!l.code) continue;
+    try {
+      const d = await decoder(l.code);
+      const ou = d.pays?.length ? d.pays.map((p) => p.nom).join(', ') : 'Destination à décider';
+      const jours = d.mode === 'total' ? d.duree || 0 : (d.pays || []).reduce((n, p) => n + nuitsEntre(p.debut, p.fin), 0);
+      infos.set(l.id, { texte: [ou, jours ? plur(jours, 'jour') : ''].filter(Boolean).join(' · '), courriel: String(d.courriel || l.courriel || '').trim().toLowerCase() });
+    } catch (_) { /* illisible : la ligne garde juste le nom */ }
+  }
+  // Même courriel : la plus ancienne est la 1re, la suivante est marquée « 2e demande ».
+  const parCourriel = new Map();
+  [...liens].filter((l) => infos.get(l.id)?.courriel).sort((a, b) => (a.recuLe || a.creeLe || '').localeCompare(b.recuLe || b.creeLe || '')).forEach((l) => {
+    const c = infos.get(l.id).courriel;
+    const n = (parCourriel.get(c) || 0) + 1;
+    parCourriel.set(c, n);
+    if (n > 1) infos.get(l.id).rang = n;
+  });
+  return infos;
+}
+const dateCourte = (iso) => new Date(iso).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
 async function ongletDemandes(zone, liens) {
   liens = [...liens].sort((a, b) => rangLien(a) - rangLien(b));
+  const resumes = await resumesDemandes(liens);
   zone.innerHTML = liens.length ? `
     <ul class="liste-demandes" id="liste-liens">
       ${liens.map((l) => { const [cl, txt] = etatLien(l); return `
         <li><a class="ligne-demande" href="#/demande/${esc(l.id)}" data-id="${esc(l.id)}">
           <span class="carnet-avatar ${l.code ? '' : 'avatar-pale'}">${l.code ? esc((l.nom || l.client || '?').charAt(0).toUpperCase()) : icone('send', { taille: 18 })}</span>
-          <span class="carnet-txt"><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc(new Date(l.recuLe || l.creeLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${l.source === 'public' ? ' · site' : ''}${l.suspect ? ' · à vérifier' : ''}</small></span>
+          <span class="carnet-txt"><b>${esc(l.nom || l.client || 'Sans nom')}</b><small>${esc([resumes.get(l.id)?.texte || (l.code ? '' : 'Lien envoyé'), dateCourte(l.recuLe || l.creeLe)].filter(Boolean).join(' · '))}</small>${resumes.get(l.id)?.rang || l.suspect || l.essai ? `<span class="puces-demande">${resumes.get(l.id)?.rang ? `<i>${resumes.get(l.id).rang}e demande</i>` : ''}${l.essai ? '<i>Essai</i>' : ''}${l.suspect ? '<i class="a-verifier">À vérifier</i>' : ''}</span>` : ''}</span>
           <span class="etat-lien ${cl}">${txt}</span>
           ${icone('chevron-right', { taille: 18 })}
         </a></li>`; }).join('')}
@@ -1745,7 +1769,7 @@ async function pageDemande(lienId) {
     <article class="demande-recue">
       <div class="demande-tete">
         <span class="carnet-avatar grand">${esc((d.nom || '?').charAt(0).toUpperCase())}</span>
-        <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${lien.suspect ? ' · à vérifier' : ''}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
+        <div><h2>${esc(d.nom || 'Sans nom')}</h2><small>Reçue le ${esc(new Date(lien.recuLe || d.envoyeLe || lien.modifieLe).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }))}${lien.suspect ? ' · à vérifier' : ''}${lien.essai ? ' · essai' : ''}${d.langue === 'en' ? ' · en anglais' : ''}</small></div>
       </div>
       ${relancer ? `<p class="bandeau-relance">${icone('clock', { taille: 17 })}<span>Sans nouvelles depuis ${Math.floor(depuisJours(lien.relanceLe || lien.contacteLe))} jours</span></p>` : ''}
       ${tel || d.courriel ? `<div class="actions" id="actions-demande">
