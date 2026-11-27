@@ -2335,6 +2335,7 @@ async function pageReglages() {
     <section class="section">
       <h2 class="section-titre">Sauvegarde</h2>
       <p class="petit">${plur(etat.endroits.length, 'endroit')}, ${plur(nbPhotos, 'photo')}${derniere ? ` · copie du ${new Date(derniere).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}` : ''}</p>
+      <p class="petit">Version de l’appli : ${esc(await versionAppli())}</p>
       <div class="deux">
         <button class="bouton-secondaire" id="exporter">Faire une copie</button>
         <label class="bouton-secondaire">Restaurer<input type="file" accept=".json,application/json" id="importer" hidden></label>
@@ -2488,6 +2489,22 @@ charger().then(router).then(demarrerEnvoi).catch((err) => {
   app.innerHTML = `<p class="vide">Erreur au démarrage : ${esc(err.message)}</p>`;
 });
 
+// La version installée (le numéro de la copie gardée sur le téléphone), affichée dans Réglages.
+async function versionAppli() {
+  try { return (await caches.keys()).filter((k) => /^v\d+$/.test(k)).sort((a, b) => +b.slice(1) - +a.slice(1))[0] || '?'; } catch (_) { return '?'; }
+}
+// Mise à jour : on vérifie à chaque ouverture (et au retour dans l'appli) s'il y a une nouvelle version,
+// et dès qu'elle est prête, la page se recharge toute seule une fois : plus besoin de fermer deux fois.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => { /* l'appli marche quand même */ });
+  const avaitUneVersion = Boolean(navigator.serviceWorker.controller);
+  let recharge = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!avaitUneVersion || recharge) return;
+    recharge = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => { /* l'appli marche quand même */ });
 }

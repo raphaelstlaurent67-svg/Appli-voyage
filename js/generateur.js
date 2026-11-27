@@ -2613,7 +2613,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // ---------- Démarrage ----------
 // Permet d'installer le Studio comme une appli sur l'ordinateur (et de l'ouvrir sans internet).
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(new URL('../sw.js', import.meta.url)).catch(() => {});
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { updateViaCache: 'none' }).then((reg) => reg.update().catch(() => {})).catch(() => {});
+}
 rouvrirALAccueil();
 window.addEventListener('hashchange', router);
 app.addEventListener('dragstart', (ev) => {
