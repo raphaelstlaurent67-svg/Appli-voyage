@@ -348,3 +348,36 @@ html[lang="fr"] .bi > [lang="en"], html[lang="en"] .bi > [lang="fr"] { opacity: 
 html.anime :is(.section h2, .section .surtitre, .section .texte, .etapes li, .liste-recois li, .destination, .carte-q, .cherche-pays, .appel-int > *):not(.vu) { opacity: 0; translate: 0 22px; }
 html.anime :is(.section h2, .section .surtitre, .section .texte, .etapes li, .liste-recois li, .destination, .carte-q, .cherche-pays, .appel-int > *) { transition: opacity .7s cubic-bezier(.2, .7, .2, 1) var(--delai, 0ms), translate .7s cubic-bezier(.2, .7, .2, 1) var(--delai, 0ms), transform .2s ease-out, box-shadow .25s, background-size .5s; }
 .destination:hover { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px); }
+
+/* ---------- Palette « Olive et miel » (choisie par Raph, 2026-11-27) ---------- */
+:root {
+  --encre: #2a281c; --doux: #5f5c4c; --pale: #9a9682; --ligne: #e4ddc6;
+  --fond: #f7f4ea; --douce: #ebe5cf; --carte: #fffdf7;
+  --accent: #666238; --accent-fonce: #2a281c; --accent-fond: #ebe5cf; --miel: #b98a3e;
+}
+body { background: var(--fond); color: var(--encre); }
+.nav { background: rgba(247, 244, 234, .9); border-bottom-color: var(--ligne); }
+.marque-ico { background: var(--accent); }
+.langue { background: var(--douce); }
+.bouton:hover { background: var(--accent-fonce); }
+.section.douce { background: var(--douce); }
+.etapes .num { color: var(--douce); }
+.surtitre { color: var(--miel); }
+.couverture .surtitre { color: rgba(255, 255, 255, .85); }
+.couverture { background: var(--encre); }
+.fond-couverture::after { background: linear-gradient(100deg, rgba(42, 40, 28, .78), rgba(42, 40, 28, .25) 70%), linear-gradient(180deg, transparent 60%, rgba(42, 40, 28, .33)); }
+.appel { background: var(--douce); color: var(--encre); }
+.appel p { opacity: .8; }
+.bouton.blanc { background: var(--accent); color: #fff; }
+.bouton.blanc:hover { background: var(--accent-fonce); }
+.pied { border-top: 1px solid var(--ligne); }
+.destination { background: var(--photo) center / cover no-repeat, var(--accent); }
+.destination.autre { background: transparent; border-color: #cfc7ab; }
+.destination.autre:hover { background: var(--douce); }
+.destination.autre .ico, .carte-num { color: var(--miel); }
+.champ-cherche { border-color: var(--ligne); }
+.voile-transition.disque { background: var(--fond); }
+.plus-panneau p { border-left-color: var(--miel); }
+.verso { background: var(--accent); border-color: var(--accent); }
+.carte-q:hover .recto { border-color: var(--miel); }
+.carte-q:hover .recto .carte-indice { color: var(--miel); }
