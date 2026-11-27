@@ -133,7 +133,8 @@ const TXT = {
     combienFois: 'Nombre de fois',
     aVoir: 'Un lieu ou une expérience à ne pas manquer', aVoirEx: 'Par exemple : les cerisiers en fleurs à Kyoto',
     nom: 'Nom complet', nomEx: '', courriel: 'Courriel', courrielEx: '',
-    source: 'Comment nous avez-vous connus ?', sources: { instagram: 'Instagram', facebook: 'Facebook', bouche: 'Bouche à oreille', google: 'Google', courriel: 'Courriel ou appel', autre: 'Autre' },
+    source: 'Comment nous avez-vous connus ?', sources: { instagram: 'Instagram', facebook: 'Facebook', google: 'Google', bouche: 'Bouche à oreille', courriel: 'Courriel ou appel', autre: 'Autre' },
+    sourceAutre: 'Précisez', sourceAutreEx: 'Par exemple : un ami, un événement',
     tel: 'Téléphone', message: 'Précisions', messageEx: 'Occasion spéciale, budget, rythme souhaité, besoins particuliers',
     introToi: 'Nous vous répondons sous 48 heures avec une première proposition, sans frais ni engagement.',
     ecrisNom: 'Écrivez votre nom pour que l’on sache à qui répondre', ecrisCourriel: 'Écrivez votre courriel ou votre téléphone pour recevoir la réponse',
@@ -196,7 +197,8 @@ const TXT = {
     combienFois: 'Number of times',
     aVoir: 'A place or experience not to miss', aVoirEx: 'For example: the cherry blossoms in Kyoto',
     nom: 'Full name', nomEx: '', courriel: 'Email', courrielEx: '',
-    source: 'How did you hear about us?', sources: { instagram: 'Instagram', facebook: 'Facebook', bouche: 'Word of mouth', google: 'Google', courriel: 'Email or call', autre: 'Other' },
+    source: 'How did you hear about us?', sources: { instagram: 'Instagram', facebook: 'Facebook', google: 'Google', bouche: 'Word of mouth', courriel: 'Email or call', autre: 'Other' },
+    sourceAutre: 'Please specify', sourceAutreEx: 'For example: a friend, an event',
     tel: 'Phone', message: 'Additional details', messageEx: 'Special occasion, budget, preferred pace, specific needs',
     introToi: 'We reply within 48 hours with a first proposal, free and with no commitment.',
     ecrisNom: 'Enter your name so we know who to reply to', ecrisCourriel: 'Enter your email or phone to receive our reply',
@@ -251,7 +253,7 @@ const vide = () => ({
   mode: 'total', duree: 0, plage: '', depart: '', mois: '', repartition: '',
   adultes: 2, enfants: 0, agesEnfants: '', voyageurs: 2, style: '',
   envies: {}, idees: {}, incontournable: '',
-  nom: '', courriel: '', telephone: '', message: '', source: '',
+  nom: '', courriel: '', telephone: '', message: '', source: '', sourceAutre: '',
 });
 let d = vide();
 // Un brouillon commencé est gardé une journée ; après (ou une fois la demande envoyée), on repart à zéro.
@@ -888,12 +890,16 @@ function etapeToi(zone) {
     <label class="champ"><span>${t().tel}</span><input data-champ="telephone" type="tel" value="${esc(d.telephone)}" autocomplete="tel"></label>
     <label class="champ"><span>${t().message}</span><textarea data-champ="message" rows="3" placeholder="${esc(t().messageEx)}">${esc(d.message)}</textarea></label>
     <p class="petit-titre">${t().source}</p>
-    <div class="puces sources">${Object.entries(t().sources).map(([k, nom]) => `<button type="button" class="puce douce ${d.source === k ? 'choisie' : ''}" data-source="${k}" aria-pressed="${d.source === k}">${esc(nom)}</button>`).join('')}</div>
+    <div class="grille-sources" role="radiogroup">${Object.entries(t().sources).map(([k, nom]) => `<button type="button" class="${d.source === k ? 'choisi' : ''}" data-source="${k}" role="radio" aria-checked="${d.source === k}">${esc(nom)}</button>`).join('')}</div>
+    <label class="champ source-autre" ${d.source === 'autre' ? '' : 'hidden'}><span class="vh">${t().sourceAutre}</span><input data-champ="sourceAutre" value="${esc(d.sourceAutre || '')}" maxlength="120" placeholder="${esc(t().sourceAutreEx)}"></label>
     ${carteResume()}`;
   zone.querySelectorAll('[data-source]').forEach((b) => {
     b.onclick = () => {
       d.source = d.source === b.dataset.source ? '' : b.dataset.source; garder();
-      zone.querySelectorAll('[data-source]').forEach((x) => { const on = x.dataset.source === d.source; x.classList.toggle('choisie', on); x.setAttribute('aria-pressed', on); });
+      zone.querySelectorAll('[data-source]').forEach((x) => { const on = x.dataset.source === d.source; x.classList.toggle('choisi', on); x.setAttribute('aria-checked', on); });
+      const autre = zone.querySelector('.source-autre');
+      autre.hidden = d.source !== 'autre';
+      if (!autre.hidden && !d.sourceAutre) autre.querySelector('input').focus();
     };
   });
   zone.oninput = (ev) => {
@@ -1118,7 +1124,7 @@ function texteMessage(lien) {
   if (d.style) lignes.push(`- ${t().style}${dp} ${t().styles[d.style]}`);
   const envies = enviesChoisies();
   if (envies.length) lignes.push(`- ${t().mesEnvies}${dp} ${envies.map((e) => e.nom).join(', ')}`);
-  if (d.source && t().sources[d.source]) lignes.push(`- ${t().source}${dp} ${t().sources[d.source]}`);
+  if (d.source && t().sources[d.source]) lignes.push(`- ${t().source}${dp} ${t().sources[d.source]}${d.source === 'autre' && d.sourceAutre?.trim() ? ` (${d.sourceAutre.trim()})` : ''}`);
   return t().corps(lignes.join('\n'), lien, d.nom);
 }
 
@@ -1162,6 +1168,7 @@ async function envoyer() {
   // On n'envoie que ce qui sert au mode choisi.
   const envoi = structuredClone(d);
   delete envoi.voyageursChoisis;
+  envoi.sourceAutre = envoi.source === 'autre' ? (envoi.sourceAutre || '').trim().slice(0, 120) : '';
   if (envoi.pays.length) envoi.regions = [];
   if (envoi.mode !== 'total') envoi.plage = '';
   if (envoi.mode === 'total') envoi.pays.forEach((p) => { p.debut = ''; p.fin = ''; });

@@ -524,3 +524,15 @@ img { -webkit-user-drag: none; }
   font-size: 14px; max-width: none;
 }
 .idee .ico { flex: none; }
+
+/* Comment nous avez-vous connus ? : choix réguliers, deux par ligne */
+.grille-sources { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grille-sources button {
+  min-height: 48px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ligne); background: var(--carte);
+  font-weight: 600; font-size: 14.5px; line-height: 1.2; text-align: center; transition: background .15s, border-color .15s, color .15s;
+}
+.grille-sources button:hover { border-color: var(--ligne-forte); }
+.grille-sources button.choisi { background: var(--encre); border-color: var(--encre); color: #fff; }
+.source-autre { margin: 10px 0 0; }
+.source-autre[hidden] { display: none; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
