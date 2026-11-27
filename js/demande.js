@@ -70,7 +70,9 @@ if (params.has('apercu')) {
 // demande.html?client=Marie%20Tremblay : lien personnel fait dans le Studio. Chaque client a son propre
 // brouillon (rien n'est partagé entre appareils de toute façon), son nom est déjà rempli et on le salue.
 const CLIENT = (params.get('client') || '').trim().slice(0, 80);
-const CLE_BROUILLON = CLIENT ? `brouillonDemande:${CLIENT.toLowerCase()}` : 'brouillonDemande';
+// Le brouillon est rangé sous l'identifiant unique du lien (jamais sous le nom) : deux clients
+// qui ont le même nom, ou deux liens ouverts sur le même téléphone, ne se mélangent jamais.
+const CLE_BROUILLON = LIEN ? `brouillonDemande:l:${LIEN.id}` : CLIENT ? `brouillonDemande:${CLIENT.toLowerCase()}` : 'brouillonDemande';
 const prenomClient = CLIENT.split(/\s+/)[0] || '';
 const REQUIS = '<span class="requis" aria-hidden="true">*</span>';
 // Les destinations les plus demandées ; les autres se trouvent avec la recherche.
@@ -256,17 +258,28 @@ const vide = () => ({
   nom: '', courriel: '', telephone: '', message: '', source: '', sourceAutre: '',
 });
 let d = vide();
+let brouillonRepris = false;
+// Ménage : les brouillons de plus d'une journée sont effacés de ce téléphone.
+try {
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith('brouillonDemande') || k.endsWith(':etape') || k === CLE_BROUILLON) continue;
+    const b = JSON.parse(localStorage.getItem(k) || 'null');
+    if (!b || Date.now() - (b.gardeLe || 0) > 24 * 3600 * 1000) { localStorage.removeItem(k); localStorage.removeItem(`${k}:etape`); }
+  }
+} catch (_) { /* rien */ }
 // Un brouillon commencé est gardé une journée ; après (ou une fois la demande envoyée), on repart à zéro.
 try {
   const b = MODE_TEST ? null : JSON.parse(localStorage.getItem(CLE_BROUILLON) || 'null');
-  if (b?.f === 'demande' && !b.envoyeLe && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000) {
+  if (b?.f === 'demande' && !b.envoyeLe && Date.now() - (b.gardeLe || 0) < 24 * 3600 * 1000 && (b.lien || '') === (LIEN?.id || '')) {
     d = { ...vide(), ...b, v: 3 };
     if (!b.v || b.v < 3) {
       d.adultes = Math.max(1, b.voyageurs || 2); d.style = b.style || '';
       d.incontournable = d.pays.filter((p) => p.incontournable?.trim()).map((p) => `${p.nom} : ${p.incontournable.trim()}`).join('\n');
       d.pays.forEach((p) => { p.incontournable = ''; });
     }
-    delete d.gardeLe;
+    delete d.gardeLe; delete d.lien;
+    brouillonRepris = true;
   }
 } catch (_) { /* rien */ }
 if (langueParam) d.langue = langueParam;
@@ -280,14 +293,14 @@ if (PAYS_PARAM && TOUS_PAYS.includes(PAYS_PARAM) && !d.pays.some((p) => p.nom ==
 const CLE_ETAPE = `${CLE_BROUILLON}:etape`;
 const garder = () => {
   try {
-    localStorage.setItem(CLE_BROUILLON, JSON.stringify({ ...d, gardeLe: Date.now() }));
+    localStorage.setItem(CLE_BROUILLON, JSON.stringify({ ...d, lien: LIEN?.id || '', gardeLe: Date.now() }));
     localStorage.setItem(CLE_ETAPE, String(etape));
   } catch (_) { /* rien */ }
 };
 let etape = 0;
 try {
   const e = parseInt(localStorage.getItem(CLE_ETAPE), 10);
-  if (d.gardeLe === undefined && d.f === 'demande' && !MODE_TEST && e > 0) etape = Math.min(e, 4);
+  if (brouillonRepris && !MODE_TEST && e > 0) etape = Math.min(e, 4);
 } catch (_) { /* rien */ }
 let paysActif = 0;
 let moisAffiche = null;
