@@ -268,6 +268,9 @@ try {
 if (langueParam) d.langue = langueParam;
 d.plage = ''; // les anciennes tranches « 3 à 6 » sont remplacées par un nombre de jours
 if (CLIENT) { d.client = CLIENT; if (!d.nom) d.nom = CLIENT; }
+// Venu du site en touchant une destination (?pays=Japon) : elle est déjà choisie.
+const PAYS_PARAM = params.get('pays') || '';
+if (PAYS_PARAM && TOUS_PAYS.includes(PAYS_PARAM) && !d.pays.some((p) => p.nom === PAYS_PARAM)) d.pays.push({ nom: PAYS_PARAM, debut: '', fin: '', incontournable: '' });
 // L'étape où on est est gardée aussi : si la page se recharge (ex. en tirant vers le bas en haut de la page),
 // on revient à la même étape au lieu du début.
 const CLE_ETAPE = `${CLE_BROUILLON}:etape`;
@@ -417,6 +420,11 @@ function brancherEnTete(refaire) {
 }
 
 function majBas() {
+  // Dès que l'étape est remplie, le message d'erreur disparaît.
+  if (etapeValide(etape)) {
+    fiche.querySelectorAll('.erreur-msg').forEach((e) => e.remove());
+    fiche.querySelectorAll('.erreur').forEach((e) => e.classList.remove('erreur'));
+  }
   const s = fiche.querySelector('#suivant');
   if (!s || etape === 4) return;
   const passer = MODE_TEST && etapeVide();

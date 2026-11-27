@@ -910,6 +910,8 @@ async function pageFormulaire(id) {
   const f = existant
     ? structuredClone(existant)
     : { id: db.nouvelId(), pays: lieu.pays || '', ville: lieu.ville || '', devise: lieu.devise || DEVISE_DU_PAYS[lieu.pays] || 'CAD', contacts: {}, photos: [], verifieLe: aujourdhui(), ...(brouillon || {}) };
+  if (!f.devise) f.devise = DEVISE_DU_PAYS[f.pays] || 'CAD';
+  if (!f.contacts) f.contacts = {};
   brouillon = null;
   // « Pour un client » : coché d'office pour le client en repérage. Coché, on choisit le client dans la liste.
   const clients = f.contributeurId ? [] : await clientsActifs();

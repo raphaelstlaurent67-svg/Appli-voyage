@@ -170,14 +170,18 @@ async function integrerChoixClients() {
       if (v) { v.carnetId = c.id; change = true; }
     }
     if (!v && !c.client?.prenom && !voulus.size) continue;
+    // Pays pas écrit dans le voyage sur mesure : on prend celui de ses endroits.
+    const paysEndroits = c.items.map((i) => endroit(i.endroitId)?.pays).filter(Boolean);
+    const paysC = c.pays || paysEndroits.sort((a, b) => paysEndroits.filter((x) => x === b).length - paysEndroits.filter((x) => x === a).length)[0] || '';
+    if (v && paysC) for (const e of v.etapes || []) if (!e.pays && e.ville === c.ville) { e.pays = paysC; change = true; synchroniserJours(v); }
     if (!v) {
       v = nouveauVoyage();
       Object.assign(v, { titre: `${c.ville || 'Voyage'} sur mesure`, client: c.client?.prenom || '', carnetId: c.id });
-      v.etapes = [{ id: db.nouvelId(), pays: c.pays || '', ville: c.ville || '', jours: Math.max(2, new Set(c.items.map((i) => i.livraison)).size) }];
+      v.etapes = [{ id: db.nouvelId(), pays: paysC, ville: c.ville || '', jours: Math.max(2, new Set(c.items.map((i) => i.livraison)).size) }];
       synchroniserJours(v);
       change = true;
     }
-    if (!v.jours.length) { v.etapes.push({ id: db.nouvelId(), pays: c.pays || '', ville: c.ville || '', jours: 2 }); synchroniserJours(v); }
+    if (!v.jours.length) { v.etapes.push({ id: db.nouvelId(), pays: paysC, ville: c.ville || '', jours: 2 }); synchroniserJours(v); }
     // Retirer les anciens choix que le client a changés.
     for (const j of v.jours) {
       const avant = j.items.length;
