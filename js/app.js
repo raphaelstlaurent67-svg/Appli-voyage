@@ -28,6 +28,7 @@ import { PHRASES, PITCH_FR, LANGUES, langueDuPays, voixPays, urgences } from './
 import { ENVIES, decoder, nuits as nuitsEntre } from './code-demande.js';
 import * as autour from './autour.js';
 import * as styleAppli from './style-appli.js';
+import { pageCarte } from './carte-contact.js';
 
 styleAppli.couleurBarre();
 
@@ -2235,33 +2236,7 @@ async function pageOutil(id) {
       } catch (_) { toast('Pas de connexion'); }
     };
   } else if (id === 'carte') {
-    const moi = { nom: await db.lireReglage('nomFiche', ''), courriel: await db.lireReglage('courrielFiche', ''), tel: await db.lireReglage('telFiche', ''), insta: await db.lireReglage('instaFiche', '') };
-    if (!moi.nom && !moi.tel && !moi.courriel) {
-      zone.innerHTML = `<div class="vide"><span class="vide-icone">${icone('id-card', { taille: 28 })}</span><b>Carte vide</b><a class="bouton-principal bouton-vide" href="#/reglages">Remplir mes coordonnées</a></div>`;
-      return;
-    }
-    const insta = moi.insta.replace(/^@/, '');
-    zone.innerHTML = `
-      <article class="carte-contact">
-        <span class="carte-contact-marque">${esc(MARQUE)}</span>
-        <h2>${esc(moi.nom || 'Mon nom')}</h2>
-        <ul>
-          ${moi.tel ? `<li>${icone('phone', { taille: 18 })}<span>${esc(moi.tel)}</span></li>` : ''}
-          ${moi.courriel ? `<li>${icone('mail', { taille: 18 })}<span>${esc(moi.courriel)}</span></li>` : ''}
-          ${insta ? `<li>${icone('camera', { taille: 18 })}<span>@${esc(insta)}</span></li>` : ''}
-        </ul>
-      </article>
-      <button type="button" class="bouton-principal" id="partager-carte">${icone('share', { taille: 18 })} Partager ma carte</button>
-      <a class="lien lien-centre" href="#/reglages">Modifier</a>`;
-    zone.querySelector('#partager-carte').onclick = async () => {
-      const v = (t) => String(t || '').replace(/[\r\n;,]/g, ' ');
-      const vcf = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${v(moi.nom)}`, `ORG:${v(MARQUE)}`, moi.tel ? `TEL;TYPE=CELL:${v(moi.tel)}` : '', moi.courriel ? `EMAIL:${v(moi.courriel)}` : '', insta ? `URL:https://instagram.com/${encodeURIComponent(insta)}` : '', 'END:VCARD'].filter(Boolean).join('\r\n');
-      const fichier = new File([vcf], `${sansAccents(moi.nom || 'contact').replace(/[^a-z0-9]+/g, '-')}.vcf`, { type: 'text/vcard' });
-      try {
-        if (navigator.canShare?.({ files: [fichier] })) await navigator.share({ files: [fichier] });
-        else { const a = document.createElement('a'); a.href = URL.createObjectURL(fichier); a.download = fichier.name; a.click(); }
-      } catch (_) { /* annulé */ }
-    };
+    await pageCarte(zone, { toast });
   }
 }
 
@@ -2280,9 +2255,15 @@ async function pageReglages() {
   const pays = await paysCourant();
   const langue = langueDuPays(pays);
   const tousPays = trierFr(Object.values(CONTINENTS).flat());
-  const moi = { nom: await db.lireReglage('nomFiche', ''), courriel: await db.lireReglage('courrielFiche', ''), tel: await db.lireReglage('telFiche', ''), insta: await db.lireReglage('instaFiche', '') };
   app.innerHTML = `
     <header class="entete-page"><h1>Réglages</h1></header>
+
+    <section class="section">
+      <h2 class="section-titre">Mes coordonnées</h2>
+      <ul class="liste-choix liste-reglages">
+        ${ligneReglage('#/outils/carte', 'id-card', 'Ma carte de contact')}
+      </ul>
+    </section>
 
     <section class="section">
       <h2 class="section-titre">En voyage</h2>
@@ -2290,7 +2271,6 @@ async function pageReglages() {
         ${ligneReglage('#/outils/phrases', 'message-circle', 'Phrases utiles', langue === 'fr' ? '' : LANGUES[langue]?.nom)}
         ${ligneReglage('#/outils/pitch', 'megaphone', 'Présenter mon agence')}
         ${ligneReglage('#/outils/convertir', 'coins', 'Convertir un prix')}
-        ${ligneReglage('#/outils/carte', 'id-card', 'Ma carte de contact')}
       </ul>
     </section>
 
@@ -2308,15 +2288,6 @@ async function pageReglages() {
       </ul>
     </section>
 
-    <section class="section">
-      <h2 class="section-titre">Mes coordonnées</h2>
-      <label class="champ"><span>Nom</span><input id="moi-nom" value="${esc(moi.nom)}" autocapitalize="words" autocomplete="name"></label>
-      <div class="deux">
-        <label class="champ"><span>Cell</span><input id="moi-tel" type="tel" value="${esc(moi.tel)}" autocomplete="tel"></label>
-        <label class="champ"><span>Instagram</span><input id="moi-insta" value="${esc(moi.insta)}" autocapitalize="off" autocorrect="off" placeholder="@"></label>
-      </div>
-      <label class="champ"><span>Courriel</span><input id="moi-courriel" type="email" inputmode="email" value="${esc(moi.courriel)}" autocapitalize="off" autocomplete="email"></label>
-    </section>
 
     <section class="section">
       <h2 class="section-titre">Préférences</h2>
@@ -2378,10 +2349,6 @@ async function pageReglages() {
   const boutonInstaller = app.querySelector('#installer');
   if (boutonInstaller) boutonInstaller.onclick = async () => { if (!(await pwa.installer())) app.querySelector('#aide-installer').hidden = false; };
 
-  // Mes coordonnées : servent aux liens de demande, à la page des clients et à ma carte.
-  [['#moi-nom', 'nomFiche'], ['#moi-tel', 'telFiche'], ['#moi-insta', 'instaFiche'], ['#moi-courriel', 'courrielFiche']].forEach(([sel, cle]) => {
-    app.querySelector(sel).addEventListener('change', async (ev) => { await db.ecrireReglage(cle, ev.target.value.trim()); toast('Enregistré'); });
-  });
   app.querySelector('#pellicule').onchange = (ev) => db.ecrireReglage('pellicule', ev.target.checked);
   app.querySelector('#pays-actuel').onchange = async (ev) => {
     etat.region = { continent: '', pays: ev.target.value };
