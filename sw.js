@@ -1,6 +1,6 @@
 // Garde une copie de l'appli sur le téléphone pour qu'elle s'ouvre sans internet.
 // Change le numéro de version quand on modifie un fichier de l'appli.
-const VERSION = 'v65';
+const VERSION = 'v66';
 const FICHIERS = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/db.js', 'js/taxonomie.js', 'js/lieux.js', 'js/icones.js', 'js/sync.js', 'js/monde.js',
   'demande.html', 'js/contact.js',
@@ -15,7 +15,7 @@ const FICHIERS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FICHIERS.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -23,10 +23,12 @@ self.addEventListener('activate', (e) => {
 });
 
 // Réseau d'abord (pour avoir la dernière version), copie locale si pas d'internet.
+// « no-cache » : le téléphone demande toujours au serveur si le fichier a changé (sinon il
+// pouvait garder l'ancienne version jusqu'à 10 minutes après une mise à jour).
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((rep) => { const copie = rep.clone(); caches.open(VERSION).then((c) => c.put(e.request, copie)); return rep; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('index.html'))),
   );
