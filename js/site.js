@@ -90,7 +90,7 @@ function afficher() {
   document.querySelectorAll('[data-demande]').forEach((el) => { el.href = lienDemande(); });
   document.querySelectorAll('[data-langue]').forEach((b) => b.classList.toggle('choisi', b.dataset.langue === langue));
   document.getElementById('destinations-liste').innerHTML = DESTINATIONS.map(([fr, en]) => `
-    <a class="destination" href="${lienDemande()}" style="${PHOTOS_PAYS[fr] ? `--photo:url('${photo(PHOTOS_PAYS[fr], 700)}')` : ''}"><span>${esc(langue === 'en' ? en : fr)}</span></a>`).join('');
+    <a class="destination" href="${lienDemande()}&pays=${encodeURIComponent(fr)}" style="${PHOTOS_PAYS[fr] ? `--photo:url('${photo(PHOTOS_PAYS[fr], 700)}')` : ''}"><span>${esc(langue === 'en' ? en : fr)}</span></a>`).join('');
   document.getElementById('faq-liste').innerHTML = t.faq.map(([q, r]) => `<details><summary>${esc(q)}${icone('chevron-down', { taille: 18 })}</summary><p>${esc(r)}</p></details>`).join('');
 }
 
