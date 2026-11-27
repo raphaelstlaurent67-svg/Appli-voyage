@@ -381,3 +381,11 @@ body { background: var(--fond); color: var(--encre); }
 .verso { background: var(--accent); border-color: var(--accent); }
 .carte-q:hover .recto { border-color: var(--miel); }
 .carte-q:hover .recto .carte-indice { color: var(--miel); }
+
+/* Une seule bulle grandit quand on ouvre « En savoir plus » (les autres gardent leur taille). */
+.etapes { align-items: start; }
+/* Questions : sur ordinateur, la carte tourne quand la souris passe dessus, et revient quand elle s'en va. */
+@media (hover: hover) and (pointer: fine) {
+  .carte-q:hover .carte-int, .carte-q:focus-visible .carte-int { transform: rotateY(180deg); }
+  .carte-int { transition-duration: .6s; }
+}

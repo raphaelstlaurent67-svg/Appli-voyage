@@ -44,9 +44,9 @@ const TXT = {
       ['Mes informations restent-elles privées ?', 'Oui. Vos réponses servent uniquement à préparer votre voyage. Elles ne sont jamais vendues ni partagées.'],
     ],
     appelTitre: 'Parlons de votre prochain voyage', appelTexte: 'Décrivez votre projet en quelques minutes. Nous vous contactons pour en discuter.',
-    e1m: 'Le formulaire prend environ cinq minutes. Choisissez un ou plusieurs pays, ou seulement une région si vous hésitez encore. Vos réponses restent enregistrées si vous fermez la page.',
-    e2m: 'Nous revenons ensemble sur votre demande, vos attentes et votre budget. À la fin de l’appel, vous connaissez le prix exact et le délai de préparation. Aucune obligation.',
-    e3m: 'Vous recevez une page personnelle avec votre itinéraire, la carte et nos recommandations. Pour certaines étapes, vous choisissez parmi quelques options. Chaque hôtel, activité et transport a son lien de réservation.',
+    e1m: 'Notre formulaire de demande nous permet de cerner votre projet : destinations, période, nombre de voyageurs, style de voyage et centres d’intérêt. Si vous n’avez pas encore choisi de pays, une région suffit.',
+    e2m: 'Lors d’un appel de quinze minutes, nous validons avec vous vos attentes, votre rythme et votre budget. Nous vous confirmons ensuite le prix et le délai de préparation, sans engagement de votre part.',
+    e3m: 'Votre itinéraire vous est remis sur une page personnelle : programme jour par jour, carte, hébergements, restaurants et activités recommandés, avec tous les liens de réservation.',
     r1m: 'Chaque journée est organisée selon votre rythme : ce qu’il faut voir, dans quel ordre et combien de temps prévoir.',
     r2m: 'Pour chaque étape, des hébergements adaptés à votre style de voyage, avec le lien pour réserver.',
     r3m: 'Des adresses pour chaque moment de la journée, du café du matin au souper, choisies selon vos goûts.',
@@ -54,7 +54,7 @@ const TXT = {
     r5m: 'Une estimation des coûts sur place : hébergement, repas, transport et activités. Vous savez à quoi vous attendre avant de partir.',
     enSavoirPlus: 'En savoir plus',
     moins: 'Moins',
-    faqAstuce: 'Touchez une carte pour voir la réponse.',
+    faqAstuce: 'Touchez une carte pour voir la réponse.', faqAstuceOrdi: 'Passez la souris sur une carte pour voir la réponse.',
     voirReponse: 'Voir la réponse',
     retourner: 'Retourner',
     pied: 'Itinéraires de voyage sur mesure', credits: 'Photos : Unsplash', contrib: 'Devenir éclaireur', voirExemple: 'Voir un exemple',
@@ -95,9 +95,9 @@ const TXT = {
       ['Is my information kept private?', 'Yes. Your answers are only used to prepare your trip. They are never sold or shared.'],
     ],
     appelTitre: "Let's talk about your next trip", appelTexte: 'Describe your project in a few minutes. We will contact you to discuss it.',
-    e1m: 'The form takes about five minutes. Pick one or more countries, or just a region if you are still deciding. Your answers are saved if you close the page.',
-    e2m: 'We go over your request, your expectations and your budget together. By the end of the call, you know the exact price and the preparation time. No obligation.',
-    e3m: 'You receive a personal page with your itinerary, the map and our recommendations. For some stops, you choose between a few options. Every hotel, activity and transfer has its booking link.',
+    e1m: 'Our request form lets us understand your project: destinations, timing, number of travellers, travel style and interests. If you have not chosen a country yet, a region is enough.',
+    e2m: 'During a fifteen-minute call, we confirm your expectations, your pace and your budget with you. We then confirm the price and the preparation time, with no commitment on your part.',
+    e3m: 'Your itinerary is delivered on a personal page: a day-by-day plan, a map, recommended accommodation, restaurants and activities, with every booking link.',
     r1m: 'Each day is planned around your pace: what to see, in what order and how much time to allow.',
     r2m: 'For each stop, accommodation that fits your travel style, with the link to book.',
     r3m: 'Places for every moment of the day, from morning coffee to dinner, chosen for your tastes.',
@@ -105,7 +105,7 @@ const TXT = {
     r5m: 'An estimate of costs on the ground: accommodation, meals, transport and activities. You know what to expect before you leave.',
     enSavoirPlus: 'Learn more',
     moins: 'Less',
-    faqAstuce: 'Tap a card to see the answer.',
+    faqAstuce: 'Tap a card to see the answer.', faqAstuceOrdi: 'Hover over a card to see the answer.',
     voirReponse: 'See the answer',
     retourner: 'Flip back',
     pied: 'Custom travel itineraries', credits: 'Photos: Unsplash', contrib: 'Become a scout', voirExemple: 'See an example',
@@ -131,6 +131,7 @@ const BLOCS = new Set(['H1', 'H2', 'H3', 'P', 'LI', 'DIV']);
 const deux = (fr, en, bloc = false) => `<span class="bi${bloc ? ' bloc' : ''}"><span lang="fr">${esc(fr)}</span><span lang="en">${esc(en)}</span></span>`;
 
 function remplirTextes() {
+  if (SURVOL) document.querySelectorAll('[data-t="faqAstuce"]').forEach((el) => { el.dataset.t = 'faqAstuceOrdi'; });
   document.querySelectorAll('[data-t]').forEach((el) => { el.innerHTML = deux(TXT.fr[el.dataset.t], TXT.en[el.dataset.t], BLOCS.has(el.tagName)); });
   document.querySelectorAll('[data-marque]').forEach((el) => { el.textContent = MARQUE; });
   document.getElementById('destinations-liste').innerHTML = DESTINATIONS.map(([fr, en]) => `
@@ -255,6 +256,7 @@ document.addEventListener('pointerover', (ev) => { if (ev.target.closest?.('a[da
 document.addEventListener('touchstart', (ev) => { if (ev.target.closest?.('a[data-demande], a.destination, a.resultat')) precharger(); }, { passive: true });
 
 // ---------- Interactions ----------
+const SURVOL = matchMedia('(hover: hover) and (pointer: fine)').matches;
 document.addEventListener('click', (ev) => {
   const plus = ev.target.closest('.plus-bouton');
   if (plus) {
@@ -264,7 +266,8 @@ document.addEventListener('click', (ev) => {
     return;
   }
   const carte = ev.target.closest('.carte-q');
-  if (carte) {
+  // Ordinateur : la carte tourne au survol. Cellulaire : on la touche.
+  if (carte && !SURVOL) {
     const tourne = carte.getAttribute('aria-pressed') !== 'true';
     carte.setAttribute('aria-pressed', tourne);
     carte.classList.toggle('tournee', tourne);
@@ -306,7 +309,20 @@ document.querySelectorAll('[data-ico]').forEach((el) => {
 document.querySelectorAll('[data-langue]').forEach((b) => {
   b.onclick = () => { langue = b.dataset.langue; try { localStorage.setItem('langueSite', langue); } catch (_) { /* rien */ } afficher(); };
 });
+
+// Étapes : même hauteur pour les trois quand elles sont fermées ; seule celle qu'on ouvre grandit.
+function egaliserEtapes() {
+  const li = [...document.querySelectorAll('.etapes li')];
+  li.forEach((x) => { x.style.minHeight = ''; });
+  if (matchMedia('(max-width: 860px)').matches) return;
+  const fermees = li.filter((x) => !x.querySelector('.plus.ouvert'));
+  const h = Math.max(0, ...li.map((x) => (x.querySelector('.plus.ouvert') ? 0 : x.offsetHeight)));
+  if (fermees.length) li.forEach((x) => { x.style.minHeight = `${h}px`; });
+}
+addEventListener('resize', () => { clearTimeout(egaliserEtapes.t); egaliserEtapes.t = setTimeout(egaliserEtapes, 150); });
 remplirTextes();
+egaliserEtapes();
+document.fonts?.ready.then(egaliserEtapes);
 brancherRecherche();
 afficher();
 animerAuDefilement();
