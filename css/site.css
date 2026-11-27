@@ -287,3 +287,64 @@ html[lang="fr"] .bi > [lang="en"], html[lang="en"] .bi > [lang="fr"] { opacity: 
   transition: top .5s cubic-bezier(.65, 0, .35, 1), left .5s cubic-bezier(.65, 0, .35, 1), width .5s cubic-bezier(.65, 0, .35, 1), height .5s cubic-bezier(.65, 0, .35, 1), border-radius .5s;
 }
 .voile-transition.photo.plein { top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; border-radius: 0; }
+
+/* ---------- En savoir plus ---------- */
+.plus { margin-top: 10px; }
+.plus-bouton {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 6px 0; margin-left: -1px;
+  color: var(--accent); font-weight: 700; font-size: 15px;
+}
+.plus-bouton .ico { transition: transform .3s cubic-bezier(.3, .7, .3, 1); }
+.plus-bouton:hover .plus-txt, .plus-bouton:hover .moins-txt { text-decoration: underline; text-underline-offset: 4px; }
+.plus .moins-txt, .plus.ouvert .plus-txt { display: none; }
+.plus.ouvert .moins-txt { display: inline-grid; }
+.plus.ouvert .plus-bouton .ico { transform: rotate(180deg); }
+.plus-panneau { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .4s cubic-bezier(.3, .7, .3, 1), opacity .3s; opacity: 0; }
+.plus-panneau > div { overflow: hidden; }
+.plus.ouvert .plus-panneau { grid-template-rows: 1fr; opacity: 1; }
+.plus-panneau p { color: var(--doux); font-size: 15.5px; padding: 6px 0 2px; border-left: 2px solid var(--accent-fond); padding-left: 12px; margin-top: 4px; }
+.etapes li, .liste-recois li { transition: transform .25s, box-shadow .25s, border-color .25s; }
+.etapes li:hover, .liste-recois li:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(29, 27, 25, .07); }
+
+/* ---------- Questions : cartes à retourner ---------- */
+.faq-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 28px; }
+#faq .texte { margin: 10px 0 0; font-size: 16px; }
+.carte-q {
+  --rx: 0deg; --ry: 0deg;
+  border: 0; padding: 0; background: none; text-align: left; font: inherit; color: inherit; perspective: 1100px; cursor: pointer;
+  transform: rotateX(var(--rx)) rotateY(var(--ry)); transition: transform .2s ease-out;
+}
+.carte-int { display: grid; position: relative; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.3, 1.3, .4, 1); min-height: 190px; }
+.carte-q.tournee .carte-int { transform: rotateY(180deg); }
+.face {
+  grid-area: 1 / 1; display: flex; flex-direction: column; gap: 12px; padding: 22px 22px 18px; border-radius: 20px;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden; border: 1px solid var(--ligne);
+  box-shadow: 0 2px 0 rgba(29, 27, 25, .03);
+}
+.recto { background: var(--carte); transition: box-shadow .25s, border-color .25s; }
+.carte-q:hover .recto { border-color: var(--accent); box-shadow: 0 16px 32px rgba(29, 27, 25, .08); }
+.verso { background: var(--encre); color: #fff; transform: rotateY(180deg); border-color: var(--encre); }
+.carte-num { font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: .06em; }
+.carte-question { font-size: 19px; font-weight: 800; line-height: 1.25; letter-spacing: -.01em; flex: 1; }
+.carte-question.petite { font-size: 14px; font-weight: 700; flex: none; opacity: .6; }
+.carte-reponse { font-size: 15.5px; line-height: 1.55; flex: 1; color: rgba(255, 255, 255, .92); }
+.carte-indice { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--pale); margin-top: auto; }
+.verso .carte-indice { color: rgba(255, 255, 255, .55); }
+.carte-q:hover .recto .carte-indice { color: var(--accent); }
+.carte-q:hover .recto .carte-indice .ico { animation: tourne-un-peu .6s ease; }
+.carte-q:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 22px; }
+.carte-q:active .carte-int { scale: .98; }
+@keyframes tourne-un-peu { 50% { transform: rotate(-60deg); } }
+@media (max-width: 480px) { .faq-cartes { grid-template-columns: 1fr; gap: 10px; } .face { padding: 18px 18px 16px; gap: 10px; } .carte-int { min-height: 150px; } }
+
+/* ---------- Petits plaisirs ---------- */
+.bouton:active, .resultat:active { transform: scale(.97); }
+.destination { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .2s ease-out, box-shadow .25s; }
+.destination:hover { box-shadow: 0 18px 36px rgba(29, 27, 25, .18); }
+.destination:not(.autre) { background-size: cover; }
+.destination:not(.autre):hover { background-size: 110%; }
+
+/* ---------- Apparition au défilement ---------- */
+html.anime :is(.section h2, .section .surtitre, .section .texte, .etapes li, .liste-recois li, .destination, .carte-q, .cherche-pays, .appel-int > *):not(.vu) { opacity: 0; translate: 0 22px; }
+html.anime :is(.section h2, .section .surtitre, .section .texte, .etapes li, .liste-recois li, .destination, .carte-q, .cherche-pays, .appel-int > *) { transition: opacity .7s cubic-bezier(.2, .7, .2, 1) var(--delai, 0ms), translate .7s cubic-bezier(.2, .7, .2, 1) var(--delai, 0ms), transform .2s ease-out, box-shadow .25s, background-size .5s; }
+.destination:hover { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px); }
